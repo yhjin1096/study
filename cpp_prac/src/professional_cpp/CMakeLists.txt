@@ -23,6 +23,9 @@ add_executable(employee_test
               src/ch1/ch1_Employee.cpp
               src/ch1/ch1_EmployeeTest.cpp)
 
+add_executable(memory
+              src/ch7/memory.cpp)
+
 link_libraries(
   ${catkin_LIBRARIES}
 )
