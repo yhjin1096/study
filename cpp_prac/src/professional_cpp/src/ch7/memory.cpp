@@ -1,5 +1,10 @@
 #include <iostream>
 
+void test(int* ptr) // == int*& ptr
+{
+    *ptr = 10;
+}
+
 int main(int argc, char** argv)
 {
     // memory leak
@@ -30,6 +35,7 @@ int main(int argc, char** argv)
             std::cout << "메모리 할당 성공 " << ptr << std::endl;
         else
             std::cout << "nullptr " << ptr << std::endl;
+        delete ptr;
     }
     
     // 메모리 할당에 실패한 경우 예외처리
@@ -37,12 +43,12 @@ int main(int argc, char** argv)
         // new를 사용할 때마다 해줘야하는 단점
         try
         {
-            int* ptr = new int[100000000000000];
+             int* ptr = new int[100000000000000];
         }
         catch(std::bad_alloc &exception)
         {
             std::cout << "exception: " << exception.what() << std::endl;
-            std::abort(); // 비정상 종료를 의미
+            // std::abort(); // 비정상 종료를 의미
         }
     }
     {
@@ -51,8 +57,22 @@ int main(int argc, char** argv)
             std::cout << "done" << std::endl;
         else
             std::cout << "error" << std::endl;
-        delete ptr;
     }
-    
+
+    // 함수
+    {
+        int* ptr = new int{3};
+        // test(ptr);
+        std::cout << *ptr << std::endl;
+        delete  ptr;
+    }
+
+    // 중복 삭제 문제
+    {
+        int* ptr = new int;
+        delete ptr;
+        // delete ptr;
+    }
+
     return 0;
 }
