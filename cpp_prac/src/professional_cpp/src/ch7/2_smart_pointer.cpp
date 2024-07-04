@@ -112,15 +112,25 @@ int main(int argc, char** argv)
     {
         Simple* mySimple {new Simple()}; // 생성
         std::shared_ptr<Simple> smartPtr1 {mySimple}; // 스코프 벗어나 삭제
-        // std::shared_ptr<Simple> smartPtr2 {mySimple}; // 스코프 벗어나 삭제
+        // std::shared_ptr<Simple> smartPtr2 {mySimple}; // 스코프 벗어나 삭제, 에러
     }
     {
         std::shared_ptr<Simple> ptr {std::make_shared<Simple>()};
         ptr->setNum(10);
-        std::shared_ptr<int> aliasing {std::shared_ptr<int>{ptr, &ptr->num}};
+        
+        std::cout << ptr.use_count() << std::endl;
+
+        //std::shared_ptr<int> aliasing {std::shared_ptr<int>{ptr, &ptr->num}};
+        //std::shared_ptr<int> aliasing {소유권을 공유한 포인터, 실제 가리킬 객체};
+        std::shared_ptr<int> aliasing {ptr, &ptr->num};
+
+        std::cout << ptr.use_count() << std::endl;
+        std::cout << aliasing.use_count() << std::endl;
+        
         ptr->printNum();
         std::cout << *aliasing.get() << std::endl;
     }
+    std::cout << "-------------------" << std::endl;
     // weak_ptr
     {
         std::shared_ptr<Simple> sharedSimple {std::make_shared<Simple>()};
