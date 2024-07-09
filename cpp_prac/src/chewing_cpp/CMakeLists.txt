@@ -21,12 +21,17 @@ include_directories(
 
 add_executable(1_2 src/1_2/main.cpp)
 add_executable(2_1 src/2_1/main.cpp)
+
 add_executable(4_3
                src/4_3/4_3.cpp
                src/4_3/main.cpp)
 add_executable(4_3_mission
               src/4_3/mission.cpp)
 
+add_executable(4_4
+              src/4_4/main.cpp
+              src/4_4/4_4.cpp)
+              
 link_libraries(
   ${catkin_LIBRARIES}
 )
