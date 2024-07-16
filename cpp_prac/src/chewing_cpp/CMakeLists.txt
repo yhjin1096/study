@@ -31,6 +31,8 @@ add_executable(4_3_mission
 add_executable(4_4
               src/4_4/main.cpp
               src/4_4/4_4.cpp)
+add_executable(4_4_stub
+              src/4_4/stub.cpp)
               
 link_libraries(
   ${catkin_LIBRARIES}
