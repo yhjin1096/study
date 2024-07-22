@@ -3,17 +3,17 @@
 int& foo(int& i){return i;};
 int foobar(int j){return j;};
 
-class X
-{
-    private:
-        int id;
-    public:
-        X& X::operator=(const X& rhs) //복사 대입 연산자
-        {
-            this->id = rhs.id;
-            return *this;
-        };
-};
+// class X
+// {
+//     private:
+//         int id;
+//     public:
+//         X& X::operator=(const X& rhs) //복사 대입 연산자
+//         {
+//             this->id = rhs.id;
+//             return *this;
+//         };
+// };
 
 int main(int argc, char** argv)
 {
@@ -42,6 +42,7 @@ int main(int argc, char** argv)
     }
     
     //TODO 12 끝낸 후 다시 보기
+    //https://modoocode.com/189
 
     return 0;
 }
