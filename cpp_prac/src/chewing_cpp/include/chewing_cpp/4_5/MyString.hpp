@@ -46,6 +46,11 @@ class MyString {
         int find(int find_from, char c) const;
 
         int compare(const MyString& str) const;
+
+        bool operator==(MyString& str)
+        {
+          return !compare(str);
+        }
 };
 
 // MyString::MyString(char c) {
