@@ -42,7 +42,9 @@ add_executable(4_6
          
 add_executable(5_1
               src/5_1/main.cpp)
-              
+           
+add_executable(5_2
+               src/5_2/main.cpp)
 link_libraries(
   ${catkin_LIBRARIES}
 )
