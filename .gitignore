@@ -2,4 +2,10 @@ cpp_prac/build/
 cpp_prac/devel/
 cpp_prac/.vscode/
 cpp_prac/.catkin_workspace
+
+pose_graph_optimization/build/
+pose_graph_optimization/devel/
+pose_graph_optimization/.vscode/
+pose_graph_optimization/.catkin_workspace
+
 .vscode/

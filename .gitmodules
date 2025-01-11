@@ -1,0 +1,3 @@
+[submodule "pose_graph_optimization/src/pgo_toy_example/thirdparty/g2o"]
+	path = pose_graph_optimization/src/pgo_toy_example/thirdparty/g2o
+	url = https://github.com/RainerKuemmerle/g2o.git
