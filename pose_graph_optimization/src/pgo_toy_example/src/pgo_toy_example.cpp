@@ -114,8 +114,10 @@ void PGOToyExample::AddEdge()
         #endif
 
         e->setInformation(information);
-        e->vertices()[0] = optimizer_->vertex(i-1);
-        e->vertices()[1] = optimizer_->vertex(i);
+        e->setVertex(0, optimizer_->vertex(i-1));
+        e->setVertex(1, optimizer_->vertex(i));
+        // e->vertices()[0] = optimizer_->vertex(i-1);
+        // e->vertices()[1] = optimizer_->vertex(i);
 
         optimizer_->addEdge(e);
     }
