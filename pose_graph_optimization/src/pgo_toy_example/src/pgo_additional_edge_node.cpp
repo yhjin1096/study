@@ -306,8 +306,8 @@ int main(int argc, char** argv)
             for(int i=1; i<num_poses; i++) 
               SetEdgeForROS(pae, prev_edges, "prev_edges", i, i-1, i, Vec4(0.0, 0.0, 0.0, 0.25), PREV);
 
-            SetEdgeForROS(pae, prev_edges, "prev_edges", 16, 5, 11, Vec4(0.0, 0.0, 0.0, 0.25), PREV);
-            SetEdgeForROS(pae, prev_edges, "prev_edges", 17, 3, 14, Vec4(0.0, 0.0, 0.0, 0.25), PREV);
+            // SetEdgeForROS(pae, prev_edges, "prev_edges", 16, 5, 11, Vec4(0.0, 0.0, 0.0, 0.25), PREV);
+            // SetEdgeForROS(pae, prev_edges, "prev_edges", 17, 3, 14, Vec4(0.0, 0.0, 0.0, 0.25), PREV);
 
 
             for(int i=0; i<num_poses; i++)
@@ -316,8 +316,8 @@ int main(int argc, char** argv)
             for(int i=1; i<num_poses; i++)
               SetEdgeForROS(pae, opt_edges, "opt_edges", i, i-1, i, Vec4(0.0, 0.0, 0.0, 1), OPT);
 
-            SetEdgeForROS(pae, opt_edges, "opt_edges", 16, 5, 11, Vec4(0.0, 0.0, 0.0, 1), OPT);
-            SetEdgeForROS(pae, opt_edges, "opt_edges", 17, 3, 14, Vec4(0.0, 0.0, 0.0, 1), OPT);
+            // SetEdgeForROS(pae, opt_edges, "opt_edges", 16, 5, 11, Vec4(0.0, 0.0, 0.0, 1), OPT);
+            // SetEdgeForROS(pae, opt_edges, "opt_edges", 17, 3, 14, Vec4(0.0, 0.0, 0.0, 1), OPT);
 
 
             for(int i=0; i<num_poses; i++)
@@ -326,8 +326,8 @@ int main(int argc, char** argv)
             for(int i=1; i<num_poses; i++)
               SetEdgeForROS(pae, addi_edges, "addi_edges", i, i-1, i, Vec4(0.0, 0.0, 1.0, 0.25), ADDITIONAL);
 
-            SetEdgeForROS(pae, addi_edges, "addi_edges", 16, 5, 11, Vec4(0.0, 0.0, 1.0, 0.25), ADDITIONAL);
-            SetEdgeForROS(pae, addi_edges, "addi_edges", 17, 3, 14, Vec4(0.0, 0.0, 1.0, 0.25), ADDITIONAL);
+            // SetEdgeForROS(pae, addi_edges, "addi_edges", 16, 5, 11, Vec4(0.0, 0.0, 1.0, 0.25), ADDITIONAL);
+            // SetEdgeForROS(pae, addi_edges, "addi_edges", 17, 3, 14, Vec4(0.0, 0.0, 1.0, 0.25), ADDITIONAL);
 
             prev_node_pub.publish(prev_nodes);
             prev_edge_pub.publish(prev_edges);
@@ -348,7 +348,7 @@ int main(int argc, char** argv)
             ros::spinOnce();
         }
         std::cout << std::endl;
-        
+
         prev_nodes.markers.clear();
         prev_edges.markers.clear();
         opt_nodes.markers.clear();

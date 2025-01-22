@@ -46,7 +46,7 @@ Visualization Manager:
       Offset:
         X: 0
         Y: 0
-        Z: -1
+        Z: 0
       Plane: XY
       Plane Cell Count: 50
       Reference Frame: <Fixed Frame>
@@ -107,8 +107,17 @@ Visualization Manager:
       Marker Topic: /prev_edges
       Name: MarkerArray
       Namespaces:
-        {}
+        prev_edges: true
       Queue Size: 100
+      Value: true
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 1
+      Name: Axes
+      Radius: 0.10000000149011612
+      Reference Frame: <Fixed Frame>
+      Show Trail: false
       Value: true
   Enabled: true
   Global Options:
@@ -138,7 +147,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 10.784381866455078
+      Distance: 11.733150482177734
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -146,17 +155,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 4.267551422119141
-        Y: 2.1629350185394287
-        Z: -1.6965402364730835
+        X: 4.129757404327393
+        Y: 2.419029712677002
+        Z: -0.29121267795562744
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7817511558532715
+      Pitch: 0.15675155818462372
       Target Frame: <Fixed Frame>
-      Yaw: 3.8816728591918945
+      Yaw: 4.701684951782227
     Saved: ~
 Window Geometry:
   Displays:

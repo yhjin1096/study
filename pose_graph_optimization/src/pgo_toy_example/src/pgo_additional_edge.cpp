@@ -57,24 +57,24 @@ void PGOAdditionalEdge::SetOriginalPoses()
     {
         Eigen::Matrix<double, 3, 1> trans;
         if(i == 0)
-            trans = Eigen::Matrix<double, 3, 1>(0, 0, 0);
+            trans = Eigen::Matrix<double, 3, 1>(0, 0, 1.5);
         else if(i >= 1 && i <= 7)
         {
             trans = Eigen::Matrix<double, 3, 1>(i + Sampling::Gaussian(.2),
                                                 Sampling::Gaussian(.2),
-                                                Sampling::Gaussian(.2));
+                                                1.5);
         }
         else if(i == 8)
         {
             trans = Eigen::Matrix<double, 3, 1>(8 + Sampling::Gaussian(.2),
                                                 7 - i + Sampling::Gaussian(.2),
-                                                Sampling::Gaussian(.2));
+                                                1.5);
         }
         else if(i >= 9)
         {
             trans = Eigen::Matrix<double, 3, 1>(17 - i + Sampling::Gaussian(.2),
                                                 -1 + Sampling::Gaussian(.2),
-                                                Sampling::Gaussian(.2));
+                                                1.5);
         }
 
         Eigen::Quaterniond q;
@@ -87,7 +87,9 @@ void PGOAdditionalEdge::SetOriginalPoses()
         original_poses_.push_back(pose);
 
         Eigen::Matrix<double, 3, 1> trans_tmp;
-        trans_tmp = Eigen::Matrix<double, 3, 1>(trans(0), trans(1), 0.0);
+        trans_tmp = Eigen::Matrix<double, 3, 1>(trans(0) + Sampling::Gaussian(.05),
+                                                trans(1) + Sampling::Gaussian(.05),
+                                                1.5);
 
         pose.setTranslation(trans_tmp);
         additional_poses_.push_back(pose);
@@ -106,13 +108,14 @@ void PGOAdditionalEdge::MakeCurrentPoseAndAddVertex()
         
         Eigen::Matrix<double, 3, 1> trans(Sampling::Gaussian(.2),
                                           Sampling::Gaussian(.2),
-                                          Sampling::Gaussian(.2));
+                                          Sampling::Gaussian(.05));
         Eigen::Quaterniond q;
         q.UnitRandom();
 
         g2o::SE3Quat origin = original_poses_.at(i);
         g2o::SE3Quat noise;
         noise.setTranslation(origin.translation() + trans);
+        
         vtx->setEstimate(noise);
         optimizer_->addVertex(vtx);
     }
@@ -124,7 +127,9 @@ void PGOAdditionalEdge::AddEdge()
     {
         g2o::EdgeSE3Expmap* e = new g2o::EdgeSE3Expmap();
         g2o::SE3Quat relative_pose = original_poses_.at(i-1).inverse() * original_poses_.at(i);
-
+// std::cout << original_poses_.at(i-1).translation().transpose() << std::endl;
+// std::cout << original_poses_.at(i).translation().transpose() << std::endl;
+// std::cout << relative_pose.translation().transpose() << std::endl;
         e->setMeasurement(relative_pose);
         
         #if 0
@@ -142,42 +147,42 @@ void PGOAdditionalEdge::AddEdge()
 
 
         /*------------------------------------------------------------------*/
-        g2o::SE3Quat additional_relative_pose = additional_poses_.at(i-1).inverse() * additional_poses_.at(i);
-        e->setMeasurement(additional_relative_pose);
-        e->setInformation(information);
-        e->setVertex(0, optimizer_->vertex(i-1));
-        e->setVertex(1, optimizer_->vertex(i));
+        // g2o::SE3Quat additional_relative_pose = additional_poses_.at(i-1).inverse() * additional_poses_.at(i);
+        // e->setMeasurement(additional_relative_pose);
+        // e->setInformation(information);
+        // e->setVertex(0, optimizer_->vertex(i-1));
+        // e->setVertex(1, optimizer_->vertex(i));
 
-        optimizer_->addEdge(e);
+        // optimizer_->addEdge(e);
     }
 
-    g2o::EdgeSE3Expmap* e511(new g2o::EdgeSE3Expmap());
-    g2o::SE3Quat relative_pose = original_poses_.at(5).inverse() * original_poses_.at(11);
-    e511->setMeasurement(relative_pose);
-    MatXX A = Eigen::MatrixXd::Random(6,6).cwiseAbs();
-    MatXX information = A.transpose() * A;
-    e511->setInformation(information);
-    e511->vertices()[0] = optimizer_->vertex(5);
-    e511->vertices()[1] = optimizer_->vertex(11);
-    optimizer_->addEdge(e511);
+    // g2o::EdgeSE3Expmap* e511(new g2o::EdgeSE3Expmap());
+    // g2o::SE3Quat relative_pose = original_poses_.at(5).inverse() * original_poses_.at(11);
+    // e511->setMeasurement(relative_pose);
+    // MatXX A = Eigen::MatrixXd::Random(6,6).cwiseAbs();
+    // MatXX information = A.transpose() * A;
+    // e511->setInformation(information);
+    // e511->vertices()[0] = optimizer_->vertex(5);
+    // e511->vertices()[1] = optimizer_->vertex(11);
+    // optimizer_->addEdge(e511);
 
-    relative_pose = additional_poses_.at(5).inverse() * additional_poses_.at(11);
-    e511->setMeasurement(relative_pose);
-    optimizer_->addEdge(e511);
+    // relative_pose = additional_poses_.at(5).inverse() * additional_poses_.at(11);
+    // e511->setMeasurement(relative_pose);
+    // optimizer_->addEdge(e511);
 
-    g2o::EdgeSE3Expmap* e314(new g2o::EdgeSE3Expmap());
-    relative_pose = original_poses_.at(3).inverse() * original_poses_.at(14);
-    e314->setMeasurement(relative_pose);
-    A = Eigen::MatrixXd::Random(6,6).cwiseAbs();
-    information = A.transpose() * A;
-    e314->setInformation(information);
-    e314->vertices()[0] = optimizer_->vertex(3);
-    e314->vertices()[1] = optimizer_->vertex(14);
-    optimizer_->addEdge(e314);
+    // g2o::EdgeSE3Expmap* e314(new g2o::EdgeSE3Expmap());
+    // relative_pose = original_poses_.at(3).inverse() * original_poses_.at(14);
+    // e314->setMeasurement(relative_pose);
+    // A = Eigen::MatrixXd::Random(6,6).cwiseAbs();
+    // information = A.transpose() * A;
+    // e314->setInformation(information);
+    // e314->vertices()[0] = optimizer_->vertex(3);
+    // e314->vertices()[1] = optimizer_->vertex(14);
+    // optimizer_->addEdge(e314);
 
-    relative_pose = additional_poses_.at(3).inverse() * additional_poses_.at(14);
-    e511->setMeasurement(relative_pose);
-    optimizer_->addEdge(e314);
+    // relative_pose = additional_poses_.at(3).inverse() * additional_poses_.at(14);
+    // e511->setMeasurement(relative_pose);
+    // optimizer_->addEdge(e314);
 }
 
 void PGOAdditionalEdge::Reset()
