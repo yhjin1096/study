@@ -1,5 +1,10 @@
 <launch>
-  <node pkg="pgo_toy_example" type="pgo_toy_example" name="pgo_toy_example"  output="screen" >
+  <!-- <node pkg="pgo_toy_example" type="pgo_toy_example" name="pgo_toy_example"  output="screen" >
+    <param name="loop_rate" value="5" />
+    <param name="iteration" value="20" />
+  </node> -->
+
+  <node pkg="pgo_toy_example" type="pgo_additional_edge" name="pgo_additional_edge"  output="screen" >
     <param name="loop_rate" value="5" />
     <param name="iteration" value="20" />
   </node>

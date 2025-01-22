@@ -42,7 +42,17 @@ add_executable(pgo_toy_example
  src/pgo_toy_example_node.cpp
  src/pgo_toy_example.cpp)
 
+ add_executable(pgo_additional_edge
+ src/pgo_additional_edge_node.cpp
+ src/pgo_additional_edge.cpp)
+
 target_link_libraries(pgo_toy_example
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBS}
+  ${G2O_LIBS}
+)
+
+target_link_libraries(pgo_additional_edge
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBS}
   ${G2O_LIBS}
