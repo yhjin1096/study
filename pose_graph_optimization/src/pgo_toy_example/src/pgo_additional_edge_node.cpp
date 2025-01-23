@@ -102,20 +102,20 @@ void SetNodeForROS(PGOAdditionalEdge* pae, visualization_msgs::MarkerArray& node
         Eigen::Isometry3d opt_poses = vtx->estimate();
         Eigen::Quaterniond q = (Eigen::Quaterniond)opt_poses.rotation();
 
-        if(id==0)
-        {
-            xinit = opt_poses.translation()[0];
-            yinit = opt_poses.translation()[1];
-            zinit = opt_poses.translation()[2];
+        // if(id==0)
+        // {
+        //     xinit = opt_poses.translation()[0];
+        //     yinit = opt_poses.translation()[1];
+        //     zinit = opt_poses.translation()[2];
 
-            node.pose.position.x = 0;
-            node.pose.position.y = 0;
-            node.pose.position.z = 0;
-        }
-
-        node.pose.position.x = opt_poses.translation()[0]-xinit;
-        node.pose.position.y = opt_poses.translation()[1]-yinit;
-        node.pose.position.z = opt_poses.translation()[2]-zinit;
+        //     node.pose.position.x = 0;
+        //     node.pose.position.y = 0;
+        //     node.pose.position.z = 0;
+        // }
+        
+        node.pose.position.x = opt_poses.translation()[0];//-xinit;
+        node.pose.position.y = opt_poses.translation()[1];//-yinit;
+        node.pose.position.z = opt_poses.translation()[2];//-zinit;
 
         node.pose.orientation.x = q.x();
         node.pose.orientation.y = q.y();
@@ -233,22 +233,22 @@ void SetEdgeForROS(PGOAdditionalEdge* pae, visualization_msgs::MarkerArray& edge
         Isometry curr_opt_poses = curr_vtx->estimate();
 
         // First opt_node.
-        if(start == 0) {
-        xinit = prev_opt_poses.translation()[0];
-        yinit = prev_opt_poses.translation()[1];
-        zinit = prev_opt_poses.translation()[2];
-        }
+        // if(start == 0) {
+        // xinit = prev_opt_poses.translation()[0];
+        // yinit = prev_opt_poses.translation()[1];
+        // zinit = prev_opt_poses.translation()[2];
+        // }
 
         geometry_msgs::Point p1;
-        p1.x = prev_opt_poses.translation()[0] -xinit;
-        p1.y = prev_opt_poses.translation()[1] -yinit;
-        p1.z = prev_opt_poses.translation()[2] -zinit;
+        p1.x = prev_opt_poses.translation()[0];// -xinit;
+        p1.y = prev_opt_poses.translation()[1];// -yinit;
+        p1.z = prev_opt_poses.translation()[2];// -zinit;
         edge.points.push_back(p1);
 
         geometry_msgs::Point p2;
-        p2.x = curr_opt_poses.translation()[0] -xinit;
-        p2.y = curr_opt_poses.translation()[1] -yinit;
-        p2.z = curr_opt_poses.translation()[2] -zinit;
+        p2.x = curr_opt_poses.translation()[0];// -xinit;
+        p2.y = curr_opt_poses.translation()[1];// -yinit;
+        p2.z = curr_opt_poses.translation()[2];// -zinit;
         edge.points.push_back(p2);
 
         edges.markers.push_back(edge);
