@@ -8,4 +8,9 @@ pose_graph_optimization/devel/
 pose_graph_optimization/.vscode/
 pose_graph_optimization/.catkin_workspace
 
+local_ba_g2o/build/
+local_ba_g2o/devel/
+local_ba_g2o/.vscode/
+local_ba_g2o/.catkin_workspace
+
 .vscode/
