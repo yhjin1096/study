@@ -134,8 +134,6 @@ int main(int argc, char **argv)
         frames.push_back(Frame(Vec2_t(0.3 * i, 0.0), i));
     tf2_ros::TransformBroadcaster tf_broadcaster;
 
-    std::cout << "12123123123" << std::endl;    
-
     ros::Rate loop_rate(10);
 
     while(ros::ok())
