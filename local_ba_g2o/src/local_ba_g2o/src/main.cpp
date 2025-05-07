@@ -15,7 +15,8 @@
 
 #include <tinycolormap.hpp>
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const std::vector<Landmark>& landmarks) {
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const std::vector<Landmark>& landmarks, std::vector<tinycolormap::Color>& colors) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     cloud->points.resize(landmarks.size());
 
@@ -34,6 +35,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const std::v
         double normalized_z = (landmarks[i].pos_(2) - min_z) / (max_z - min_z);
 
         auto color = tinycolormap::GetColor(normalized_z, tinycolormap::ColormapType::Heat);
+        colors.push_back(color);
 
         cloud->points[i].r = static_cast<uint8_t>(color.r() * 255);
         cloud->points[i].g = static_cast<uint8_t>(color.g() * 255);
@@ -77,44 +79,66 @@ void publishFramePose(const Frame& frame, tf2_ros::TransformBroadcaster& broadca
     broadcaster.sendTransform(transform);
 }
 
-void setImages(std::vector<Frame>& frames, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud)
+cv::Mat concat_observed_image, concat_gt_image, concat_images;
+void setImages(std::vector<Frame>& frames, const std::vector<Landmark>& landmarks, const std::vector<tinycolormap::Color>& colors)
 {
     for(auto& frame : frames)
     {
         int width = static_cast<int>(frame.intrinsic_(0,2) * 2);
         int height = static_cast<int>(frame.intrinsic_(1,2) * 2);
-        frame.image_ = cv::Mat::zeros(height, width, CV_8UC3);
-        int count = 0;
+        frame.gt_image_ = cv::Mat::zeros(height, width, CV_8UC3);
+        frame.observed_image_ = cv::Mat::zeros(height, width, CV_8UC3);
 
-        for(const auto& point : cloud->points)
+        for(const auto& landmark : landmarks)
         {
-            Eigen::Vector4d point_world(point.x, point.y, point.z, 1.0);
+            Eigen::Vector4d point_world(landmark.pos_(0), landmark.pos_(1), landmark.pos_(2), 1.0);
             Eigen::Vector4d point_frame = frame.pose_.inverse() * point_world;
 
             if(point_frame(2) <= 0) continue;
 
             int x = static_cast<int>(point_frame(0) * frame.intrinsic_(0,0) / point_frame(2) + frame.intrinsic_(0,2));
             int y = static_cast<int>(point_frame(1) * frame.intrinsic_(1,1) / point_frame(2) + frame.intrinsic_(1,2));
+            int noise_x = x + Random::GaussRand(0, 1);
+            int noise_y = y + Random::GaussRand(0, 1);
 
             if(x < 0 || x >= width || y < 0 || y >= height) continue;
 
-            frame.image_.at<cv::Vec3b>(y, x) = cv::Vec3b(point.b, point.g, point.r);
-            count++;
+            int r = colors[landmark.id_].r()*255;
+            int g = colors[landmark.id_].g()*255;
+            int b = colors[landmark.id_].b()*255;
+
+            // frame.gt_image_.at<cv::Vec3b>(y, x) = cv::Vec3b(colors[landmark.id_].b()*255, colors[landmark.id_].g()*255, colors[landmark.id_].r()*255);
+            cv::circle(frame.gt_image_, cv::Point(x, y), 2, cv::Scalar(b, g, r), -1);
+
+            if(noise_x < 0 || noise_x >= width || noise_y < 0 || noise_y >= height) continue;
+
+            cv::circle(frame.observed_image_, cv::Point(noise_x, noise_y), 2, cv::Scalar(b, g, r), -1);
+
+            frame.addObservation(landmark.id_, Vec2_t(noise_x, noise_y));
         }
-        std::cout << "Frame " << frame.id_ << " points: " << count << std::endl;
     }
 
-    // 모든 프레임 이미지를 가로로 연결
-    cv::Mat concat_image = frames[0].image_.clone();
-    cv::Mat line_image = cv::Mat(concat_image.rows, 3, CV_8UC3, cv::Scalar(255, 255, 255));
+    concat_gt_image = frames[0].gt_image_.clone();
+    cv::Mat line_image = cv::Mat(concat_gt_image.rows, 1, CV_8UC3, cv::Scalar(0, 0, 255));
     for(size_t i = 1; i < frames.size(); ++i)
     {
-        cv::hconcat(concat_image, line_image, concat_image);
-        cv::hconcat(concat_image, frames[i].image_, concat_image);
+        cv::hconcat(concat_gt_image, line_image, concat_gt_image);
+        cv::hconcat(concat_gt_image, frames[i].gt_image_, concat_gt_image);
     }
-    cv::imshow("All Frames", concat_image);
-    cv::waitKey(1);
+    cv::line(concat_gt_image, cv::Point(0, concat_gt_image.rows/2), cv::Point(concat_gt_image.cols, concat_gt_image.rows/2), cv::Scalar(255, 255, 255), 1);
+
+    concat_observed_image = frames[0].observed_image_.clone();
+    for(size_t i = 1; i < frames.size(); ++i)
+    {
+        cv::hconcat(concat_observed_image, line_image, concat_observed_image);
+        cv::hconcat(concat_observed_image, frames[i].observed_image_, concat_observed_image);
+    }
+    cv::line(concat_observed_image, cv::Point(0, concat_observed_image.rows/2), cv::Point(concat_observed_image.cols, concat_observed_image.rows/2), cv::Scalar(255, 255, 255), 1);
+    cv::vconcat(concat_gt_image, concat_observed_image, concat_images);
+    cv::line(concat_images, cv::Point(0, concat_images.rows/2), cv::Point(concat_images.cols, concat_images.rows/2), cv::Scalar(0, 0, 255), 1);
+    cv::resize(concat_images, concat_images, cv::Size(concat_images.cols/2, concat_images.rows/2));
 }
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "local_ba_g2o");
@@ -124,18 +148,20 @@ int main(int argc, char **argv)
     int num_frames = nh.param<int>("num_frames", 5);
 
     //landmarks
+    std::vector<tinycolormap::Color> colors;
     std::vector<Landmark> landmarks = Random::getRandomLandmarks(num_landmarks);
     ros::Publisher landmarks_pub = nh.advertise<sensor_msgs::PointCloud2>("/landmarks", 1);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = convertLandmarksToPointCloud(landmarks);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = convertLandmarksToPointCloud(landmarks, colors);
 
     //frames
     std::vector<Frame> frames;
     for(int i = 0; i < num_frames; ++i)
-        frames.push_back(Frame(Vec2_t(0.3 * i, 0.0), i));
+        frames.push_back(Frame(Vec2_t(0.3 * i, 0.0), i, num_landmarks));
     tf2_ros::TransformBroadcaster tf_broadcaster;
 
-    ros::Rate loop_rate(10);
+    setImages(frames, landmarks, colors);
 
+    ros::Rate loop_rate(10);
     while(ros::ok())
     {
 
@@ -144,7 +170,12 @@ int main(int argc, char **argv)
         for(const auto& frame : frames) {
             publishFramePose(frame, tf_broadcaster);
         }
-        setImages(frames, cloud);
+
+        // cv::imshow("concat_gt_image", concat_gt_image);
+        // cv::imshow("concat_observed_image", concat_observed_image);
+        cv::imshow("concat_images", concat_images);
+        cv::waitKey(1);
+
         ros::spinOnce();
         loop_rate.sleep();
     }
