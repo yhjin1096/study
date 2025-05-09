@@ -1,8 +1,8 @@
 <launch>
     <node name="local_ba_g2o" pkg="local_ba_g2o" type="local_ba_g2o_node" output="screen"/>
-    <param name="num_landmarks" type="int" value="100" />
-    <param name="num_frames" type="int" value="5" />
-
+    <param name="num_landmarks" type="int" value="200" />
+    <param name="num_frames" type="int" value="15" />
+    <param name="num_iter" type="int" value="30" />
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find local_ba_g2o)/config/rviz/default.rviz" output="screen"/>
 
 </launch>

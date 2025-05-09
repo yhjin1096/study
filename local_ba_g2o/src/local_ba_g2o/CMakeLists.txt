@@ -19,10 +19,10 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
- INCLUDE_DIRS include
- LIBRARIES local_ba_g2o
- CATKIN_DEPENDS roscpp sensor_msgs pcl_ros pcl_conversions tf2_ros geometry_msgs
- DEPENDS system_lib
+#  INCLUDE_DIRS include
+#  LIBRARIES local_ba_g2o
+#  CATKIN_DEPENDS roscpp sensor_msgs pcl_ros pcl_conversions tf2_ros geometry_msgs
+#  DEPENDS system_lib
 )
 
 include_directories(
@@ -42,8 +42,11 @@ set(G2O_LIBS
     g2o_types_sba 
     g2o_types_slam3d
     g2o_solver_csparse 
+    g2o_solver_dense
+    g2o_solver_eigen
     g2o_stuff 
     g2o_csparse_extension
+    g2o_solver_cholmod
 )
 
 add_executable(${PROJECT_NAME}_node src/main.cpp)
