@@ -40,8 +40,6 @@ class Frame
             gt_observations_[landmark_id] = observation;
         }
 
-        
-
         cv::Mat gt_image_, observed_image_;
         Mat44_t pose_w2c_, pose_c2w_;
         int id_ = 0;

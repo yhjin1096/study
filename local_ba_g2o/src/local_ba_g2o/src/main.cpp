@@ -178,28 +178,28 @@ void observedImage(const Optimizer& optimizer, std::vector<Frame>& frames, const
 
     for(auto& frame : frames)
     {
+        cv::Mat whole_image = cv::Mat::zeros(frame.intrinsic_(1,2) * 2, frame.intrinsic_(0,2) * 2, CV_8UC3);
         frame.gt_image_ = cv::Mat::zeros(frame.intrinsic_(1,2) * 2, frame.intrinsic_(0,2) * 2, CV_8UC3);
         frame.observed_image_ = cv::Mat::zeros(frame.intrinsic_(1,2) * 2, frame.intrinsic_(0,2) * 2, CV_8UC3);
         cv::Mat line_image = cv::Mat(frame.gt_image_.rows, 1, CV_8UC3, cv::Scalar(255, 255, 255));
-
-        for(const auto& observation : frame.gt_observations_)
-        {
-            int x = observation.second(0);
-            int y = observation.second(1);
-            if(x >= 0 && x < frame.gt_image_.cols && y >= 0 && y < frame.gt_image_.rows)
-                cv::circle(frame.gt_image_, cv::Point(x, y), 1, cv::Scalar(0, 255, 0), -1);
-        }
 
         for(const auto& observation : frame.observations_)
         {
             int x = observation.second(0);
             int y = observation.second(1);
             if(x >= 0 && x < frame.observed_image_.cols && y >= 0 && y < frame.observed_image_.rows)
-                cv::circle(frame.observed_image_, cv::Point(x, y), 1, cv::Scalar(0, 0, 255), -1);
+                cv::circle(whole_image, cv::Point(x, y), 4, cv::Scalar(0, 0, 255), -1);
         }
 
-        cv::Mat whole_image;
-        cv::add(frame.gt_image_, frame.observed_image_, whole_image);
+        for(const auto& observation : frame.gt_observations_)
+        {
+            int x = observation.second(0);
+            int y = observation.second(1);
+            if(x >= 0 && x < frame.gt_image_.cols && y >= 0 && y < frame.gt_image_.rows)
+                cv::circle(whole_image, cv::Point(x, y), 4, cv::Scalar(0, 255, 0), -1);
+        }
+
+        // cv::add(frame.gt_image_, frame.observed_image_, whole_image);
 
         for(const auto& landmark : landmarks)
         {
@@ -219,7 +219,7 @@ void observedImage(const Optimizer& optimizer, std::vector<Frame>& frames, const
                         int y = static_cast<int>(point_frame(1) * frame.intrinsic_(1,1) / point_frame(2) + frame.intrinsic_(1,2));
 
                         if(x >= 0 && x < whole_image.cols && y >= 0 && y < whole_image.rows)
-                            cv::circle(whole_image, cv::Point(x, y), 1, cv::Scalar(0, 255, 255), -1);
+                            cv::circle(whole_image, cv::Point(x, y), 2, cv::Scalar(0, 255, 255), -1);
                     }
                 }
             }
@@ -238,7 +238,7 @@ void observedImage(const Optimizer& optimizer, std::vector<Frame>& frames, const
     }
 
     // 이미지 크기 조정 및 표시
-    // cv::resize(concat_image, concat_image, cv::Size(), 0.5, 0.5);
+    // cv::resize(concat_image, concat_image, cv::Size(), 0.7, 0.7);
     cv::imshow("observed image", concat_image);
 }
 
@@ -271,11 +271,12 @@ int main(int argc, char **argv)
         std::vector<Landmark> noise_landmarks = gt_landmarks;
         for(auto& landmark : noise_landmarks)
             landmark.pos_ += Vec3_t(Random::UniformRand(-0.2, 0.2), Random::UniformRand(-0.2, 0.2), Random::UniformRand(-0.2, 0.2));
+            // landmark.pos_ += Vec3_t(Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0));
 
         //frames
         std::vector<Frame> frames;
         for(int i = 0; i < num_frames; ++i)
-            frames.push_back(Frame(Vec2_t(0.8 * i, 0.0), i, num_landmarks));
+            frames.push_back(Frame(Vec2_t(0.4 * i, 0.0), i, num_landmarks));
         setObservations(frames, gt_landmarks, noise_landmarks);
 
         if(!optimizer.setup(frames, noise_landmarks))
