@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(local_ba_g2o)
 
+add_definitions(-DPROJECT_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
+
 set(tinycolormap_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/thirdparty/tinycolormap/include)
 
 find_package(g2o REQUIRED)

@@ -15,6 +15,8 @@
 
 #include <optimize/optimizer.hpp>
 
+#include <data_io/dataio.hpp>
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const std::vector<Landmark>& landmarks, cv::Scalar color) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     cloud->points.resize(landmarks.size());
@@ -47,18 +49,12 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const Optimi
                                                                 int num_frames) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     cloud->points.resize(landmarks.size());
-
-    double min_z = std::numeric_limits<double>::max();
-    double max_z = std::numeric_limits<double>::lowest();
-    for(const auto& landmark : landmarks) {
-        min_z = std::min(min_z, landmark.pos_(2));
-        max_z = std::max(max_z, landmark.pos_(2));
-    }
-
+    
     for(size_t i = 0; i < landmarks.size(); ++i) {
-        auto vertex_it = optimizer.optimizer_.vertices().find(i + num_frames);
+        auto vertex_it = optimizer.optimizer_.vertices().find(landmarks[i].id_ + num_frames);
         if(vertex_it != optimizer.optimizer_.vertices().end()) {
             g2o::VertexPointXYZ* vtx = dynamic_cast<g2o::VertexPointXYZ*>(vertex_it->second);
+
             if(vtx) {
                 cloud->points[i].x = vtx->estimate()(0);
                 cloud->points[i].y = vtx->estimate()(1);
@@ -161,8 +157,10 @@ void setObservations(std::vector<Frame>& frames, const std::vector<Landmark>& gt
 
             frame.addGTObservation(landmark.id_, Vec2_t(gt_x, gt_y));
 
-            int noise_x = static_cast<int>(gt_x + Random::GaussRand(0.0, 1.0));
-            int noise_y = static_cast<int>(gt_y + Random::GaussRand(0.0, 1.0));
+            // int noise_x = gt_x + static_cast<int>(Random::UniformRand(-2.0, 2.0));
+            // int noise_y = gt_y + static_cast<int>(Random::UniformRand(-2.0, 2.0));
+            int noise_x = gt_x + static_cast<int>(Random::GaussRand(0.0, 1.0));
+            int noise_y = gt_y + static_cast<int>(Random::GaussRand(0.0, 1.0));
 
             if(noise_x < 0 || noise_x >= width || noise_y < 0 || noise_y >= height) continue;
 
@@ -240,6 +238,51 @@ void observedImage(const Optimizer& optimizer, std::vector<Frame>& frames, const
     // 이미지 크기 조정 및 표시
     // cv::resize(concat_image, concat_image, cv::Size(), 0.7, 0.7);
     cv::imshow("observed image", concat_image);
+    cv::waitKey(1);
+}
+
+
+Eigen::Vector3d convertRotationMatrixToRPY(const Eigen::Matrix3d& rot)
+{
+    double roll = atan2(rot(2,1), rot(2,2));
+    double pitch = atan2(-rot(2,0), sqrt(rot(2,1)*rot(2,1) + rot(2,2)*rot(2,2)));
+    double yaw = atan2(rot(1,0), rot(0,0));
+    return Eigen::Vector3d(roll, pitch, yaw);
+}
+
+void printResult(const Optimizer& optimizer, const std::vector<Landmark>& gt_landmarks, const std::vector<Landmark>& noise_landmarks, const std::vector<Frame>& frames)
+{
+    for(const auto& frame : frames)
+    {
+        auto vertex_it = optimizer.optimizer_.vertices().find(frame.id_);
+        if(vertex_it != optimizer.optimizer_.vertices().end())
+        {
+            g2o::VertexSE3Expmap* vtx = dynamic_cast<g2o::VertexSE3Expmap*>(vertex_it->second);
+            if(vtx)
+            {
+                Vec3_t gt_rpy = convertRotationMatrixToRPY(frame.pose_w2c_.block<3,3>(0,0));
+                Vec3_t optimized_rpy = convertRotationMatrixToRPY(vtx->estimate().inverse().rotation().toRotationMatrix());
+                Vec3_t gt_translation = frame.pose_w2c_.block<3,1>(0,3);
+                Vec3_t optimized_translation = vtx->estimate().inverse().translation();
+
+                std::cout << " Frame id                       : " << frame.id_  << std::endl;
+                std::cout << " GT Rotation(r, p, y)           : " << gt_rpy(0) << ", " << gt_rpy(1) << ", " << gt_rpy(2) << std::endl;
+                std::cout << " Optimized Rotation(r, p, y)    : " << optimized_rpy(0) << ", " << optimized_rpy(1) << ", " << optimized_rpy(2) << std::endl;
+                std::cout << " GT Translation(x, y, z)        : " << gt_translation(0) << ", " << gt_translation(1) << ", " << gt_translation(2) << std::endl;
+                std::cout << " Optimized Translation(x, y, z) : " << optimized_translation(0) << ", " << optimized_translation(1) << ", " << optimized_translation(2) << std::endl;
+            }
+        }
+    }
+    // // 자유도, 95% 신뢰구간 threshold
+    // // (1, 3.841), (2, 5.991), (3, 7.815), (4, 9.488), (5, 11.070)
+    // double chi2 = optimizer.optimizer_.activeChi2();
+    // std::cout << " Total chi2 error               : " << chi2 << std::endl;
+    // for(const auto& edge : optimizer.optimizer_.activeEdges())
+    // {
+    //     std::cout << " Edge id                       : " << edge->id() << std::endl;
+    //     std::cout << " Edge chi2 error               : " << edge->chi2() << std::endl;
+    // }
+    std::cout << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -250,6 +293,9 @@ int main(int argc, char **argv)
     int num_landmarks = nh.param<int>("num_landmarks", 100);
     int num_frames = nh.param<int>("num_frames", 5);
     int num_iter = nh.param<int>("num_iter", 30);
+    bool use_data = nh.param<bool>("use_data", false);
+    bool save_data = nh.param<bool>("save_data", false);
+    std::string data_path = nh.param<std::string>("data_path", "");
 
     ros::Publisher gt_landmarks_pub = nh.advertise<sensor_msgs::PointCloud2>("/gt_landmarks", 1);
     ros::Publisher noise_landmarks_pub = nh.advertise<sensor_msgs::PointCloud2>("/observed_landmarks", 1);
@@ -260,27 +306,49 @@ int main(int argc, char **argv)
     //optimizer
     Optimizer optimizer;
 
-    ros::Rate loop_rate(5);
+    std::vector<Frame> frames;
+    std::vector<Landmark> gt_landmarks;
+    std::vector<Landmark> noise_landmarks;
+    if(use_data)
+        DataIO::load(frames, gt_landmarks, noise_landmarks, data_path);
+
+    ros::Rate loop_rate(10);
     while(ros::ok())
     {
         int count = 0;
         optimizer.reset();
 
-        //landmarks
-        std::vector<Landmark> gt_landmarks = Random::getRandomLandmarks(num_landmarks);
-        std::vector<Landmark> noise_landmarks = gt_landmarks;
-        for(auto& landmark : noise_landmarks)
-            landmark.pos_ += Vec3_t(Random::UniformRand(-0.2, 0.2), Random::UniformRand(-0.2, 0.2), Random::UniformRand(-0.2, 0.2));
-            // landmark.pos_ += Vec3_t(Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0));
+        if(!use_data)
+        {
+            frames.clear();
+            gt_landmarks.clear();
+            noise_landmarks.clear();
 
-        //frames
-        std::vector<Frame> frames;
-        for(int i = 0; i < num_frames; ++i)
-            frames.push_back(Frame(Vec2_t(0.4 * i, 0.0), i, num_landmarks));
-        setObservations(frames, gt_landmarks, noise_landmarks);
+            //landmarks
+            gt_landmarks = Random::getRandomLandmarks(num_landmarks);
+            noise_landmarks = gt_landmarks;
+            for(auto& landmark : noise_landmarks)
+                landmark.pos_ += Vec3_t(Random::UniformRand(-0.1, 0.1), Random::UniformRand(-0.1, 0.1), Random::UniformRand(-0.1, 0.1));
+                // landmark.pos_ += Vec3_t(Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0), Random::GaussRand(0.0, 1.0));
+
+            //frames
+            for(int i = 0; i < num_frames; ++i)
+                frames.push_back(Frame(Vec2_t(0.5 * i, 0.0), i, num_landmarks));
+
+            setObservations(frames, gt_landmarks, noise_landmarks);
+        }
+
+        if(save_data)
+        {
+            DataIO::save(frames, gt_landmarks, noise_landmarks, data_path);
+            break;
+        }
 
         if(!optimizer.setup(frames, noise_landmarks))
             break;
+
+        //structure only ba
+        optimizer.doStructureOnlyBA(10);
 
         while(count < num_iter)
         {
@@ -290,13 +358,10 @@ int main(int argc, char **argv)
             publishLandmarks(convertLandmarksToPointCloud(optimizer, noise_landmarks, num_frames), optimal_landmarks_pub);
 
             //publish frame poses
-            // for(auto& frame : frames)
-            //     publishFramePose(frame, tf_broadcaster);
             publishFramePoses(optimizer, tf_broadcaster, num_frames);
 
             //imshow
             observedImage(optimizer, frames, gt_landmarks);
-            cv::waitKey(1);
 
             //optimize
             optimizer.optimize(1);
@@ -305,6 +370,7 @@ int main(int argc, char **argv)
             loop_rate.sleep();
             ros::spinOnce();
         }
+        printResult(optimizer, gt_landmarks, noise_landmarks, frames);
     }
 
     return 0;

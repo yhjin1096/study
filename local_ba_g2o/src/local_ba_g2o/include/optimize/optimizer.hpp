@@ -112,17 +112,17 @@ class Optimizer
                 if(frame_ids.size() < 2)
                     continue;
 
-                addLandmarkVertex(landmark_poses_[landmark.id_], vertex_id);
+                addLandmarkVertex(landmark_poses_[landmark.id_], landmark.id_ + vertex_id);
 
                 // edge 추가
                 for(auto& frame_id : frame_ids)
                 {
                     g2o::EdgeProjectXYZ2UV* e = new g2o::EdgeProjectXYZ2UV();
                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(
-                        optimizer_.vertices().find(vertex_id)->second));
+                        optimizer_.vertices().find(landmark.id_ + vertex_id)->second));
                     e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(
                         optimizer_.vertices().find(frame_id)->second));
-                    e->setMeasurement(frames[frame_id].observations_[landmark.id_]);
+                    e->setMeasurement(frames[frame_id].gt_observations_[landmark.id_]);
                     e->information() = Mat22_t::Identity();
 
                     g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
@@ -131,7 +131,7 @@ class Optimizer
                     e->setParameterId(0, 0);
                     optimizer_.addEdge(e);
                 }
-                vertex_id++;
+                // vertex_id++;
             }
             return true;
         }
@@ -159,22 +159,25 @@ class Optimizer
 
         }
 
+        void doStructureOnlyBA(int num_iter)
+        {
+            g2o::StructureOnlySolver<3> structure_only_ba;
+            std::cout << "Performing structure-only BA:" << std::endl;
+            g2o::OptimizableGraph::VertexContainer points;
+            for (g2o::OptimizableGraph::VertexIDMap::const_iterator it =
+                    optimizer_.vertices().begin();
+                it != optimizer_.vertices().end(); ++it) {
+                g2o::OptimizableGraph::Vertex* v =
+                    static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+                if (v->dimension() == 3) points.push_back(v);
+            }
+            structure_only_ba.calc(points, num_iter);
+        }
+
         void optimize(int num_iter)
         {
             optimizer_.setVerbose(true);
             optimizer_.initializeOptimization();
-
-            // g2o::StructureOnlySolver<3> structure_only_ba;
-            // std::cout << "Performing structure-only BA:" << std::endl;
-            // g2o::OptimizableGraph::VertexContainer points;
-            // for (g2o::OptimizableGraph::VertexIDMap::const_iterator it =
-            //         optimizer_.vertices().begin();
-            //     it != optimizer_.vertices().end(); ++it) {
-            //     g2o::OptimizableGraph::Vertex* v =
-            //         static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
-            //     if (v->dimension() == 3) points.push_back(v);
-            // }
-            // structure_only_ba.calc(points, 10);
 
             optimizer_.optimize(num_iter);
         }
