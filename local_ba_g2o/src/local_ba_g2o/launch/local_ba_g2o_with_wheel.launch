@@ -1,12 +1,12 @@
 <launch>
-    <node name="local_ba_g2o" pkg="local_ba_g2o" type="local_ba_g2o_node" output="screen"/>
+    <node name="local_ba_g2o_with_wheel" pkg="local_ba_g2o" type="local_ba_g2o_with_wheel_node" output="screen"/>
     <param name="num_landmarks" type="int" value="300" />
     <param name="num_frames" type="int" value="10" />
     <param name="num_iter" type="int" value="50" />
 
     <param name="use_data" type="bool" value="true" />
     <param name="save_data" type="bool" value="false" />
-    <param name="data_path" type="string" value="$(find local_ba_g2o)/local_ba_g2o.txt.txt" />
+    <param name="data_path" type="string" value="$(find local_ba_g2o)/with_wheel.txt" />
 
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find local_ba_g2o)/config/rviz/default.rviz" output="screen"/>
 

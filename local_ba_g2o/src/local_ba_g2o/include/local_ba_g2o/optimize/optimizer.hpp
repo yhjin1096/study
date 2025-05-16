@@ -1,9 +1,9 @@
 #ifndef OPTIMIZER_HPP
 #define OPTIMIZER_HPP
 
-#include <local_ba_g2o/type.h>
-#include <local_ba_g2o/frame.hpp>
-#include <local_ba_g2o/landmark.hpp>
+#include <local_ba_g2o/local_ba_g2o/type.h>
+#include <local_ba_g2o/local_ba_g2o/frame.hpp>
+#include <local_ba_g2o/local_ba_g2o/landmark.hpp>
 
 #include "g2o/core/optimization_algorithm_factory.h"
 #include "g2o/core/robust_kernel_impl.h"
@@ -98,7 +98,7 @@ class Optimizer
                 else
                     addPoseVertex(pose, vertex_id++, false);
             }
-
+            
             /*--------------------------------------------------------------*/
             // landmark vertex 추가
             for (auto& landmark : landmarks)
@@ -131,8 +131,8 @@ class Optimizer
                     e->setParameterId(0, 0);
                     optimizer_.addEdge(e);
                 }
-                // vertex_id++;
             }
+
             return true;
         }
 

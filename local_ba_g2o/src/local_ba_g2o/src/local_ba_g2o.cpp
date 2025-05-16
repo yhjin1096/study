@@ -10,12 +10,12 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <Eigen/Geometry>
 
-#include <local_ba_g2o/random.hpp>
-#include <local_ba_g2o/frame.hpp>
+#include <local_ba_g2o/local_ba_g2o/random.hpp>
+#include <local_ba_g2o/local_ba_g2o/frame.hpp>
 
-#include <optimize/optimizer.hpp>
+#include <local_ba_g2o/optimize/optimizer.hpp>
 
-#include <data_io/dataio.hpp>
+#include <local_ba_g2o/data_io/dataio.hpp>
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertLandmarksToPointCloud(const std::vector<Landmark>& landmarks, cv::Scalar color) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -348,7 +348,7 @@ int main(int argc, char **argv)
             break;
 
         //structure only ba
-        optimizer.doStructureOnlyBA(10);
+        // optimizer.doStructureOnlyBA(10);
 
         while(count < num_iter)
         {
@@ -370,7 +370,9 @@ int main(int argc, char **argv)
             loop_rate.sleep();
             ros::spinOnce();
         }
-        printResult(optimizer, gt_landmarks, noise_landmarks, frames);
+        std::cout << "chi2: " << optimizer.optimizer_.activeChi2() << std::endl;
+        std::cout << "num of edges: " << optimizer.optimizer_.edges().size() << std::endl;
+        // printResult(optimizer, gt_landmarks, noise_landmarks, frames);
     }
 
     return 0;

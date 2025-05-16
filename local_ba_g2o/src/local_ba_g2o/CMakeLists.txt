@@ -51,9 +51,18 @@ set(G2O_LIBS
     g2o_solver_cholmod
 )
 
-add_executable(${PROJECT_NAME}_node src/main.cpp)
+add_executable(${PROJECT_NAME}_node src/local_ba_g2o.cpp)
+add_executable(${PROJECT_NAME}_with_wheel_node src/local_ba_g2o_with_wheel.cpp)
+
 
 target_link_libraries(${PROJECT_NAME}_node
+  ${catkin_LIBRARIES}
+  ${G2O_LIBS}
+  ${EIGEN3_LIBS}
+  ${OpenCV_LIBS}
+  ${PCL_LIBRARIES}
+)
+target_link_libraries(${PROJECT_NAME}_with_wheel_node
   ${catkin_LIBRARIES}
   ${G2O_LIBS}
   ${EIGEN3_LIBS}

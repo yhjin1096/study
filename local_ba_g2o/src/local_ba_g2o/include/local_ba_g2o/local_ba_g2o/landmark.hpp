@@ -1,7 +1,7 @@
 #ifndef LANDMARK_HPP
 #define LANDMARK_HPP
 
-#include <local_ba_g2o/type.h>
+#include <local_ba_g2o/local_ba_g2o/type.h>
 
 class Landmark
 {

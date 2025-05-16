@@ -1,8 +1,8 @@
 #ifndef RANDOM_HPP
 #define RANDOM_HPP
 
-#include <local_ba_g2o/type.h>
-#include <local_ba_g2o/landmark.hpp>
+#include <local_ba_g2o_with_wheel/local_ba_g2o/type.h>
+#include <local_ba_g2o_with_wheel/local_ba_g2o/landmark.hpp>
 
 #include <vector>
 

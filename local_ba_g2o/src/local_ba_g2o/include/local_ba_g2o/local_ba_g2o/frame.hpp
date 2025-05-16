@@ -1,7 +1,7 @@
 #ifndef FRAME_HPP
 #define FRAME_HPP
 
-#include <local_ba_g2o/type.h>
+#include <local_ba_g2o/local_ba_g2o/type.h>
 #include <opencv2/opencv.hpp>
 #include <unordered_map>
 class Frame

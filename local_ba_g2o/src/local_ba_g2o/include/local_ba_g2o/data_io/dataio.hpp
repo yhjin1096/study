@@ -1,9 +1,9 @@
 #ifndef SAVE_HPP
 #define SAVE_HPP
 
-#include <local_ba_g2o/type.h>
-#include <local_ba_g2o/landmark.hpp>
-#include <local_ba_g2o/frame.hpp>
+#include <local_ba_g2o/local_ba_g2o/type.h>
+#include <local_ba_g2o/local_ba_g2o/landmark.hpp>
+#include <local_ba_g2o/local_ba_g2o/frame.hpp>
 
 #include <fstream>
 class DataIO
