@@ -18,6 +18,7 @@ include_directories(
 )
 
 add_executable(2_2 src/2_2/main.cpp)
+add_executable(2_3 src/2_3/main.cpp)
 
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}

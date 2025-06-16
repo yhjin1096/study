@@ -1,6 +1,7 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <cstdint>
 
 int main(int argc, char **argv)
 {
@@ -41,6 +42,10 @@ int main(int argc, char **argv)
 
   unsigned int ui = -1;
   std::cout << "unsigned int ui = " << ui << std::endl;
+
+  // 시스템 아키텍처 확인
+  std::cout << "시스템 아키텍처: " << (sizeof(void*) * 8) << "비트" << std::endl;
+  std::cout << "sizeof(void*) = " << sizeof(void*) << " 바이트" << std::endl;
 
   return 0;
 }
