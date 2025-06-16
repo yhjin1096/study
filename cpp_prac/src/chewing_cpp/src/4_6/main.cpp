@@ -26,7 +26,7 @@ int main(int argc, char** argv)
     }
     {
         DoSomethingWithString(MyString("abc"));
-        DoSomethingWithString("abc"); //암시적 변환
+        DoSomethingWithString("abc"); //암시적 변환(implicit conversion)
     }
     {
         //암시적 변환 막기 - explicit
