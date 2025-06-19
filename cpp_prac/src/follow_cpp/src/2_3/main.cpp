@@ -2,38 +2,32 @@
 
 int main(int argc, char **argv)
 {
-    // void my_void; // void는 메모리 차지하지 않아 선언 불가
-    int i = 123;
-    float f = 123.456f;
-    double d = 123.456;
-
-    // 포인터의 크기는 모두 같다(8byte)
-    // 때문에 void 포인터로 모든 타입을 가리킬 수 있다.
-    void *my_void;
+    // fixed-width integers
+    std::int8_t i8 = 1; // 1byte = 8bit
+    std::int16_t i16 = 1; // 2byte = 16bit
+    std::int32_t i32 = 1; // 4byte = 32bit
+    std::int64_t i64 = 1; // 8byte = 64bit
+    std::int_fast8_t i_fast8 = 1; // 1byte = 8bit
+    std::int_fast16_t i_fast16 = 1; // 2byte = 16bit
+    std::int_fast32_t i_fast32 = 1; // 4byte = 32bit
+    std::int_fast64_t i_fast64 = 1; // 8byte = 64bit
+    std::int_least8_t i_least8 = 1; // 1byte = 8bit
+    std::int_least16_t i_least16 = 1; // 2byte = 16bit
+    std::int_least32_t i_least32 = 1; // 4byte = 32bit
+    std::int_least64_t i_least64 = 1; // 8byte = 64bit
     
-    my_void = &i;
-    std::cout << "my_void = " << my_void << std::endl;
-    
-    my_void = &f;
-    std::cout << "my_void = " << my_void << std::endl;
-
-    my_void = &d;
-    std::cout << "my_void = " << my_void << std::endl;
-
-    float *my_float = &f;
-    double *my_double = &d;
-
-    // 포인터의 크기는 모두 같다(8byte)
-    // 8byte인 이유는 시스템 아키텍처가 64bit 이기 때문이다.
-    // 시스템 아키텍처가 32bit 이면 4byte이다.
-    // 이를 확인하려면 void*의 크기를 확인하면 된다. sizeof(void*)
-    std::cout << "sizeof(my_void) = " << sizeof(my_void) << std::endl;
-    std::cout << "sizeof(my_float) = " << sizeof(my_float) << std::endl;
-    std::cout << "sizeof(my_double) = " << sizeof(my_double) << std::endl;
-    
-    std::cout << "sizeof(i) = " << sizeof(i) << std::endl;
-    std::cout << "sizeof(f) = " << sizeof(f) << std::endl;
-    std::cout << "sizeof(d) = " << sizeof(d) << std::endl;
+    std::cout << "i8 = " << i8 << ", sizeof(i8) = " << sizeof(i8) << std::endl;
+    std::cout << "i16 = " << i16 << ", sizeof(i16) = " << sizeof(i16) << std::endl;
+    std::cout << "i32 = " << i32 << ", sizeof(i32) = " << sizeof(i32) << std::endl;
+    std::cout << "i64 = " << i64 << ", sizeof(i64) = " << sizeof(i64) << std::endl;
+    std::cout << "i_fast8 = " << i_fast8 << ", sizeof(i_fast8) = " << sizeof(i_fast8) << std::endl;
+    std::cout << "i_fast16 = " << i_fast16 << ", sizeof(i_fast16) = " << sizeof(i_fast16) << std::endl;
+    std::cout << "i_fast32 = " << i_fast32 << ", sizeof(i_fast32) = " << sizeof(i_fast32) << std::endl;
+    std::cout << "i_fast64 = " << i_fast64 << ", sizeof(i_fast64) = " << sizeof(i_fast64) << std::endl;
+    std::cout << "i_least8 = " << i_least8 << ", sizeof(i_least8) = " << sizeof(i_least8) << std::endl;
+    std::cout << "i_least16 = " << i_least16 << ", sizeof(i_least16) = " << sizeof(i_least16) << std::endl;
+    std::cout << "i_least32 = " << i_least32 << ", sizeof(i_least32) = " << sizeof(i_least32) << std::endl;
+    std::cout << "i_least64 = " << i_least64 << ", sizeof(i_least64) = " << sizeof(i_least64) << std::endl;
 
     return 0;
 }
