@@ -28,6 +28,7 @@ add_executable(4_2 src/4_2/main.cpp) # static variable - internal linkage
 add_executable(4_2_2 src/4_2/main2.cpp # global variable - external linkage
                      src/4_2/test.cpp
                      src/4_2/MyConstraint.cpp)
+add_executable(4_4 src/4_4/main.cpp) # auto
 
 
 # target_link_libraries(${PROJECT_NAME}_node
