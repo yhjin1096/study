@@ -34,6 +34,8 @@ add_executable(follow_4_4 src/4_4/main.cpp) # auto
 add_executable(follow_4_5 src/4_5/main.cpp) # 형변환
 add_executable(follow_4_8 src/4_8/main.cpp) # enum class
 
+add_executable(follow_6_13 src/6_13/main.cpp) # 포인터와 const
+add_executable(follow_6_18 src/6_18/main.cpp) # void pointer
 
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
