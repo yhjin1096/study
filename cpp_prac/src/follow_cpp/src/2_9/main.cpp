@@ -16,5 +16,8 @@ int main(int argc, char **argv)
 
     std::cout << "my_const_var = " << my_const_var << std::endl;
 
+    // 컴파일 에러
+    // error: duplicate ‘const’
+    // const int const * ptr = nullptr;
     return 0;
 }

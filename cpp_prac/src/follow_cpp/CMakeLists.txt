@@ -37,6 +37,9 @@ add_executable(follow_4_8 src/4_8/main.cpp) # enum class
 add_executable(follow_6_13 src/6_13/main.cpp) # 포인터와 const
 add_executable(follow_6_18 src/6_18/main.cpp) # void pointer
 
+add_executable(follow_7_6 src/7_6/main.cpp) # inline 함수
+add_executable(follow_7_9 src/7_9/main.cpp) # 함수 포인터
+
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
