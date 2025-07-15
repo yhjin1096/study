@@ -41,6 +41,7 @@ add_executable(follow_7_6 src/7_6/main.cpp) # inline 함수
 add_executable(follow_7_9 src/7_9/main.cpp) # 함수 포인터
 
 add_executable(follow_8_2 src/8_2/main.cpp) # 캡슐화(encapsulation), 접근 지정자(access specifier), 접근 함수(access function)
+add_executable(follow_8_10 src/8_10/main.cpp) # 정적 멤버 변수
 
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
