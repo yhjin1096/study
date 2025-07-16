@@ -42,6 +42,11 @@ add_executable(follow_7_9 src/7_9/main.cpp) # 함수 포인터
 
 add_executable(follow_8_2 src/8_2/main.cpp) # 캡슐화(encapsulation), 접근 지정자(access specifier), 접근 함수(access function)
 add_executable(follow_8_10 src/8_10/main.cpp) # 정적 멤버 변수
+add_executable(follow_8_11 src/8_11/main.cpp) # 정적 멤버 함수
+add_executable(follow_8_12 src/8_12/main.cpp) # 친구 함수와 클래스 friend
+add_executable(follow_8_12_2 src/8_12/main2.cpp) # 친구 함수와 클래스 friend
+add_executable(follow_8_13 src/8_13/main.cpp) # 익명 객체
+add_executable(follow_8_13_2 src/8_13/main2.cpp) # 익명 객체
 
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}

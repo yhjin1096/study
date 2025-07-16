@@ -18,6 +18,7 @@ int Something::value_ = 1;
 int main(int argc, char* argv[])
 {
     // instance 선언 전에 이미 메모리 할당됨
+    // 특정 instance가 없어도 접근 가능
     std::cout << &Something::value_ << " " << Something::value_ << std::endl;
     std::cout << &Something::value2_ << " " << Something::value2_ << std::endl;
 
