@@ -48,6 +48,8 @@ add_executable(follow_8_12_2 src/8_12/main2.cpp) # 친구 함수와 클래스 fr
 add_executable(follow_8_13 src/8_13/main.cpp) # 익명 객체
 add_executable(follow_8_13_2 src/8_13/main2.cpp) # 익명 객체
 
+add_executable(follow_9_1 src/9_1/main.cpp) # 산술 연산자 오버로딩
+
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
