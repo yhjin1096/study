@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<launch>
+  <node name="ekf_mouse_tracking" pkg="filter" type="ekf_mouse_tracking" output="screen">
+  </node>
+</launch>

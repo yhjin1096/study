@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+
+  <node name="kf_mouse_tracking" pkg="filter" type="kf_mouse_tracking" output="screen">
+
+  </node>
+</launch>

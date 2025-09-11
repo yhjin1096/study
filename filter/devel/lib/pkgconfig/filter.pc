@@ -1,0 +1,8 @@
+prefix=/home/cona/yhj/study/filter/devel
+
+Name: filter
+Description: Description of filter
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,2 @@
+filter
+-DCATKIN_DEVEL_PREFIX=/home/cona/yhj/study/filter/devel -DCMAKE_INSTALL_PREFIX=/home/cona/yhj/study/filter/install -G Unix Makefiles
