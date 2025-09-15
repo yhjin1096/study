@@ -64,11 +64,17 @@ cv::Mat EKFMouseTracking::stateTransition(const cv::Mat& state, double dt) {
 
 cv::Mat EKFMouseTracking::measurementFunction(const cv::Mat& state) {
     cv::Mat measurement = cv::Mat::zeros(2, 1, CV_32F);
-
-    // 측정값은 위치만 (비선형 함수일 수 있음)
-    measurement.at<float>(0) = state.at<float>(0); // x
-    measurement.at<float>(1) = state.at<float>(1); // y
-
+    
+    float x = state.at<float>(0);
+    float y = state.at<float>(1);
+    
+    // 기본 측정값
+    measurement.at<float>(0) = x;
+    measurement.at<float>(1) = y;
+    
+    // 실제로는 여기에 측정 노이즈가 추가됨
+    // measurement += noise;
+    
     return measurement;
 }
 
