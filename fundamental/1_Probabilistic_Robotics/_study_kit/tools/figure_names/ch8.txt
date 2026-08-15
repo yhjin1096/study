@@ -1,0 +1,36 @@
+# 8장 Mobile Robot Localization: Grid and Monte Carlo — Figure/Table 파일명 매핑
+# 사용: python3 tools/extract_figures.py --chapter 8 --pages 258-300 \
+#         --out part2_localization/08_localization_grid_montecarlo/images \
+#         --names tools/figure_names/ch8.txt
+#
+# 참고: 이 책에 **Figure 8.15는 존재하지 않는다** (저자의 번호 건너뜀).
+#       PDF 전체 검색으로 확인했다 — 스크립트 누락이 아니다.
+
+Table 8.1    = table8_1_grid_localization
+Figure 8.1   = fig8_1_grid_localization_hallway
+Figure 8.2   = fig8_2_fixed_resolution_grid
+Figure 8.3   = fig8_3_error_vs_cell_size
+Figure 8.4   = fig8_4_cputime_vs_cell_size
+Figure 8.5   = fig8_5_topological_representation
+Figure 8.6   = fig8_6_metric_grid_global_localization
+Figure 8.7   = fig8_7_sonar_global_localization_office
+Figure 8.8   = fig8_8_aaai_arena_map
+Figure 8.9   = fig8_9_sonar_dataset_and_beliefs
+Figure 8.10  = fig8_10_odometry_vs_corrected_path
+Figure 8.11  = fig8_11_mcl_hallway
+Table 8.2    = table8_2_mcl
+Figure 8.12  = fig8_12_mcl_landmark_based
+Figure 8.13  = fig8_13_mcl_office_sonar
+Figure 8.14  = fig8_14_mcl_ceiling_camera
+Table 8.3    = table8_3_augmented_mcl
+Figure 8.16  = fig8_16_mcl_random_particles_robocup
+Figure 8.17  = fig8_17_mcl_variants_comparison
+Table 8.4    = table8_4_kld_sampling_mcl
+Figure 8.18  = fig8_18_kld_sample_size_evolution
+Figure 8.19  = fig8_19_kld_vs_fixed_sampling
+Figure 8.20  = fig8_20_museum_crowd
+Figure 8.21  = fig8_21_corrupted_laser_scans
+Table 8.5    = table8_5_test_range_measurement
+Figure 8.22  = fig8_22_measurement_rejection
+Figure 8.23  = fig8_23_mcl_with_without_rejection
+Table 8.6    = table8_6_localization_comparison

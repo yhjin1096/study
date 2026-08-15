@@ -1,0 +1,313 @@
+<div class="lab" id="w-euk">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">EKF vs UKF — 곡선 운동에서 선형화 오차</span>
+    <span class="lab-note">Figure 7.16을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>로봇이 원호를 따라 <b>관측 없이</b> 이동할 때의 예측 공분산을 세 가지로 비교한다:
+       <b>참값</b>(Table 5.3의 sample_motion_model_velocity로 뽑은 표본 2000개),
+       <b>EKF</b>(Jacobian 선형화), <b>UKF</b>(시그마 포인트).
+       <b>회전량이 클수록·노이즈가 클수록</b> EKF 타원이 참값에서 벗어나는 것을 볼 수 있다.
+       EKF의 평균은 <b>언제나 제어가 가리키는 점</b>에 놓이지만, UKF의 평균은 시그마 포인트에서
+       추출되므로 <b>곡선 안쪽으로 당겨진다</b> — 책 p.228이 지적한 “미묘한 차이”다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>v (cm/s)</span><b id="uv-v">40</b></label>
+        <input type="range" id="us-v" min="10" max="80" step="1" value="40">
+      </div>
+      <div class="slider">
+        <label><span>ω (deg/s)</span><b id="uv-w">40</b></label>
+        <input type="range" id="us-w" min="5" max="90" step="1" value="40">
+      </div>
+      <div class="slider">
+        <label><span>스텝 수</span><b id="uv-n">2</b></label>
+        <input type="range" id="us-n" min="1" max="5" step="1" value="2">
+      </div>
+      <div class="slider">
+        <label><span>α₁ — 병진 노이즈</span><b id="uv-a1">0.12</b></label>
+        <input type="range" id="us-a1" min="0.01" max="0.4" step="0.01" value="0.12">
+      </div>
+      <div class="slider">
+        <label><span>α₄ — 회전 노이즈</span><b id="uv-a4">0.12</b></label>
+        <input type="range" id="us-a4" min="0.01" max="0.4" step="0.01" value="0.12">
+      </div>
+      <div class="slider">
+        <label><span>초기 σθ (deg)</span><b id="uv-s0">10</b></label>
+        <input type="range" id="us-s0" min="1" max="40" step="1" value="10">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="mild">완만한 곡선</button>
+      <button data-preset="fig716">Figure 7.16 (급한 곡선)</button>
+      <button data-preset="extreme">극단 (선형화 붕괴)</button>
+      <button class="ghost" data-samples>표본 표시 켜기/끄기</button>
+    </div>
+
+    <canvas id="eu-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>참값 (표본 2000개)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>EKF</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>UKF · 시그마 포인트</span>
+    </div>
+    <div class="readout" id="eu-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('eu-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('eu-readout');
+  var showSamples = true, DT = 1.0, NS = 2000;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function wrap(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function mm(A, B) {
+    return A.map(function (r) {
+      return B[0].map(function (_, j) { return r.reduce(function (s, x, k) { return s + x * B[k][j]; }, 0); });
+    });
+  }
+  function T(A) { return A[0].map(function (_, j) { return A.map(function (r) { return r[j]; }); }); }
+  function add(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+
+  function motion(x, v, w, dt) {
+    if (Math.abs(w) < 1e-6) return [x[0] + v * dt * Math.cos(x[2]), x[1] + v * dt * Math.sin(x[2]), x[2]];
+    var r = v / w;
+    return [x[0] - r * Math.sin(x[2]) + r * Math.sin(x[2] + w * dt),
+            x[1] + r * Math.cos(x[2]) - r * Math.cos(x[2] + w * dt),
+            x[2] + w * dt];
+  }
+
+  // Cholesky (대칭 양정부호)
+  function chol(A) {
+    var n = A.length, L = Array.from({length: n}, function () { return new Array(n).fill(0); });
+    for (var i = 0; i < n; i++) for (var j = 0; j <= i; j++) {
+      var s = A[i][j];
+      for (var k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+      if (i === j) L[i][j] = Math.sqrt(Math.max(s, 1e-12));
+      else L[i][j] = s / L[j][j];
+    }
+    return L;
+  }
+
+  function covOf(pts, mean) {
+    var C = [[0, 0], [0, 0]];
+    pts.forEach(function (p) {
+      var dx = p[0] - mean[0], dy = p[1] - mean[1];
+      C[0][0] += dx * dx; C[0][1] += dx * dy; C[1][0] += dx * dy; C[1][1] += dy * dy;
+    });
+    var n = pts.length;
+    return [[C[0][0] / n, C[0][1] / n], [C[1][0] / n, C[1][1] / n]];
+  }
+
+  function compute() {
+    var v = val('us-v'), w = val('us-w') * Math.PI / 180, N = Math.round(val('us-n'));
+    // 교차 항 α₂·α₃는 0으로 둔다. 식 (7.10)의 α₂ω², α₃v² 는 v가 m/s일 것을 전제하므로
+    // cm 단위를 쓰는 이 위젯에서 그대로 두면 노이즈가 10⁴배로 부풀어 오른다.
+    // α₂=α₃=0 이면 M_t = diag(α₁v², α₄ω²) 가 되어 단위에 무관해진다.
+    var a1 = val('us-a1'), a4 = val('us-a4'), a2 = 0, a3 = 0;
+    var s0 = val('us-s0') * Math.PI / 180;
+    var mu0 = [0, 0, 0];
+    var Sig0 = [[25, 0, 0], [0, 25, 0], [0, 0, s0 * s0]];
+
+    // ---- 참값: 표본 기반 (Table 5.3) ----
+    var samples = [];
+    for (var s = 0; s < NS; s++) {
+      var x = [mu0[0] + gauss() * 5, mu0[1] + gauss() * 5, mu0[2] + gauss() * s0];
+      for (var n = 0; n < N; n++) {
+        var vh = v + gauss() * Math.sqrt(a1 * v * v + a2 * w * w);
+        var wh = w + gauss() * Math.sqrt(a3 * v * v + a4 * w * w);
+        x = motion(x, vh, wh, DT);
+      }
+      samples.push(x);
+    }
+    var tm = [0, 0];
+    samples.forEach(function (p) { tm[0] += p[0]; tm[1] += p[1]; });
+    tm = [tm[0] / NS, tm[1] / NS];
+    var trueC = covOf(samples, tm);
+
+    // ---- EKF ----
+    var mu = mu0.slice(), Sig = Sig0.map(function (r) { return r.slice(); });
+    for (var n2 = 0; n2 < N; n2++) {
+      var th = mu[2];
+      var G = [[1, 0, (v / w) * (-Math.cos(th) + Math.cos(th + w * DT))],
+               [0, 1, (v / w) * (-Math.sin(th) + Math.sin(th + w * DT))],
+               [0, 0, 1]];
+      var V = [[(-Math.sin(th) + Math.sin(th + w * DT)) / w,
+                v * (Math.sin(th) - Math.sin(th + w * DT)) / (w * w) + v * Math.cos(th + w * DT) * DT / w],
+               [(Math.cos(th) - Math.cos(th + w * DT)) / w,
+                -v * (Math.cos(th) - Math.cos(th + w * DT)) / (w * w) + v * Math.sin(th + w * DT) * DT / w],
+               [0, DT]];
+      var M = [[a1 * v * v + a2 * w * w, 0], [0, a3 * v * v + a4 * w * w]];
+      mu = motion(mu, v, w, DT);
+      Sig = add(mm(mm(G, Sig), T(G)), mm(mm(V, M), T(V)));
+    }
+    var ekfM = [mu[0], mu[1]], ekfC = [[Sig[0][0], Sig[0][1]], [Sig[1][0], Sig[1][1]]];
+
+    // ---- UKF (state augmentation, Table 7.4) ----
+    var umu = mu0.slice(), uSig = Sig0.map(function (r) { return r.slice(); });
+    var sigmaPts = [];
+    for (var n3 = 0; n3 < N; n3++) {
+      var L = 5;                                    // 상태 3 + 제어 2 (관측 없음)
+      var alpha = 1.0, kappa = 0, beta = 2;         // 3.4절 식 (3.67) 표준 설정
+      var lam = alpha * alpha * (L + kappa) - L, gam = Math.sqrt(L + lam);
+      var Ma = [[a1 * v * v + a2 * w * w, 0], [0, a3 * v * v + a4 * w * w]];
+      var Sa = [[uSig[0][0], uSig[0][1], uSig[0][2], 0, 0],
+                [uSig[1][0], uSig[1][1], uSig[1][2], 0, 0],
+                [uSig[2][0], uSig[2][1], uSig[2][2], 0, 0],
+                [0, 0, 0, Ma[0][0], 0],
+                [0, 0, 0, 0, Ma[1][1]]];
+      var ma = [umu[0], umu[1], umu[2], 0, 0];
+      var Lc = chol(Sa);
+      var X = [ma.slice()];
+      for (var i = 0; i < L; i++) {
+        var col = Lc.map(function (r) { return r[i]; });
+        X.push(ma.map(function (m, k) { return m + gam * col[k]; }));
+      }
+      for (var i2 = 0; i2 < L; i2++) {
+        var col2 = Lc.map(function (r) { return r[i2]; });
+        X.push(ma.map(function (m, k) { return m - gam * col2[k]; }));
+      }
+      var wm = [lam / (L + lam)], wc = [lam / (L + lam) + (1 - alpha * alpha + beta)];
+      for (var i3 = 1; i3 < 2 * L + 1; i3++) { wm.push(1 / (2 * (L + lam))); wc.push(1 / (2 * (L + lam))); }
+
+      var Xb = X.map(function (p) {                 // 라인 7 — 노이즈가 함수 안으로
+        return motion([p[0], p[1], p[2]], v + p[3], w + p[4], DT);
+      });
+      sigmaPts = Xb;
+      var m2 = [0, 0, 0];
+      Xb.forEach(function (p, i4) { m2[0] += wm[i4] * p[0]; m2[1] += wm[i4] * p[1]; m2[2] += wm[i4] * p[2]; });
+      var C2 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+      Xb.forEach(function (p, i5) {
+        var d = [p[0] - m2[0], p[1] - m2[1], wrap(p[2] - m2[2])];
+        for (var a = 0; a < 3; a++) for (var b = 0; b < 3; b++) C2[a][b] += wc[i5] * d[a] * d[b];
+      });
+      umu = m2; uSig = C2;
+    }
+    var ukfM = [umu[0], umu[1]], ukfC = [[uSig[0][0], uSig[0][1]], [uSig[1][0], uSig[1][1]]];
+
+    return {samples: samples, tm: tm, trueC: trueC, ekfM: ekfM, ekfC: ekfC,
+            ukfM: ukfM, ukfC: ukfC, sigmaPts: sigmaPts, N: N, v: v, w: w};
+  }
+
+  function ellipse(g, cx, cy, C, sc, color, width) {
+    var a = C[0][0] * sc * sc, b = -C[0][1] * sc * sc, c = C[1][1] * sc * sc;
+    var tr = a + c, det = a * c - b * b;
+    var l1 = tr / 2 + Math.sqrt(Math.max(tr * tr / 4 - det, 0));
+    var l2 = tr / 2 - Math.sqrt(Math.max(tr * tr / 4 - det, 0));
+    var ang = Math.abs(b) < 1e-12 ? (a >= c ? 0 : Math.PI / 2) : Math.atan2(l1 - a, b);
+    g.save(); g.translate(cx, cy); g.rotate(-ang);
+    g.beginPath();
+    g.ellipse(0, 0, 2 * Math.sqrt(Math.max(l1, 0)), 2 * Math.sqrt(Math.max(l2, 0)), 0, 0, Math.PI * 2);
+    g.strokeStyle = color; g.lineWidth = width; g.stroke(); g.restore();
+  }
+
+  function draw() {
+    ['uv-v', 'uv-w', 'uv-n', 'uv-a1', 'uv-a4', 'uv-s0'].forEach(function (id, i) {
+      var src = ['us-v', 'us-w', 'us-n', 'us-a1', 'us-a4', 'us-s0'][i];
+      document.getElementById(id).textContent = val(src).toFixed(i === 3 || i === 4 ? 2 : 0);
+    });
+    var R = compute();
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 화면 범위: 표본뿐 아니라 EKF·UKF 타원(2σ)까지 담아야 타원이 잘리지 않는다
+    var xs = R.samples.map(function (p) { return p[0]; }).concat([0]);
+    var ys = R.samples.map(function (p) { return p[1]; }).concat([0]);
+    [[R.ekfM, R.ekfC], [R.ukfM, R.ukfC]].forEach(function (e) {
+      var rx = 2 * Math.sqrt(Math.max(e[1][0][0], 0)), ry = 2 * Math.sqrt(Math.max(e[1][1][1], 0));
+      xs.push(e[0][0] - rx, e[0][0] + rx);
+      ys.push(e[0][1] - ry, e[0][1] + ry);
+    });
+    var minX = Math.min.apply(null, xs) - 20, maxX = Math.max.apply(null, xs) + 20;
+    var minY = Math.min.apply(null, ys) - 20, maxY = Math.max.apply(null, ys) + 20;
+    var pad = 20;
+    var sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
+    var ox = (W - sc * (maxX - minX)) / 2, oy = (H - sc * (maxY - minY)) / 2;
+    function PX(x) { return ox + (x - minX) * sc; }
+    function PY(y) { return H - (oy + (y - minY) * sc); }
+
+    // 노이즈 없는 궤적
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    var p0 = [0, 0, 0];
+    for (var s = 0; s <= 120; s++) {
+      var pp = motion([0, 0, 0], R.v, R.w, R.N * DT * s / 120);
+      s ? ctx.lineTo(PX(pp[0]), PY(pp[1])) : ctx.moveTo(PX(pp[0]), PY(pp[1]));
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    if (showSamples) {
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.20;
+      R.samples.forEach(function (p) {
+        ctx.beginPath(); ctx.arc(PX(p[0]), PY(p[1]), 1.1, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    ellipse(ctx, PX(R.tm[0]), PY(R.tm[1]), R.trueC, sc, css('--correct'), 2.6);
+    ellipse(ctx, PX(R.ekfM[0]), PY(R.ekfM[1]), R.ekfC, sc, css('--predict'), 2.0);
+    ellipse(ctx, PX(R.ukfM[0]), PY(R.ukfM[1]), R.ukfC, sc, css('--accent'), 2.0);
+
+    // 시그마 포인트
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.2;
+    R.sigmaPts.forEach(function (p) {
+      var x = PX(p[0]), y = PY(p[1]);
+      ctx.beginPath(); ctx.moveTo(x - 3.5, y); ctx.lineTo(x + 3.5, y);
+      ctx.moveTo(x, y - 3.5); ctx.lineTo(x, y + 3.5); ctx.stroke();
+    });
+
+    function dot(m, color, r) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(PX(m[0]), PY(m[1]), r, 0, Math.PI * 2); ctx.fill();
+    }
+    dot(R.tm, css('--correct'), 4.5);
+    dot(R.ekfM, css('--predict'), 3.5);
+    dot(R.ukfM, css('--accent'), 3.5);
+    dot([0, 0], css('--ink'), 4);
+
+    var dE = Math.hypot(R.ekfM[0] - R.tm[0], R.ekfM[1] - R.tm[1]);
+    var dU = Math.hypot(R.ukfM[0] - R.tm[0], R.ukfM[1] - R.tm[1]);
+    function trace(C) { return C[0][0] + C[1][1]; }
+    var tT = trace(R.trueC), tE = trace(R.ekfC), tU = trace(R.ukfC);
+    out.innerHTML =
+      '<b>평균 오차</b> — EKF <b>' + dE.toFixed(2) + '</b> cm · UKF <b>' + dU.toFixed(2) + '</b> cm' +
+      (dU < dE ? ' &nbsp;→ UKF가 더 가깝다' : '') + '<br>' +
+      '<b>공분산 trace</b> — 참값 ' + tT.toFixed(0) + ' · EKF ' + tE.toFixed(0) +
+      ' (' + (100 * (tE / tT - 1)).toFixed(0) + '%) · UKF ' + tU.toFixed(0) +
+      ' (' + (100 * (tU / tT - 1)).toFixed(0) + '%) &nbsp; ' +
+      '총 회전 ' + (R.w * R.N * 180 / Math.PI).toFixed(0) + '°';
+  }
+
+  ['us-v', 'us-w', 'us-n', 'us-a1', 'us-a4', 'us-s0'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-euk [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = {
+        mild:    {v: 40, w: 12, n: 2, a1: 0.03, a4: 0.03, s0: 3},
+        fig716:  {v: 40, w: 40, n: 2, a1: 0.12, a4: 0.12, s0: 10},
+        extreme: {v: 60, w: 75, n: 3, a1: 0.25, a4: 0.25, s0: 20}
+      }[b.dataset.preset];
+      Object.keys(p).forEach(function (k) {
+        document.getElementById('us-' + k).value = p[k];
+      });
+      draw();
+    });
+  });
+  document.querySelector('#w-euk [data-samples]').addEventListener('click', function () {
+    showSamples = !showSamples; draw();
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

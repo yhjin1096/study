@@ -1,0 +1,25 @@
+# 7장 Mobile Robot Localization: Markov and Gaussian — Figure/Table 파일명 매핑
+# 사용: python3 tools/extract_figures.py --chapter 7 --pages 212-257 \
+#         --out part2_localization/07_localization_markov_gaussian/images \
+#         --names tools/figure_names/ch7.txt
+
+Figure 7.1  = fig7_1_graphical_model_localization
+Figure 7.2  = fig7_2_example_maps
+Figure 7.3  = fig7_3_symmetric_corridor_belief
+Table 7.1   = table7_1_markov_localization
+Figure 7.4  = fig7_4_hallway_three_doors
+Figure 7.5  = fig7_5_markov_localization_illustration
+Figure 7.6  = fig7_6_ekf_localization_illustration
+Table 7.2   = table7_2_ekf_localization_known_correspondences
+Figure 7.7  = fig7_7_aibo_robocup_field
+Figure 7.8  = fig7_8_ekf_prediction_step
+Figure 7.9  = fig7_9_ekf_measurement_prediction
+Figure 7.10 = fig7_10_ekf_correction_step
+Figure 7.11 = fig7_11_ekf_localization_sequences
+Table 7.3   = table7_3_ekf_localization_unknown_correspondences
+Table 7.4   = table7_4_ukf_localization
+Figure 7.12 = fig7_12_ukf_prediction_step
+Figure 7.13 = fig7_13_ukf_measurement_prediction
+Figure 7.14 = fig7_14_ukf_correction_step
+Figure 7.15 = fig7_15_ukf_vs_ekf_comparison
+Figure 7.16 = fig7_16_linearization_error

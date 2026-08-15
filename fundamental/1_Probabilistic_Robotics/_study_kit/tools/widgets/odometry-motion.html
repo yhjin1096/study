@@ -1,0 +1,237 @@
+<div class="lab" id="w-odo">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">Odometry motion model — 회전·직진·회전 분해</span>
+    <span class="lab-note">Figure 5.7·5.8·5.9·5.10을 한 화면에서</span>
+  </div>
+  <div class="lab-body">
+    <p><b>캔버스를 클릭</b>하면 그 지점이 odometry가 보고한 도착점이 된다. 회색 꺾은선이
+       <b>δ<sub>rot1</sub> → δ<sub>trans</sub> → δ<sub>rot2</sub></b> 분해(Figure 5.7)이고,
+       점들이 Table 5.6으로 표집한 500개 표본이다.
+       <b>여러 스텝 누적</b>을 켜면 측정 없이 이동만 할 때 불확실성이 자라는 모습(Figure 5.10)을 볼 수 있다.</p>
+
+    <div class="btnrow">
+      <button data-preset="a">Fig 5.8(a) 전형적</button>
+      <button data-preset="b">Fig 5.8(b) 병진 오차 큼</button>
+      <button data-preset="c">Fig 5.8(c) 회전 오차 큼</button>
+      <button data-accum>여러 스텝 누적: <b id="od-acc">끄기</b></button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>α₁ — 회전이 회전에 주는 오차</span><b id="ov-1">0.02</b></label>
+        <input type="range" id="os-1" min="0" max="0.5" step="0.005" value="0.02">
+      </div>
+      <div class="slider">
+        <label><span>α₂ — 직진이 회전에 주는 오차</span><b id="ov-2">0.02</b></label>
+        <input type="range" id="os-2" min="0" max="0.2" step="0.005" value="0.02">
+      </div>
+      <div class="slider">
+        <label><span>α₃ — 직진이 직진에 주는 오차</span><b id="ov-3">0.05</b></label>
+        <input type="range" id="os-3" min="0" max="0.5" step="0.005" value="0.05">
+      </div>
+      <div class="slider">
+        <label><span>α₄ — 회전이 직진에 주는 오차</span><b id="ov-4">0.02</b></label>
+        <input type="range" id="os-4" min="0" max="0.5" step="0.005" value="0.02">
+      </div>
+    </div>
+
+    <canvas id="od-canvas" width="880" height="340"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>회전–직진–회전 분해</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>표본 500개</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>odometry가 보고한 pose</span>
+    </div>
+    <div class="readout" id="od-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('od-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('od-readout');
+  var N = 500, accum = false;
+  var start = { x: 1.0, y: 2.0, th: 0 };
+  var target = { x: 5.0, y: 3.5, th: 0.8 };
+  var trail = [];                       // 누적 모드용 표본 집합들
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function norm(a) { return (a + Math.PI) % (2 * Math.PI) - Math.PI + (a + Math.PI < 0 ? 2 * Math.PI : 0); }
+  function wrap(a) {
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a < -Math.PI) a += 2 * Math.PI;
+    return a;
+  }
+  function sampleNormal(b2) {
+    if (b2 <= 0) return 0;
+    var b = Math.sqrt(b2), s = 0;
+    for (var i = 0; i < 12; i++) s += (Math.random() * 2 - 1) * b;
+    return 0.5 * s;
+  }
+
+  // 식 (29)(30)(31)
+  function decompose(a, b) {
+    var d1 = wrap(Math.atan2(b.y - a.y, b.x - a.x) - a.th);
+    var dt = Math.hypot(b.x - a.x, b.y - a.y);
+    var d2 = wrap(b.th - a.th - d1);
+    return [d1, dt, d2];
+  }
+
+  // Table 5.6
+  function sampleOdom(x, d, al) {
+    var d1 = d[0], dt = d[1], d2 = d[2];
+    var h1 = d1 - sampleNormal(al[0] * d1 * d1 + al[1] * dt * dt);
+    var ht = dt - sampleNormal(al[2] * dt * dt + al[3] * (d1 * d1 + d2 * d2));
+    var h2 = d2 - sampleNormal(al[0] * d2 * d2 + al[1] * dt * dt);
+    return { x: x.x + ht * Math.cos(x.th + h1),
+             y: x.y + ht * Math.sin(x.th + h1),
+             th: wrap(x.th + h1 + h2) };
+  }
+
+  function draw() {
+    var al = [val('os-1'), val('os-2'), val('os-3'), val('os-4')];
+    [1, 2, 3, 4].forEach(function (i) {
+      document.getElementById('ov-' + i).textContent = al[i - 1].toFixed(3);
+    });
+
+    var d = decompose(start, target);
+    var pts = [];
+    for (var i = 0; i < N; i++) pts.push(sampleOdom(start, d, al));
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 340;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 고정 월드 범위 (클릭 좌표 안정)
+    var MINX = 0, MAXX = 10, MINY = 0, MAXY = 10 * H / W;
+    var sc = W / (MAXX - MINX);
+    function PX(x) { return (x - MINX) * sc; }
+    function PY(y) { return H - (y - MINY) * sc; }
+    function UX(px) { return MINX + px / sc; }
+    function UY(py) { return MINY + (H - py) / sc; }
+    cv._u = { UX: UX, UY: UY };
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g = 1; g < MAXX; g++) {
+      ctx.beginPath(); ctx.moveTo(PX(g), 0); ctx.lineTo(PX(g), H); ctx.stroke();
+    }
+    for (var g2 = 1; g2 < MAXY; g2++) {
+      ctx.beginPath(); ctx.moveTo(0, PY(g2)); ctx.lineTo(W, PY(g2)); ctx.stroke();
+    }
+
+    // 누적 표본
+    if (accum) {
+      trail.forEach(function (set, k) {
+        ctx.fillStyle = css('--correct');
+        ctx.globalAlpha = 0.12 + 0.2 * (k / Math.max(trail.length - 1, 1));
+        set.forEach(function (p) {
+          ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 1.6, 0, Math.PI * 2); ctx.fill();
+        });
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // 현재 표본
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.5;
+    pts.forEach(function (p) {
+      ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 2, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // 회전–직진–회전 분해 (Figure 5.7)
+    var midTh = start.th + d[0];
+    var mid = { x: start.x + d[1] * Math.cos(midTh), y: start.y + d[1] * Math.sin(midTh) };
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(PX(start.x), PY(start.y)); ctx.lineTo(PX(mid.x), PY(mid.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    // 회전 호
+    function arc(cx, cy, a0, a1, label) {
+      var R = 26;
+      ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(PX(cx), PY(cy), R, -a0, -a1, a1 > a0);
+      ctx.stroke();
+      var am = (a0 + a1) / 2;
+      ctx.fillStyle = css('--accent'); ctx.font = '600 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, PX(cx) + (R + 14) * Math.cos(am), PY(cy) - (R + 14) * Math.sin(am));
+      ctx.textAlign = 'left';
+    }
+    arc(start.x, start.y, start.th, midTh, 'δrot1');
+    arc(target.x, target.y, midTh, target.th, 'δrot2');
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillText('δtrans', (PX(start.x) + PX(mid.x)) / 2 + 6, (PY(start.y) + PY(mid.y)) / 2 - 8);
+
+    function robot(p, color, label) {
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(PX(p.x), PY(p.y));
+      ctx.lineTo(PX(p.x + 0.55 * Math.cos(p.th)), PY(p.y + 0.55 * Math.sin(p.th)));
+      ctx.stroke();
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, PX(p.x), PY(p.y) - 13);
+      ctx.textAlign = 'left';
+    }
+    robot(start, css('--ink-soft'), 'x_{t-1}');
+    robot(target, css('--ink'), 'odometry 보고');
+
+    var mx = 0, my = 0;
+    pts.forEach(function (p) { mx += p.x; my += p.y; });
+    mx /= N; my /= N;
+    var sxx = 0;
+    pts.forEach(function (p) { sxx += (p.x - mx) * (p.x - mx) + (p.y - my) * (p.y - my); });
+    out.innerHTML =
+      'δrot1 = <b>' + (d[0] * 180 / Math.PI).toFixed(1) + '°</b> · ' +
+      'δtrans = <b>' + d[1].toFixed(2) + '</b> · ' +
+      'δrot2 = <b>' + (d[2] * 180 / Math.PI).toFixed(1) + '°</b>' +
+      ' &nbsp;|&nbsp; 표본 퍼짐 σ = <b>' + Math.sqrt(sxx / N).toFixed(3) + '</b>' +
+      (accum ? ' &nbsp;|&nbsp; 누적 <b>' + trail.length + '</b> 스텝' : '') +
+      '<br><span style="color:var(--ink-faint)">캔버스를 클릭해 도착점을 옮겨보세요</span>';
+
+    return pts;
+  }
+
+  cv.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect();
+    var u = cv._u;
+    if (!u) return;
+    var nx = u.UX(e.clientX - r.left), ny = u.UY(e.clientY - r.top);
+    if (accum) {
+      var pts = draw();
+      trail.push(pts);
+      if (trail.length > 8) trail.shift();
+      // 다음 스텝: 현재 목표를 새 출발점으로
+      start = { x: target.x, y: target.y, th: target.th };
+    }
+    target = { x: nx, y: ny, th: Math.atan2(ny - start.y, nx - start.x) };
+    draw();
+  });
+
+  [1, 2, 3, 4].forEach(function (i) {
+    document.getElementById('os-' + i).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-odo [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = { a: [0.02, 0.02, 0.05, 0.02], b: [0.01, 0.01, 0.40, 0.02], c: [0.35, 0.15, 0.02, 0.02] }[b.dataset.preset];
+      for (var i = 0; i < 4; i++) document.getElementById('os-' + (i + 1)).value = p[i];
+      draw();
+    });
+  });
+  document.querySelector('#w-odo [data-accum]').addEventListener('click', function () {
+    accum = !accum; trail = [];
+    document.getElementById('od-acc').textContent = accum ? '켜기' : '끄기';
+    draw();
+  });
+  document.querySelector('#w-odo [data-reset]').addEventListener('click', function () {
+    start = { x: 1.0, y: 2.0, th: 0 };
+    target = { x: 5.0, y: 3.5, th: 0.8 };
+    trail = []; draw();
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

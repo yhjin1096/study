@@ -1,0 +1,204 @@
+<div class="lab" id="w-ukfsp">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">Unscented transform — sigma point가 EKF보다 나은 이유</span>
+    <span class="lab-note">Figure 3.7·3.8·3.9를 한 화면에서 비교</span>
+  </div>
+  <div class="lab-body">
+    <p>같은 분포, 같은 함수에 대해 <b>EKF(접선 한 개)</b>와 <b>UKF(sigma point 3개)</b>가 각각 어떤
+       가우시안을 내놓는지 비교한다. 회색은 Monte-Carlo로 구한 참 분포다.
+       <b>σ를 키우거나</b>(Fig 3.8) <b>μ를 굽은 영역으로 옮기면</b>(Fig 3.9) 두 방법의 차이가 벌어진다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>평균 μ</span><b id="uv-m">1.35</b></label>
+        <input type="range" id="us-m" min="-3" max="3" step="0.05" value="1.35">
+      </div>
+      <div class="slider">
+        <label><span>표준편차 σ</span><b id="uv-s">0.80</b></label>
+        <input type="range" id="us-s" min="0.1" max="2.2" step="0.05" value="0.8">
+      </div>
+      <div class="slider">
+        <label><span>κ — sigma point 퍼짐 (λ = α²(n+κ) − n)</span><b id="uv-k">2.0</b></label>
+        <input type="range" id="us-k" min="0" max="8" step="0.5" value="2">
+      </div>
+    </div>
+
+    <canvas id="us-canvas" width="880" height="430"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>참 분포 (Monte-Carlo)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>참 분포의 가우시안</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>EKF (접선)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>UKF (sigma point)</span>
+    </div>
+    <div class="readout" id="us-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('us-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('us-readout');
+  var NS = 40000, XMIN = -4, XMAX = 4, YMIN = -4.5, YMAX = 4.5;
+
+  function g(x) { return 2.2 * Math.sin(1.15 * x) + 0.45 * x; }
+  function gp(x) { return 2.53 * Math.cos(1.15 * x) + 0.45; }
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function draw() {
+    var mu = parseFloat(document.getElementById('us-m').value);
+    var sd = parseFloat(document.getElementById('us-s').value);
+    var kappa = parseFloat(document.getElementById('us-k').value);
+    document.getElementById('uv-m').textContent = mu.toFixed(2);
+    document.getElementById('uv-s').textContent = sd.toFixed(2);
+    document.getElementById('uv-k').textContent = kappa.toFixed(1);
+
+    // --- 참 분포 (Monte-Carlo)
+    var ys = new Float64Array(NS), s1 = 0;
+    for (var i = 0; i < NS; i++) { var y = g(mu + sd * randn()); ys[i] = y; s1 += y; }
+    var mTrue = s1 / NS, a2 = 0;
+    for (var j = 0; j < NS; j++) { var d = ys[j] - mTrue; a2 += d * d; }
+    var sTrue = Math.sqrt(a2 / NS);
+
+    // --- EKF: 1차 Taylor
+    var G = gp(mu), mEkf = g(mu), sEkf = Math.abs(G) * sd;
+
+    // --- UKF: n=1, α=1, β=2 → λ = (1+κ) − 1 = κ  (식 57)
+    var n = 1, alpha = 1, beta = 2;
+    var lam = alpha * alpha * (n + kappa) - n;
+    var gamma = Math.sqrt(n + lam);
+    var X = [mu, mu + gamma * sd, mu - gamma * sd];            // 식 (56)
+    var wm0 = lam / (n + lam), wc0 = wm0 + (1 - alpha * alpha + beta);
+    var wi = 1 / (2 * (n + lam));                              // 식 (58)
+    var wm = [wm0, wi, wi], wc = [wc0, wi, wi];
+    var Y = X.map(g);                                          // 식 (59)
+    var mUkf = 0;
+    for (var k = 0; k < 3; k++) mUkf += wm[k] * Y[k];          // 식 (60)
+    var vUkf = 0;
+    for (var k2 = 0; k2 < 3; k2++) vUkf += wc[k2] * (Y[k2] - mUkf) * (Y[k2] - mUkf);
+    var sUkf = Math.sqrt(Math.max(vUkf, 1e-9));
+
+    // --- 히스토그램
+    var BINS = 90, hist = new Float64Array(BINS), maxH = 0;
+    for (var m2 = 0; m2 < NS; m2++) {
+      var b = Math.floor((ys[m2] - YMIN) / (YMAX - YMIN) * BINS);
+      if (b >= 0 && b < BINS) { hist[b]++; if (hist[b] > maxH) maxH = hist[b]; }
+    }
+
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 430;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var gap = 14, leftW = Math.min(230, w * 0.3);
+    var fX = leftW + gap, fW = w - fX - 6, fY = 6, fH = 250;
+    var iY = fH + gap + 6, iH = h - iY - 10;
+    function px(x) { return fX + fW * (x - XMIN) / (XMAX - XMIN); }
+    function py(y) { return fY + fH * (1 - (y - YMIN) / (YMAX - YMIN)); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.strokeRect(fX, fY, fW, fH); ctx.strokeRect(fX, iY, fW, iH); ctx.strokeRect(6, fY, leftW - 6, fH);
+
+    // 함수 g
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var p = 0; p <= 300; p++) {
+      var x = XMIN + (XMAX - XMIN) * p / 300;
+      if (p === 0) ctx.moveTo(px(x), py(g(x))); else ctx.lineTo(px(x), py(g(x)));
+    }
+    ctx.stroke();
+
+    // EKF 접선
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.7; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(px(XMIN), py(g(mu) + G * (XMIN - mu)));
+    ctx.lineTo(px(XMAX), py(g(mu) + G * (XMAX - mu)));
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // sigma point: 입력축과 함수 위 위치
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    X.forEach(function (xs, idx) {
+      ctx.beginPath(); ctx.moveTo(px(xs), py(Y[idx])); ctx.lineTo(px(xs), iY + iH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, py(Y[idx])); ctx.lineTo(px(xs), py(Y[idx])); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    X.forEach(function (xs, idx) {
+      ctx.fillStyle = css('--accent');
+      ctx.beginPath(); ctx.arc(px(xs), py(Y[idx]), 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = css('--ground');
+      ctx.beginPath(); ctx.arc(px(xs), py(Y[idx]), 2.2, 0, Math.PI * 2); ctx.fill();
+    });
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('g(x) · EKF 접선(주황 파선) · sigma point(파랑 원)', fX + 8, fY + 14);
+
+    // 입력 p(x) + sigma point 위치
+    var pk = 1 / (sd * Math.sqrt(2 * Math.PI));
+    ctx.beginPath(); ctx.moveTo(px(XMIN), iY + iH);
+    for (var q = 0; q <= 300; q++) {
+      var xx = XMIN + (XMAX - XMIN) * q / 300, dd = (xx - mu) / sd;
+      var vv = Math.exp(-0.5 * dd * dd) / (sd * Math.sqrt(2 * Math.PI));
+      ctx.lineTo(px(xx), iY + iH - (vv / pk) * (iH - 14));
+    }
+    ctx.lineTo(px(XMAX), iY + iH); ctx.closePath();
+    ctx.fillStyle = css('--ink-faint') + '33'; ctx.fill();
+    ctx.strokeStyle = css('--ink-soft'); ctx.lineWidth = 1.5; ctx.stroke();
+    X.forEach(function (xs) {
+      ctx.fillStyle = css('--accent');
+      ctx.beginPath(); ctx.arc(px(xs), iY + iH - 4, 4.5, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('p(x) — 입력, 파랑 점이 sigma point', fX + 8, iY + 14);
+
+    // 출력 p(y)
+    var lx0 = leftW - 4, lw = leftW - 18;
+    ctx.beginPath(); ctx.moveTo(lx0, py(YMIN));
+    for (var b2 = 0; b2 < BINS; b2++) {
+      var yv = YMIN + (YMAX - YMIN) * (b2 + 0.5) / BINS;
+      ctx.lineTo(lx0 - (hist[b2] / maxH) * lw, py(yv));
+    }
+    ctx.lineTo(lx0, py(YMAX)); ctx.closePath();
+    ctx.fillStyle = css('--ink-faint') + '44'; ctx.fill();
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1; ctx.stroke();
+
+    function vcurve(m, s, color, dash) {
+      var pkk = 1 / (s * Math.sqrt(2 * Math.PI));
+      ctx.beginPath();
+      for (var r = 0; r <= 260; r++) {
+        var yv2 = YMIN + (YMAX - YMIN) * r / 260, e = (yv2 - m) / s;
+        var vv2 = Math.exp(-0.5 * e * e) / (s * Math.sqrt(2 * Math.PI));
+        var xx2 = lx0 - Math.min(vv2 / pkk, 1) * lw * 0.9;
+        if (r === 0) ctx.moveTo(xx2, py(yv2)); else ctx.lineTo(xx2, py(yv2));
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      if (dash) ctx.setLineDash(dash);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    vcurve(mTrue, sTrue, css('--correct'), null);
+    vcurve(mEkf, sEkf, css('--predict'), [6, 4]);
+    vcurve(mUkf, sUkf, css('--accent'), [2, 3]);
+    ctx.fillStyle = css('--ink-faint'); ctx.fillText('p(y)', 12, fY + 14);
+
+    var eE = Math.abs(mEkf - mTrue), eU = Math.abs(mUkf - mTrue);
+    out.innerHTML =
+      '참&nbsp; 평균 <b>' + mTrue.toFixed(3) + '</b>&nbsp; σ <b>' + sTrue.toFixed(3) + '</b><br>' +
+      'EKF 평균 <b>' + mEkf.toFixed(3) + '</b>&nbsp; σ <b>' + sEkf.toFixed(3) +
+        '</b>&nbsp; 평균오차 <b>' + eE.toFixed(3) + '</b><br>' +
+      'UKF 평균 <b>' + mUkf.toFixed(3) + '</b>&nbsp; σ <b>' + sUkf.toFixed(3) +
+        '</b>&nbsp; 평균오차 <b>' + eU.toFixed(3) + '</b> — ' +
+      (eU < eE * 0.98 ? 'UKF가 더 정확' : eE < eU * 0.98 ? 'EKF가 더 정확 (드문 경우)' : '거의 동등');
+  }
+
+  ['us-m', 'us-s', 'us-k'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

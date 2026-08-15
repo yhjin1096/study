@@ -1,0 +1,325 @@
+<div class="lab" id="w-ekfloc">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">EKF localization — 예측 타원과 보정 타원</span>
+    <span class="lab-note">Table 7.2 · Figure 7.8·7.10·7.11</span>
+  </div>
+  <div class="lab-body">
+    <p>Table 7.2를 그대로 실행한다. <b>예측(라인 3~7)</b>에서 타원이
+       <code>G Σ Gᵀ</code>(이전 불확실성)와 <code>V M Vᵀ</code>(제어 노이즈) 두 성분으로 커지고,
+       <b>보정(라인 8~17)</b>에서 랜드마크를 보면 줄어든다 — Figure 7.8과 7.10이 한 화면에 있다.
+       <b>α₁</b>을 키우면 <b>운동 방향으로</b>, <b>α₄</b>를 키우면 <b>운동 방향에 직교</b>해서 퍼진다.
+       correspondence를 <b>“ML 추정”</b>으로 바꾸면 Table 7.3이 되고, 랜드마크가 가까울 때
+       <b>잘못된 대응</b>이 어떻게 필터를 탈선시키는지 볼 수 있다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>v (cm/s)</span><b id="ev-v">14</b></label>
+        <input type="range" id="es-v" min="4" max="30" step="1" value="14">
+      </div>
+      <div class="slider">
+        <label><span>ω (deg/s)</span><b id="ev-w">12</b></label>
+        <input type="range" id="es-w" min="-30" max="30" step="1" value="12">
+      </div>
+      <div class="slider">
+        <label><span>α₁ — 병진 노이즈</span><b id="ev-a1">0.10</b></label>
+        <input type="range" id="es-a1" min="0.01" max="0.6" step="0.01" value="0.1">
+      </div>
+      <div class="slider">
+        <label><span>α₄ — 회전 노이즈</span><b id="ev-a4">0.10</b></label>
+        <input type="range" id="es-a4" min="0.01" max="0.6" step="0.01" value="0.1">
+      </div>
+      <div class="slider">
+        <label><span>σ_r (cm)</span><b id="ev-sr">12</b></label>
+        <input type="range" id="es-sr" min="2" max="60" step="1" value="12">
+      </div>
+      <div class="slider">
+        <label><span>σ_φ (deg)</span><b id="ev-sp">5</b></label>
+        <input type="range" id="es-sp" min="1" max="30" step="1" value="5">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="step">1 스텝 (예측 + 보정)</button>
+      <button data-act="run10">10 스텝 연속</button>
+      <button class="ghost" data-act="corr">correspondence: <b id="ev-corr">알려짐</b></button>
+      <button class="ghost" data-act="close">랜드마크 간격: <b id="ev-close">넓게</b></button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="ek-canvas" width="880" height="380"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>랜드마크</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>참 궤적</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>EKF 추정 · Σ̄(옅음) → Σ(짙음)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>추측 항법 (측정 없음)</span>
+    </div>
+    <div class="readout" id="ek-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('ek-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('ek-readout');
+  var knownCorr = true, wideSpacing = true;
+  var truth, mu, Sig, dr, trail, ells, stats;
+  var DT = 1.0;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function wrap(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  // --- 작은 행렬 도구 (3x3 / 3x2) ---
+  function mm(A, B) {
+    return A.map(function (r) {
+      return B[0].map(function (_, j) { return r.reduce(function (s, v, k) { return s + v * B[k][j]; }, 0); });
+    });
+  }
+  function T(A) { return A[0].map(function (_, j) { return A.map(function (r) { return r[j]; }); }); }
+  function add(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+  function sub(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v - B[i][j]; }); }); }
+  function mv(A, x) { return A.map(function (r) { return r.reduce(function (s, v, k) { return s + v * x[k]; }, 0); }); }
+  function inv2(A) {
+    var d = A[0][0] * A[1][1] - A[0][1] * A[1][0];
+    return [[A[1][1] / d, -A[0][1] / d], [-A[1][0] / d, A[0][0] / d]];
+  }
+  function eye(n) { return Array.from({length: n}, function (_, i) { return Array.from({length: n}, function (_, j) { return i === j ? 1 : 0; }); }); }
+
+  function landmarks() {
+    return wideSpacing
+      ? [[60, 330], [300, 360], [540, 330], [560, 90], [300, 60], [60, 90]]
+      : [[60, 330], [300, 360], [330, 345], [540, 330], [560, 90], [300, 60]];
+  }
+
+  function reset() {
+    truth = [120, 150, 0.2];
+    mu = [120, 150, 0.2];
+    Sig = [[100, 0, 0], [0, 100, 0], [0, 0, 0.02]];
+    dr = [120, 150, 0.2];
+    trail = { t: [[120, 150]], m: [[120, 150]], d: [[120, 150]] };
+    ells = null; stats = null;
+    draw();
+  }
+
+  function gauss() {   // Box–Muller
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function motion(x, v, w, dt) {
+    if (Math.abs(w) < 1e-6) return [x[0] + v * dt * Math.cos(x[2]), x[1] + v * dt * Math.sin(x[2]), x[2]];
+    var r = v / w;
+    return [x[0] - r * Math.sin(x[2]) + r * Math.sin(x[2] + w * dt),
+            x[1] + r * Math.cos(x[2]) - r * Math.cos(x[2] + w * dt),
+            wrap(x[2] + w * dt)];
+  }
+
+  function step() {
+    var v = val('es-v'), w = val('es-w') * Math.PI / 180;
+    if (Math.abs(w) < 1e-4) w = 1e-4;                       // ω=0 특이점 회피 (책 p.203)
+    // 교차 항 α₂·α₃는 0. 식 (7.10)의 α₂ω²·α₃v² 는 v가 m/s일 것을 전제하므로
+    // cm 단위인 이 위젯에서는 그대로 쓰면 노이즈가 10⁴배로 부풀어 오른다.
+    var a1 = val('es-a1'), a4 = val('es-a4'), a2 = 0, a3 = 0;
+    var sr = val('es-sr'), sp = val('es-sp') * Math.PI / 180, ss = 0.01;
+    var th = mu[2];
+
+    // 라인 3~5
+    var G = [[1, 0, (v / w) * (-Math.cos(th) + Math.cos(th + w * DT))],
+             [0, 1, (v / w) * (-Math.sin(th) + Math.sin(th + w * DT))],
+             [0, 0, 1]];
+    var V = [[(-Math.sin(th) + Math.sin(th + w * DT)) / w,
+              v * (Math.sin(th) - Math.sin(th + w * DT)) / (w * w) + v * Math.cos(th + w * DT) * DT / w],
+             [(Math.cos(th) - Math.cos(th + w * DT)) / w,
+              -v * (Math.cos(th) - Math.cos(th + w * DT)) / (w * w) + v * Math.sin(th + w * DT) * DT / w],
+             [0, DT]];
+    var M = [[a1 * v * v + a2 * w * w, 0], [0, a3 * v * v + a4 * w * w]];
+
+    // 라인 6~7
+    var muBar = motion(mu, v, w, DT);
+    var GSG = mm(mm(G, Sig), T(G)), VMV = mm(mm(V, M), T(V));
+    var SigBar = add(GSG, VMV);
+
+    // 참 로봇과 추측 항법
+    var vT = v + gauss() * Math.sqrt(M[0][0]), wT = w + gauss() * Math.sqrt(M[1][1]);
+    truth = motion(truth, vT, wT, DT);
+    dr = motion(dr, v, w, DT);
+
+    // 가장 가까운 랜드마크를 관측
+    var LM = landmarks();
+    var best = 0, bd = 1e9;
+    LM.forEach(function (L, i) {
+      var d = Math.hypot(L[0] - truth[0], L[1] - truth[1]);
+      if (d < bd) { bd = d; best = i; }
+    });
+    var z = [bd + gauss() * sr,
+             wrap(Math.atan2(LM[best][1] - truth[1], LM[best][0] - truth[0]) - truth[2]) + gauss() * sp,
+             best];
+
+    // 라인 8~17 (correspondence 미지이면 Table 7.3의 라인 10~16을 먼저)
+    var Q = [[sr * sr, 0, 0], [0, sp * sp, 0], [0, 0, ss * ss]];
+    function predictFor(k) {
+      var dx = LM[k][0] - muBar[0], dy = LM[k][1] - muBar[1], q = dx * dx + dy * dy;
+      var zh = [Math.sqrt(q), wrap(Math.atan2(dy, dx) - muBar[2]), k];
+      var H = [[-dx / Math.sqrt(q), -dy / Math.sqrt(q), 0],
+               [dy / q, -dx / q, -1],
+               [0, 0, 0]];
+      var S3 = add(mm(mm(H, SigBar), T(H)), Q);
+      return {zh: zh, H: H, S: S3};
+    }
+
+    var j = best, chosen;
+    if (knownCorr) {
+      chosen = predictFor(best);
+    } else {
+      var bestScore = -1;
+      for (var k = 0; k < LM.length; k++) {
+        var c = predictFor(k);
+        var innov2 = [z[0] - c.zh[0], wrap(z[1] - c.zh[1])];
+        var S2 = [[c.S[0][0], c.S[0][1]], [c.S[1][0], c.S[1][1]]];
+        var Si = inv2(S2);
+        var d2 = innov2[0] * (Si[0][0] * innov2[0] + Si[0][1] * innov2[1])
+               + innov2[1] * (Si[1][0] * innov2[0] + Si[1][1] * innov2[1]);
+        var detS = S2[0][0] * S2[1][1] - S2[0][1] * S2[1][0];
+        var score = Math.exp(-0.5 * d2) / Math.sqrt(detS);   // Table 7.3 라인 16
+        if (score > bestScore) { bestScore = score; j = k; chosen = c; }
+      }
+    }
+
+    var innov = [z[0] - chosen.zh[0], wrap(z[1] - chosen.zh[1]), 0];
+    // 2x2 부분만으로 gain 계산 (signature 행은 0)
+    var H2 = [chosen.H[0].slice(), chosen.H[1].slice()];
+    var S2 = [[chosen.S[0][0], chosen.S[0][1]], [chosen.S[1][0], chosen.S[1][1]]];
+    var K = mm(mm(SigBar, T(H2)), inv2(S2));                 // 3x2
+    var corr = mv(K, [innov[0], innov[1]]);
+    mu = [muBar[0] + corr[0], muBar[1] + corr[1], wrap(muBar[2] + corr[2])];
+    Sig = mm(sub(eye(3), mm(K, H2)), SigBar);
+
+    trail.t.push([truth[0], truth[1]]);
+    trail.m.push([mu[0], mu[1]]);
+    trail.d.push([dr[0], dr[1]]);
+    ells = {GSG: GSG, VMV: VMV, SigBar: SigBar, Sig: Sig, muBar: muBar};
+    stats = {j: j, best: best, innov: innov, err: Math.hypot(truth[0] - mu[0], truth[1] - mu[1]),
+             derr: Math.hypot(truth[0] - dr[0], truth[1] - dr[1])};
+    draw();
+  }
+
+  function ellipse(g, cx, cy, C, color, alpha, dash) {
+    var a = C[0][0], b = C[0][1], c = C[1][1];
+    var tr = a + c, det = a * c - b * b;
+    var l1 = tr / 2 + Math.sqrt(Math.max(tr * tr / 4 - det, 0));
+    var l2 = tr / 2 - Math.sqrt(Math.max(tr * tr / 4 - det, 0));
+    var ang = Math.abs(b) < 1e-12 ? (a >= c ? 0 : Math.PI / 2) : Math.atan2(l1 - a, b);
+    g.save(); g.translate(cx, cy); g.rotate(-ang);
+    g.beginPath();
+    g.ellipse(0, 0, 2 * Math.sqrt(Math.max(l1, 0)), 2 * Math.sqrt(Math.max(l2, 0)), 0, 0, Math.PI * 2);
+    g.strokeStyle = color; g.globalAlpha = alpha; g.lineWidth = 1.6;
+    if (dash) g.setLineDash(dash);
+    g.stroke(); g.setLineDash([]); g.globalAlpha = 1; g.restore();
+  }
+
+  function draw() {
+    ['ev-v', 'ev-w', 'ev-a1', 'ev-a4', 'ev-sr', 'ev-sp'].forEach(function (id, i) {
+      var src = ['es-v', 'es-w', 'es-a1', 'es-a4', 'es-sr', 'es-sp'][i];
+      var d = (i === 2 || i === 3) ? 2 : 0;
+      document.getElementById(id).textContent = val(src).toFixed(d);
+    });
+    document.getElementById('ev-corr').textContent = knownCorr ? '알려짐' : 'ML 추정';
+    document.getElementById('ev-close').textContent = wideSpacing ? '넓게' : '좁게';
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 380;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var sc = Math.min(W / 640, H / 420), ox = (W - 640 * sc) / 2, oy = (H - 420 * sc) / 2;
+    function PX(x) { return ox + x * sc; }
+    function PY(y) { return H - oy - y * sc; }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g = 0; g <= 640; g += 80) {
+      ctx.beginPath(); ctx.moveTo(PX(g), PY(0)); ctx.lineTo(PX(g), PY(420)); ctx.stroke();
+    }
+    for (var g2 = 0; g2 <= 420; g2 += 80) {
+      ctx.beginPath(); ctx.moveTo(PX(0), PY(g2)); ctx.lineTo(PX(640), PY(g2)); ctx.stroke();
+    }
+
+    landmarks().forEach(function (L, i) {
+      ctx.fillStyle = css('--predict');
+      ctx.font = '600 15px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('★', PX(L[0]), PY(L[1]) + 5);
+      ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = css('--ink-faint');
+      ctx.fillText(i, PX(L[0]) + 11, PY(L[1]) - 7);
+    });
+
+    function path(pts, color, width, alpha, dash) {
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha;
+      if (dash) ctx.setLineDash(dash);
+      ctx.beginPath();
+      pts.forEach(function (p, i) { i ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1])); });
+      ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+    path(trail.d, css('--ink-faint'), 1.4, 0.8, [4, 4]);
+    path(trail.t, css('--ink'), 2.2, 1);
+    path(trail.m, css('--accent'), 1.8, 1, [5, 3]);
+
+    if (ells) {
+      // Figure 7.8의 네 타원 (예측 위치 기준)
+      ellipse(ctx, PX(ells.muBar[0]), PY(ells.muBar[1]),
+              [[ells.GSG[0][0] * sc * sc, -ells.GSG[0][1] * sc * sc],
+               [-ells.GSG[1][0] * sc * sc, ells.GSG[1][1] * sc * sc]], css('--ink-faint'), 0.85, [3, 3]);
+      ellipse(ctx, PX(ells.muBar[0]), PY(ells.muBar[1]),
+              [[ells.VMV[0][0] * sc * sc, -ells.VMV[0][1] * sc * sc],
+               [-ells.VMV[1][0] * sc * sc, ells.VMV[1][1] * sc * sc]], css('--predict'), 0.7, [2, 3]);
+      ellipse(ctx, PX(ells.muBar[0]), PY(ells.muBar[1]),
+              [[ells.SigBar[0][0] * sc * sc, -ells.SigBar[0][1] * sc * sc],
+               [-ells.SigBar[1][0] * sc * sc, ells.SigBar[1][1] * sc * sc]], css('--accent'), 0.45);
+      ellipse(ctx, PX(mu[0]), PY(mu[1]),
+              [[Sig[0][0] * sc * sc, -Sig[0][1] * sc * sc],
+               [-Sig[1][0] * sc * sc, Sig[1][1] * sc * sc]], css('--accent'), 1);
+    }
+
+    function robot(p, color, r) {
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(PX(p[0]), PY(p[1]), r, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(PX(p[0]), PY(p[1]));
+      ctx.lineTo(PX(p[0] + 26 * Math.cos(p[2])), PY(p[1] + 26 * Math.sin(p[2]))); ctx.stroke();
+    }
+    robot(truth, css('--ink'), 7);
+    robot(mu, css('--accent'), 5);
+
+    if (stats) {
+      var wrong = stats.j !== stats.best;
+      out.innerHTML =
+        'EKF 오차 <b>' + stats.err.toFixed(1) + '</b> cm · ' +
+        '추측 항법 오차 <b>' + stats.derr.toFixed(1) + '</b> cm · ' +
+        'innovation (Δr, Δφ) = (' + stats.innov[0].toFixed(2) + ', ' +
+        (stats.innov[1] * 180 / Math.PI).toFixed(1) + '°)<br>' +
+        'σx = ' + Math.sqrt(Sig[0][0]).toFixed(1) + ' cm · ' +
+        'σy = ' + Math.sqrt(Sig[1][1]).toFixed(1) + ' cm · ' +
+        'σθ = ' + (Math.sqrt(Sig[2][2]) * 180 / Math.PI).toFixed(1) + '° ' +
+        (Math.sqrt(Sig[2][2]) * 180 / Math.PI > 20
+          ? '<b>← 20°를 넘었다: 선형화가 무너지는 영역 (책 p.230)</b>' : '') +
+        (knownCorr ? '' : '<br>ML correspondence: 랜드마크 <b>' + stats.j + '</b> 선택' +
+          (wrong ? ' — <b>참값 ' + stats.best + ' 과 다르다! 필터가 탈선한다 (7.8절)</b>' : ' (정답)'));
+    } else {
+      out.innerHTML = '"1 스텝" 버튼을 눌러 Table 7.2를 실행하라.';
+    }
+  }
+
+  document.querySelectorAll('#w-ekfloc [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'step') step();
+      else if (a === 'run10') { for (var i = 0; i < 10; i++) step(); }
+      else if (a === 'corr') { knownCorr = !knownCorr; draw(); }
+      else if (a === 'close') { wideSpacing = !wideSpacing; reset(); }
+      else reset();
+    });
+  });
+  ['es-v', 'es-w', 'es-a1', 'es-a4', 'es-sr', 'es-sp'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

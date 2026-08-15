@@ -1,0 +1,134 @@
+<div class="lab" id="w-stepper">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Bayes filter 스텝 실행기</span>
+    <span class="lab-note">Table 2.1을 도어 예제 모델로 한 스텝씩 실행</span>
+  </div>
+  <div class="lab-body">
+    <p>제어를 고르면 라인 3(prediction)이, 측정을 고르면 라인 4(correction)가 실행된다.
+       두 단계가 belief를 어느 방향으로 움직이는지 따로 관찰해보자.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-u="push">① 제어: push</button>
+      <button class="predict" data-u="do_nothing">① 제어: do_nothing</button>
+    </div>
+    <div class="btnrow">
+      <button class="correct" data-z="sense_open">② 측정: sense_open</button>
+      <button class="correct" data-z="sense_closed">② 측정: sense_closed</button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <canvas id="st-canvas" width="760" height="200"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>prediction 직후 <code>bel&#772;</code></span>
+      <span><i class="swatch" style="background:var(--correct)"></i>correction 후 <code>bel</code></span>
+    </div>
+    <div class="readout" id="st-readout"></div>
+    <div class="log" id="st-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var P = {
+    push:       [[1.0, 0.0], [0.8, 0.2]],
+    do_nothing: [[1.0, 0.0], [0.0, 1.0]]
+  };
+  var M = { sense_open: [0.6, 0.2], sense_closed: [0.4, 0.8] };
+
+  var bel = [0.5, 0.5], belBar = null, t = 0, phase = 'ready';
+  var cv = document.getElementById('st-canvas'), ctx = cv.getContext('2d');
+  var logEl = document.getElementById('st-log'), outEl = document.getElementById('st-readout');
+  var entries = [];
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function bar(x, y, w, h, v, color, label, value) {
+    ctx.fillStyle = css('--rule-soft');
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w * v, h);
+    ctx.fillStyle = css('--ink');
+    ctx.font = '600 13px ui-monospace, Menlo, monospace';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(value, x + w + 12, y + h / 2);
+    ctx.fillStyle = css('--ink-soft');
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(label, x - 12, y + h / 2);
+    ctx.textAlign = 'left';
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = cv.clientWidth, h = 200;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var left = 96, right = 58, bw = w - left - right, bh = 26;
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('IS_OPEN', left, 18);
+    ctx.fillText('IS_CLOSED', left, 106);
+
+    if (belBar) {
+      bar(left, 30, bw, bh, belBar[0], css('--predict'), 'bel̄ (예측)', belBar[0].toFixed(3));
+      bar(left, 118, bw, bh, belBar[1], css('--predict'), 'bel̄ (예측)', belBar[1].toFixed(3));
+    }
+    bar(left, 62, bw, bh, bel[0], css('--correct'), 'bel (믿음)', bel[0].toFixed(3));
+    bar(left, 150, bw, bh, bel[1], css('--correct'), 'bel (믿음)', bel[1].toFixed(3));
+  }
+
+  function log(text) {
+    entries.unshift(text);
+    logEl.innerHTML = entries.slice(0, 24).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+
+  function status() {
+    outEl.innerHTML = phase === 'predicted'
+      ? 't = <b>' + t + '</b> · prediction 완료 — 이제 측정을 반영하세요'
+      : 't = <b>' + t + '</b> · 다음 스텝의 제어를 고르세요';
+  }
+
+  document.querySelectorAll('#w-stepper [data-u]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var u = btn.dataset.u;
+      t += 1;
+      belBar = [0, 1].map(function (xt) {
+        return P[u][0][xt] * bel[0] + P[u][1][xt] * bel[1];
+      });
+      phase = 'predicted';
+      log('t=' + t + ' 라인3 ' + u + ' → bel̄ = [' + belBar[0].toFixed(4) + ', ' + belBar[1].toFixed(4) + ']');
+      draw(); status();
+    });
+  });
+
+  document.querySelectorAll('#w-stepper [data-z]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var z = btn.dataset.z;
+      var base = belBar || bel;
+      var un = [M[z][0] * base[0], M[z][1] * base[1]];
+      var sum = un[0] + un[1];
+      var eta = 1 / sum;
+      bel = [un[0] * eta, un[1] * eta];
+      belBar = null;
+      phase = 'ready';
+      log('t=' + t + ' 라인4 ' + z + ' → η=' + eta.toFixed(3) +
+          ', bel = [' + bel[0].toFixed(4) + ', ' + bel[1].toFixed(4) + ']');
+      draw(); status();
+    });
+  });
+
+  document.querySelector('#w-stepper [data-reset]').addEventListener('click', function () {
+    bel = [0.5, 0.5]; belBar = null; t = 0; phase = 'ready'; entries = [];
+    logEl.innerHTML = ''; draw(); status();
+  });
+
+  window.addEventListener('resize', draw);
+  draw(); status();
+  log('초기 belief bel(x₀) = [0.5, 0.5]');
+})();
+</script>

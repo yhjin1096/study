@@ -1,0 +1,6 @@
+# 1장 Introduction — Figure 파일명 매핑
+# 사용: python3 tools/extract_figures.py --chapter 1 --pages 24-34 \
+#         --out part1_basics/01_introduction/images --names tools/figure_names/ch1.txt
+
+Figure 1.1 = fig1_1_markov_localization_idea
+Figure 1.2 = fig1_2_coastal_navigation

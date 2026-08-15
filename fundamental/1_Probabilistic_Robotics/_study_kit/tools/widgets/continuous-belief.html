@@ -1,0 +1,190 @@
+<div class="lab" id="w-cont">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">연속 상태 공간에서의 Bayes filter</span>
+    <span class="lab-note">1차원 직선 위 로봇 · 3장으로 가는 다리</span>
+  </div>
+  <div class="lab-body">
+    <p>상태가 연속이면 belief는 막대가 아니라 <b>곡선</b>이다. 라인 3의 적분은 이동+블러로,
+       라인 4의 곱은 곡선끼리의 곱으로 나타난다.
+       <b>이동</b>은 불확실성을 넓히고, <b>측정</b>은 좁힌다 — 2.3.2절의 대비가 눈에 보인다.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-move>① 이동 (+18, 노이즈 포함)</button>
+      <button class="correct" data-sense>② 랜드마크 관측</button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>모션 노이즈 σ</span><b id="cv-a">6.0</b></label>
+        <input type="range" id="cs-a" min="1" max="20" step="0.5" value="6">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 σ</span><b id="cv-b">7.0</b></label>
+        <input type="range" id="cs-b" min="1" max="25" step="0.5" value="7">
+      </div>
+    </div>
+
+    <canvas id="cb-canvas" width="760" height="240"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>이동 직후 (넓어짐)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>측정 반영 후 (좁아짐)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>랜드마크 위치</span>
+    </div>
+    <div class="readout" id="cb-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var N = 400, XMIN = 0, XMAX = 400;
+  var LANDMARKS = [90, 200, 310];
+  var cv = document.getElementById('cb-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cb-readout');
+  var bel, truth, lastKind;
+
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  }
+  function xAt(i) { return XMIN + (XMAX - XMIN) * i / (N - 1); }
+  function normalize(a) {
+    var s = a.reduce(function (p, c) { return p + c; }, 0);
+    return s > 0 ? a.map(function (v) { return v / s; }) : a.map(function () { return 1 / N; });
+  }
+  function gaussian(mu, sd) {
+    return normalize(Array.from({ length: N }, function (_, i) {
+      var d = xAt(i) - mu;
+      return Math.exp(-0.5 * d * d / (sd * sd));
+    }));
+  }
+
+  function reset() {
+    truth = 70;
+    bel = gaussian(70, 11);
+    lastKind = 'correct';
+    draw();
+  }
+
+  // 라인 3: bel̄(x) = ∫ p(x | u, x') bel(x') dx'  — 이동 + 가우시안 블러
+  function predict(shift, sd) {
+    var step = (XMAX - XMIN) / (N - 1);
+    var half = Math.ceil(3 * sd / step);
+    var kernel = [];
+    for (var k = -half; k <= half; k++) {
+      kernel.push(Math.exp(-0.5 * (k * step) * (k * step) / (sd * sd)));
+    }
+    var next = new Array(N).fill(0);
+    var shiftIdx = Math.round(shift / step);
+    for (var i = 0; i < N; i++) {
+      if (bel[i] < 1e-9) continue;
+      for (var k = -half; k <= half; k++) {
+        var j = i + shiftIdx + k;
+        if (j >= 0 && j < N) next[j] += bel[i] * kernel[k + half];
+      }
+    }
+    bel = normalize(next);
+    truth = Math.min(XMAX, truth + shift + (Math.random() - 0.5) * sd);
+    lastKind = 'predict';
+  }
+
+  // 라인 4: bel(x) = η p(z | x) bel̄(x)  — 가장 가까운 랜드마크까지의 거리 관측
+  function correct(sd) {
+    var nearest = LANDMARKS.reduce(function (a, b) {
+      return Math.abs(b - truth) < Math.abs(a - truth) ? b : a;
+    });
+    var z = (truth - nearest) + (Math.random() - 0.5) * sd;   // 노이즈 섞인 상대 거리
+    var post = bel.map(function (v, i) {
+      var expected = xAt(i) - nearest;
+      var d = z - expected;
+      return v * Math.exp(-0.5 * d * d / (sd * sd));
+    });
+    bel = normalize(post);
+    lastKind = 'correct';
+    return { nearest: nearest, z: z };
+  }
+
+  function draw(info) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 240;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var padL = 16, padR = 16, baseY = h - 42, top = 22;
+    var plotW = w - padL - padR;
+    var peak = Math.max.apply(null, bel) || 1;
+    var color = lastKind === 'predict' ? css('--predict') : css('--correct');
+
+    // 도로 축
+    ctx.strokeStyle = css('--rule');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, baseY); ctx.lineTo(w - padR, baseY); ctx.stroke();
+
+    // 랜드마크
+    LANDMARKS.forEach(function (lm) {
+      var px = padL + plotW * (lm - XMIN) / (XMAX - XMIN);
+      ctx.strokeStyle = css('--ink-faint');
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, baseY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.beginPath(); ctx.arc(px, baseY, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('landmark', px, baseY + 16);
+    });
+
+    // belief 곡선
+    ctx.beginPath();
+    ctx.moveTo(padL, baseY);
+    for (var i = 0; i < N; i++) {
+      var px = padL + plotW * i / (N - 1);
+      var py = baseY - (bel[i] / peak) * (baseY - top);
+      ctx.lineTo(px, py);
+    }
+    ctx.lineTo(w - padR, baseY);
+    ctx.closePath();
+    ctx.fillStyle = color + '33';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 실제 위치
+    var tx = padL + plotW * (truth - XMIN) / (XMAX - XMIN);
+    ctx.strokeStyle = css('--ink');
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(tx, top - 6); ctx.lineTo(tx, baseY); ctx.stroke();
+    ctx.fillStyle = css('--ink');
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('실제 위치', tx, top - 10);
+    ctx.textAlign = 'left';
+
+    // 분산으로 불확실성 요약
+    var mean = 0, varr = 0;
+    for (var j = 0; j < N; j++) mean += xAt(j) * bel[j];
+    for (var k2 = 0; k2 < N; k2++) varr += bel[k2] * Math.pow(xAt(k2) - mean, 2);
+    out.innerHTML = '추정 평균 <b>' + mean.toFixed(1) + '</b> · 표준편차 <b>' + Math.sqrt(varr).toFixed(1) +
+      '</b> · 실제 <b>' + truth.toFixed(1) + '</b>' +
+      (info ? ' · 관측 z = <b>' + info.z.toFixed(1) + '</b> (landmark ' + info.nearest + ' 기준)' : '');
+  }
+
+  document.querySelector('#w-cont [data-move]').addEventListener('click', function () {
+    predict(18, parseFloat(document.getElementById('cs-a').value));
+    draw();
+  });
+  document.querySelector('#w-cont [data-sense]').addEventListener('click', function () {
+    var info = correct(parseFloat(document.getElementById('cs-b').value));
+    draw(info);
+  });
+  document.querySelector('#w-cont [data-reset]').addEventListener('click', reset);
+  ['a', 'b'].forEach(function (k) {
+    document.getElementById('cs-' + k).addEventListener('input', function (e) {
+      document.getElementById('cv-' + k).textContent = parseFloat(e.target.value).toFixed(1);
+    });
+  });
+  window.addEventListener('resize', function () { draw(); });
+  reset();
+})();
+</script>

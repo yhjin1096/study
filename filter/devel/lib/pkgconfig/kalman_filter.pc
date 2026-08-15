@@ -1,8 +1,0 @@
-prefix=/home/cona/yhj/study/filter/devel
-
-Name: kalman_filter
-Description: Description of kalman_filter
-Version: 0.0.0
-Cflags: -I/home/cona/yhj/study/filter/src/kalman_filter/include -I/usr/local/include/opencv4
-Libs: -L${prefix}/lib -lkalman_filter -lekf_mouse_tracking /usr/local/lib/libopencv_calib3d.so.4.5.5 /usr/local/lib/libopencv_core.so.4.5.5 /usr/local/lib/libopencv_features2d.so.4.5.5 /usr/local/lib/libopencv_flann.so.4.5.5 /usr/local/lib/libopencv_gapi.so.4.5.5 /usr/local/lib/libopencv_highgui.so.4.5.5 /usr/local/lib/libopencv_imgcodecs.so.4.5.5 /usr/local/lib/libopencv_imgproc.so.4.5.5 /usr/local/lib/libopencv_photo.so.4.5.5 /usr/local/lib/libopencv_stitching.so.4.5.5 /usr/local/lib/libopencv_video.so.4.5.5 /usr/local/lib/libopencv_videoio.so.4.5.5 /usr/local/lib/libopencv_aruco.so.4.5.5
-Requires: roscpp

@@ -1,0 +1,289 @@
+<div class="lab" id="w-lf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">Likelihood field — 거리 필드와 빔을 따라간 likelihood</span>
+    <span class="lab-note">Figure 6.8·6.9를 직접 만들어 보기</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽 격자를 <b>클릭·드래그하면 장애물</b>이 칠해지고, 그 즉시 식 (2)(3)의
+       <b>likelihood field</b>가 다시 그려진다(밝을수록 장애물 검출 가능성이 큼 — Figure 6.8b).
+       <b>Shift+드래그</b>로 지운다. 로봇(●)은 <b>우클릭</b>으로 옮긴다.
+       오른쪽은 점선 빔을 따라 자른 단면으로, <b>Figure 6.9</b>에 해당한다 —
+       빔이 지나치는 장애물마다 봉우리가 하나씩 생기는 것이 <b>“벽을 투시”</b>하는 성질이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>σ<sub>hit</sub> (칸)</span><b id="lv-sig">1.8</b></label>
+        <input type="range" id="ls-sig" min="0.4" max="6" step="0.1" value="1.8">
+      </div>
+      <div class="slider">
+        <label><span>빔 방향 θ+θ<sub>k,sens</sub> (도)</span><b id="lv-ang">90</b></label>
+        <input type="range" id="ls-ang" min="0" max="359" step="1" value="90">
+      </div>
+      <div class="slider">
+        <label><span>z<sub>hit</sub></span><b id="lv-whit">0.80</b></label>
+        <input type="range" id="ls-whit" min="0" max="1" step="0.01" value="0.8">
+      </div>
+      <div class="slider">
+        <label><span>측정값 z<sup>k</sup><sub>t</sub> (칸)</span><b id="lv-z">14</b></label>
+        <input type="range" id="ls-z" min="0" max="34" step="0.5" value="14">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="fig68">Figure 6.8 배치</button>
+      <button data-preset="corridor">복도</button>
+      <button data-preset="clutter">어질러진 방</button>
+      <button class="ghost" data-clear>전부 지우기</button>
+    </div>
+
+    <canvas id="lf-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>장애물</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>로봇 · 빔</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>빔 끝점</span>
+    </div>
+    <div class="readout" id="lf-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('lf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lf-readout');
+  var GW = 36, GH = 30;                 // 격자 크기(칸)
+  var occ = [];                         // occupancy
+  var dist = [];                        // 최근접 장애물까지의 거리 (사전계산된 likelihood field)
+  var robot = { x: 8.5, y: 26.5 };
+  var painting = 0;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function idx(x, y) { return y * GW + x; }
+
+  function clearGrid() {
+    occ = new Array(GW * GH).fill(0);
+  }
+  function rect(x0, y0, x1, y1) {
+    for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++)
+      if (x >= 0 && x < GW && y >= 0 && y < GH) occ[idx(x, y)] = 1;
+  }
+
+  // 식 (3)의 dist를 격자 전체에 대해 미리 계산 (6.4.1절 "사전계산" 그대로).
+  // 두 번 훑는 chamfer 변환 — 유클리드 거리의 좋은 근사.
+  function computeField() {
+    var INF = 1e9, D1 = 1, D2 = Math.SQRT2;
+    dist = new Array(GW * GH);
+    for (var i = 0; i < GW * GH; i++) dist[i] = occ[i] ? 0 : INF;
+    for (var y = 0; y < GH; y++) for (var x = 0; x < GW; x++) {
+      var d = dist[idx(x, y)];
+      if (y > 0) {
+        d = Math.min(d, dist[idx(x, y - 1)] + D1);
+        if (x > 0) d = Math.min(d, dist[idx(x - 1, y - 1)] + D2);
+        if (x < GW - 1) d = Math.min(d, dist[idx(x + 1, y - 1)] + D2);
+      }
+      if (x > 0) d = Math.min(d, dist[idx(x - 1, y)] + D1);
+      dist[idx(x, y)] = d;
+    }
+    for (var y2 = GH - 1; y2 >= 0; y2--) for (var x2 = GW - 1; x2 >= 0; x2--) {
+      var e = dist[idx(x2, y2)];
+      if (y2 < GH - 1) {
+        e = Math.min(e, dist[idx(x2, y2 + 1)] + D1);
+        if (x2 > 0) e = Math.min(e, dist[idx(x2 - 1, y2 + 1)] + D2);
+        if (x2 < GW - 1) e = Math.min(e, dist[idx(x2 + 1, y2 + 1)] + D2);
+      }
+      if (x2 < GW - 1) e = Math.min(e, dist[idx(x2 + 1, y2)] + D1);
+      dist[idx(x2, y2)] = e;
+    }
+  }
+
+  function distAt(px, py) {   // 실수 좌표에서 이중선형 보간
+    var x = Math.max(0, Math.min(GW - 1.001, px - 0.5));
+    var y = Math.max(0, Math.min(GH - 1.001, py - 0.5));
+    var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    var a = dist[idx(x0, y0)], b = dist[idx(x0 + 1, y0)];
+    var c = dist[idx(x0, y0 + 1)], d = dist[idx(x0 + 1, y0 + 1)];
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+  }
+
+  function probDist(d, sig) {   // 식 (2) — 영점 중심 Gaussian
+    return Math.exp(-0.5 * d * d / (sig * sig)) / Math.sqrt(2 * Math.PI * sig * sig);
+  }
+
+  function draw() {
+    var sig = val('ls-sig'), ang = val('ls-ang') * Math.PI / 180;
+    var whit = val('ls-whit'), zq = val('ls-z');
+    document.getElementById('lv-sig').textContent = sig.toFixed(1);
+    document.getElementById('lv-ang').textContent = (val('ls-ang')).toFixed(0);
+    document.getElementById('lv-whit').textContent = whit.toFixed(2);
+    document.getElementById('lv-z').textContent = zq.toFixed(1);
+    var wrand = 1 - whit, ZMAXC = 40;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // ---- 왼쪽: likelihood field ----
+    var mapW = Math.min(360, W * 0.46), cell = Math.min(mapW / GW, (H - 30) / GH);
+    var mx = 8, my = 14, MW = cell * GW, MH = cell * GH;
+
+    var maxP = probDist(0, sig);
+    for (var y = 0; y < GH; y++) for (var x = 0; x < GW; x++) {
+      var p = probDist(dist[idx(x, y)], sig) / maxP;
+      var v = Math.round(255 * Math.pow(p, 0.6));
+      ctx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+      ctx.fillRect(mx + x * cell, my + y * cell, cell + 0.6, cell + 0.6);
+    }
+    // 장애물 윤곽
+    ctx.fillStyle = css('--accent');
+    for (var y2 = 0; y2 < GH; y2++) for (var x2 = 0; x2 < GW; x2++) {
+      if (occ[idx(x2, y2)]) {
+        ctx.globalAlpha = 0.55;
+        ctx.fillRect(mx + x2 * cell, my + y2 * cell, cell + 0.6, cell + 0.6);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, MW, MH);
+
+    // 빔
+    var bx = mx + robot.x * cell, by = my + robot.y * cell;
+    var ex = robot.x + ZMAXC * Math.cos(ang), ey = robot.y - ZMAXC * Math.sin(ang);
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(bx, by);
+    ctx.lineTo(mx + ex * cell, my + ey * cell); ctx.stroke();
+    ctx.setLineDash([]);
+    // 끝점 (식 1의 결과)
+    var qx = robot.x + zq * Math.cos(ang), qy = robot.y - zq * Math.sin(ang);
+    ctx.fillStyle = css('--correct');
+    ctx.beginPath(); ctx.arc(mx + qx * cell, my + qy * cell, 4.5, 0, Math.PI * 2); ctx.fill();
+    // 로봇
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('(a) likelihood field — 밝을수록 장애물 검출 가능성 큼', mx, 10);
+
+    // ---- 오른쪽: 빔을 따라간 단면 (Figure 6.9) ----
+    var px0 = mx + MW + 34, px1 = W - 14, PW = px1 - px0;
+    var py0 = my + 8, py1 = my + MH - 18, PH = py1 - py0;
+
+    var Nn = 320, ds = [], ps = [];
+    for (var i = 0; i <= Nn; i++) {
+      var z = ZMAXC * i / Nn;
+      var sx = robot.x + z * Math.cos(ang), sy = robot.y - z * Math.sin(ang);
+      var inside = sx >= 0 && sx <= GW && sy >= 0 && sy <= GH;
+      var d = inside ? distAt(sx, sy) : 1e9;
+      ds.push(d);
+      ps.push(whit * probDist(d, sig) + wrand / ZMAXC);
+    }
+    var pmax = Math.max.apply(null, ps) * 1.15 || 1;
+    function QX(z) { return px0 + PW * z / ZMAXC; }
+    function QY(p) { return py1 - PH * p / pmax; }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(px0, py1); ctx.lineTo(px1, py1); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    [0, 10, 20, 30, 40].forEach(function (t) { ctx.fillText(t, QX(t), py1 + 14); });
+    ctx.fillText('z_t^k  (칸)', (px0 + px1) / 2, py1 + 28);
+    ctx.textAlign = 'left';
+    ctx.fillText('(b) 빔을 따라간 p(z_t^k | x_t, m) — Figure 6.9', px0, 10);
+
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (var i2 = 0; i2 <= Nn; i2++) {
+      var X = QX(ZMAXC * i2 / Nn), Y = QY(ps[i2]);
+      if (i2 === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+    }
+    ctx.stroke();
+
+    // 질의점
+    var dq = (qx >= 0 && qx <= GW && qy >= 0 && qy <= GH) ? distAt(qx, qy) : 1e9;
+    var pq = whit * probDist(dq, sig) + wrand / ZMAXC;
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(QX(zq), py0); ctx.lineTo(QX(zq), py1); ctx.stroke();
+    ctx.fillStyle = css('--correct');
+    ctx.beginPath(); ctx.arc(QX(zq), QY(pq), 4, 0, Math.PI * 2); ctx.fill();
+
+    // 봉우리 개수 — "벽 투시"의 정량화
+    var peaks = 0;
+    for (var i3 = 2; i3 < Nn - 1; i3++) {
+      if (ps[i3] > ps[i3 - 1] && ps[i3] >= ps[i3 + 1] && ps[i3] > pmax * 0.12) peaks++;
+    }
+    out.innerHTML =
+      '끝점 = (' + qx.toFixed(2) + ', ' + qy.toFixed(2) + ') · ' +
+      'dist = <b>' + (dq > 1e8 ? '맵 밖' : dq.toFixed(3)) + '</b> 칸 · ' +
+      'z_hit·p_hit = <b>' + (whit * probDist(dq, sig)).toFixed(5) + '</b> · ' +
+      'z_rand/z_max = <b>' + (wrand / ZMAXC).toFixed(5) + '</b> · ' +
+      'q = <b>' + pq.toFixed(5) + '</b><br>' +
+      '이 빔의 단면에 봉우리 <b>' + peaks + '개</b>' +
+      (peaks > 1 ? ' — 빔이 여러 장애물을 <b>투시</b>하고 있다 (6.4.2절 단점 2)' : '');
+  }
+
+  function rebuild() { computeField(); draw(); }
+
+  // ---- 상호작용 ----
+  function cellAt(evt) {
+    var r = cv.getBoundingClientRect();
+    var W = cv.clientWidth, H = 360;
+    var mapW = Math.min(360, W * 0.46), cell = Math.min(mapW / GW, (H - 30) / GH);
+    var x = (evt.clientX - r.left - 8) / cell, y = (evt.clientY - r.top - 14) / cell;
+    return { gx: Math.floor(x), gy: Math.floor(y), fx: x, fy: y, cell: cell };
+  }
+  cv.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    var c = cellAt(e);
+    if (c.fx >= 0 && c.fx < GW && c.fy >= 0 && c.fy < GH) { robot.x = c.fx; robot.y = c.fy; draw(); }
+  });
+  cv.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    painting = e.shiftKey ? 2 : 1;
+    paint(e);
+  });
+  window.addEventListener('mouseup', function () { painting = 0; });
+  cv.addEventListener('mousemove', function (e) { if (painting) paint(e); });
+  function paint(e) {
+    var c = cellAt(e);
+    if (c.gx < 0 || c.gx >= GW || c.gy < 0 || c.gy >= GH) return;
+    occ[idx(c.gx, c.gy)] = (painting === 2) ? 0 : 1;
+    rebuild();
+  }
+
+  ['ls-sig', 'ls-ang', 'ls-whit', 'ls-z'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-lf [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      clearGrid();
+      if (b.dataset.preset === 'fig68') {
+        rect(5, 6, 11, 11); rect(17, 15, 18, 16); rect(14, 19, 15, 20);
+        robot = { x: 15.5, y: 26.5 };
+        document.getElementById('ls-ang').value = 90;
+      } else if (b.dataset.preset === 'corridor') {
+        rect(0, 8, GW - 1, 9); rect(0, 20, GW - 1, 21);
+        robot = { x: 6, y: 15 };
+        document.getElementById('ls-ang').value = 0;
+      } else {
+        for (var i = 0; i < 26; i++) {
+          var x = 3 + ((i * 7 + (i % 5) * 3) % (GW - 6));
+          var y = 3 + ((i * 11 + (i % 3) * 5) % (GH - 8));
+          rect(x, y, x, y);
+        }
+        robot = { x: 4, y: 27 };
+        document.getElementById('ls-ang').value = 60;
+      }
+      rebuild();
+    });
+  });
+  document.querySelector('#w-lf [data-clear]').addEventListener('click', function () {
+    clearGrid(); rebuild();
+  });
+  window.addEventListener('resize', draw);
+
+  clearGrid();
+  rect(5, 6, 11, 11); rect(17, 15, 18, 16); rect(14, 19, 15, 20);
+  robot = { x: 15.5, y: 26.5 };
+  rebuild();
+})();
+</script>

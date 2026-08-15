@@ -1,0 +1,172 @@
+<div class="lab" id="w-kf1d">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">1차원 Kalman filter — Figure 3.2 직접 돌려보기</span>
+    <span class="lab-note">Table 3.1의 여섯 줄이 그대로 실행된다</span>
+  </div>
+  <div class="lab-body">
+    <p><b>이동</b>은 라인 2·3(prediction), <b>측정</b>은 라인 4·5·6(measurement update)을 실행한다.
+       이동하면 분포가 <b>넓어지고</b>, 측정하면 <b>좁아지는</b> 것을 확인해보자. 측정 후 분포가
+       기여한 두 분포 <i>어느 쪽보다도</i> 좁아지는 것이 3.2.3절이 말한 "직관에 반하는" 성질이다.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-move>① 이동 (라인 2·3)</button>
+      <button class="correct" data-sense>② 측정 (라인 4·5·6)</button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>이동량 B·u</span><b id="kv-u">6.0</b></label>
+        <input type="range" id="ks-u" min="-10" max="10" step="0.5" value="6">
+      </div>
+      <div class="slider">
+        <label><span>모션 노이즈 R</span><b id="kv-r">4.0</b></label>
+        <input type="range" id="ks-r" min="0" max="20" step="0.5" value="4">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 Q</span><b id="kv-q">4.0</b></label>
+        <input type="range" id="ks-q" min="0.5" max="25" step="0.5" value="4">
+      </div>
+    </div>
+
+    <canvas id="kf-canvas" width="880" height="250"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>직전 belief</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>예측 bel&#772; (넓어짐)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>측정 후 bel (좁아짐)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>측정값 분포</span>
+    </div>
+    <div class="readout" id="kf-readout"></div>
+    <div class="log" id="kf-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var XMIN = 0, XMAX = 60, N = 500;
+  var cv = document.getElementById('kf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('kf-readout'), logEl = document.getElementById('kf-log');
+  var mu, s2, truth, prev, meas, phase, entries;
+
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss(x, m, v) { return Math.exp(-0.5 * (x - m) * (x - m) / v) / Math.sqrt(2 * Math.PI * v); }
+
+  function reset() {
+    mu = 8; s2 = 16; truth = 8; prev = null; meas = null;
+    phase = 'ready'; entries = [];
+    logEl.innerHTML = '';
+    log('초기 belief: μ = 8.00, σ² = 16.00');
+    draw(); status();
+  }
+
+  function log(t) {
+    entries.unshift(t);
+    logEl.innerHTML = entries.slice(0, 20).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+  function status() {
+    out.innerHTML = 'μ = <b>' + mu.toFixed(2) + '</b> · σ² = <b>' + s2.toFixed(2) +
+      '</b> · σ = <b>' + Math.sqrt(s2).toFixed(2) + '</b> · 실제 위치 = <b>' + truth.toFixed(2) + '</b>';
+  }
+
+  // 라인 2, 3 (A = 1)
+  function predict() {
+    var u = val('ks-u'), R = val('ks-r');
+    prev = { mu: mu, s2: s2 };
+    mu = mu + u;                       // 라인 2: μ̄ = A μ + B u
+    s2 = s2 + R;                       // 라인 3: Σ̄ = A Σ Aᵀ + R
+    truth = truth + u + (Math.random() * 2 - 1) * Math.sqrt(R);
+    meas = null; phase = 'predicted';
+    log('라인2·3  μ̄ = ' + mu.toFixed(2) + ',  σ̄² = ' + prev.s2.toFixed(2) + ' + ' + R.toFixed(1) +
+        ' = ' + s2.toFixed(2) + '  (증가)');
+  }
+
+  // 라인 4, 5, 6 (C = 1)
+  function correct() {
+    var Q = val('ks-q');
+    var z = truth + (Math.random() * 2 - 1) * Math.sqrt(Q);
+    prev = { mu: mu, s2: s2 };
+    var K = s2 / (s2 + Q);             // 라인 4: K = Σ̄ Cᵀ (C Σ̄ Cᵀ + Q)⁻¹
+    mu = mu + K * (z - mu);            // 라인 5: μ = μ̄ + K (z - C μ̄)
+    s2 = (1 - K) * s2;                 // 라인 6: Σ = (I - K C) Σ̄
+    meas = { z: z, Q: Q }; phase = 'corrected';
+    log('라인4·5·6  z = ' + z.toFixed(2) + ',  innovation = ' + (z - prev.mu).toFixed(2) +
+        ',  K = ' + K.toFixed(3) + '  →  μ = ' + mu.toFixed(2) + ',  σ² = ' + s2.toFixed(2) + '  (감소)');
+  }
+
+  function curve(m, v, color, width, dashed) {
+    var w = cv.clientWidth, h = 250, padL = 14, padR = 14, base = h - 30, top = 18;
+    var plotW = w - padL - padR;
+    var peak = 1 / Math.sqrt(2 * Math.PI * Math.min(v, 400));
+    var scale = (base - top) / (1 / Math.sqrt(2 * Math.PI * 2));   // 고정 스케일 기준
+    ctx.beginPath();
+    for (var i = 0; i < N; i++) {
+      var x = XMIN + (XMAX - XMIN) * i / (N - 1);
+      var px = padL + plotW * i / (N - 1);
+      var py = base - Math.min(gauss(x, m, v) * scale, base - top);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    return peak;
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 250;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var padL = 14, padR = 14, base = h - 30, plotW = w - padL - padR;
+
+    // 축
+    ctx.strokeStyle = css('--rule');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR, base); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint');
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    for (var t = 0; t <= 60; t += 10) {
+      var px = padL + plotW * (t - XMIN) / (XMAX - XMIN);
+      ctx.fillText(String(t), px, base + 16);
+    }
+
+    if (prev) curve(prev.mu, prev.s2, css('--ink-faint'), 1.4, true);
+    if (meas) curve(meas.z, meas.Q, css('--accent'), 1.6, false);
+    curve(mu, s2, phase === 'predicted' ? css('--predict') : css('--correct'), 2.6, false);
+
+    // 실제 위치
+    var tx = padL + plotW * (truth - XMIN) / (XMAX - XMIN);
+    ctx.strokeStyle = css('--ink');
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(tx, 12); ctx.lineTo(tx, base); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink');
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.fillText('실제', tx, 9);
+    ctx.textAlign = 'left';
+  }
+
+  document.querySelector('#w-kf1d [data-move]').addEventListener('click', function () {
+    predict(); draw(); status();
+  });
+  document.querySelector('#w-kf1d [data-sense]').addEventListener('click', function () {
+    correct(); draw(); status();
+  });
+  document.querySelector('#w-kf1d [data-reset]').addEventListener('click', reset);
+  [['ks-u', 'kv-u'], ['ks-r', 'kv-r'], ['ks-q', 'kv-q']].forEach(function (p) {
+    document.getElementById(p[0]).addEventListener('input', function (e) {
+      document.getElementById(p[1]).textContent = parseFloat(e.target.value).toFixed(1);
+    });
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

@@ -1,0 +1,115 @@
+<div class="lab" id="w-paramlab">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">모델 파라미터가 belief를 어떻게 바꾸는가</span>
+    <span class="lab-note">같은 관측 시퀀스, 다른 센서·전이 확률</span>
+  </div>
+  <div class="lab-body">
+    <p>책의 시퀀스(<code>do_nothing/sense_open</code> → <code>push/sense_open</code>)를 고정해두고
+       모델 파라미터만 바꿔본다. 책의 기본값에서는 <code>t=2</code>에 0.983이 나온다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>p(sense_open | is_open)</span><b id="v-a">0.60</b></label>
+        <input type="range" id="s-a" min="0.05" max="0.95" step="0.01" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>p(sense_open | is_closed)</span><b id="v-b">0.20</b></label>
+        <input type="range" id="s-b" min="0.05" max="0.95" step="0.01" value="0.2">
+      </div>
+      <div class="slider">
+        <label><span>p(is_open | push, is_closed)</span><b id="v-c">0.80</b></label>
+        <input type="range" id="s-c" min="0" max="1" step="0.01" value="0.8">
+      </div>
+      <div class="slider">
+        <label><span>초기 bel(is_open)</span><b id="v-d">0.50</b></label>
+        <input type="range" id="s-d" min="0" max="1" step="0.01" value="0.5">
+      </div>
+    </div>
+
+    <canvas id="pl-canvas" width="760" height="230"></canvas>
+    <div class="readout" id="pl-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ids = ['a', 'b', 'c', 'd'];
+  var cv = document.getElementById('pl-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('pl-readout');
+
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  }
+
+  function run(p) {
+    // 상태 0 = is_open, 1 = is_closed
+    var M_open   = [p.a, p.b];              // p(sense_open | x)
+    var trans = {
+      do_nothing: [[1, 0], [0, 1]],
+      push:       [[1, 0], [p.c, 1 - p.c]]
+    };
+    var bel = [p.d, 1 - p.d];
+    var seq = [['do_nothing', M_open], ['push', M_open]];
+    var trace = [{ label: 't=0 초기', bel: bel.slice(), kind: 'bel' }];
+
+    seq.forEach(function (step, i) {
+      var u = step[0], lik = step[1];
+      var bb = [0, 1].map(function (xt) {
+        return trans[u][0][xt] * bel[0] + trans[u][1][xt] * bel[1];
+      });
+      trace.push({ label: 't=' + (i + 1) + ' 예측 (' + u + ')', bel: bb.slice(), kind: 'bar' });
+      var un = [lik[0] * bb[0], lik[1] * bb[1]];
+      var s = un[0] + un[1];
+      bel = s > 0 ? [un[0] / s, un[1] / s] : [0.5, 0.5];
+      trace.push({ label: 't=' + (i + 1) + ' 보정 (sense_open)', bel: bel.slice(), kind: 'bel' });
+    });
+    return trace;
+  }
+
+  function draw() {
+    var p = {};
+    ids.forEach(function (k) { p[k] = parseFloat(document.getElementById('s-' + k).value); });
+    ids.forEach(function (k) { document.getElementById('v-' + k).textContent = p[k].toFixed(2); });
+
+    var trace = run(p);
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 230;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var left = 150, right = 56, bw = w - left - right;
+    var rowH = h / trace.length, bh = Math.min(20, rowH - 12);
+
+    trace.forEach(function (row, i) {
+      var y = i * rowH + (rowH - bh) / 2;
+      ctx.fillStyle = css('--rule-soft');
+      ctx.fillRect(left, y, bw, bh);
+      ctx.fillStyle = row.kind === 'bar' ? css('--predict') : css('--correct');
+      ctx.fillRect(left, y, bw * row.bel[0], bh);
+
+      ctx.fillStyle = css('--ink-soft');
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(row.label, left - 12, y + bh / 2);
+
+      ctx.fillStyle = css('--ink');
+      ctx.font = '600 12px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(row.bel[0].toFixed(3), left + bw + 10, y + bh / 2);
+    });
+
+    ctx.textAlign = 'left';
+    var last = trace[trace.length - 1].bel[0];
+    out.innerHTML = '막대 길이 = <b>p(is_open)</b> · 최종 belief(t=2) = <b>' + last.toFixed(4) + '</b>' +
+      (Math.abs(last - 0.98276) < 5e-4 ? ' — 책의 값과 일치' : '');
+  }
+
+  ids.forEach(function (k) {
+    document.getElementById('s-' + k).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

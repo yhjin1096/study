@@ -1,0 +1,203 @@
+<div class="lab" id="w-pf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">Particle filter — Table 4.3을 세 단계로 분리해서</span>
+    <span class="lab-note">resampling이 무엇을 하고 무엇을 잃는가</span>
+  </div>
+  <div class="lab-body">
+    <p>4.1절과 같은 복도(구분 불가능한 문 3개)를 particle로 푼다. 세 버튼이 각각
+       <b>라인 4</b>(모션 표집), <b>라인 5</b>(가중치), <b>라인 8~11</b>(resampling)에 해당한다.
+       단계를 나눠 실행하면 <b>가중치가 붙는 순간</b>과 <b>particle이 실제로 옮겨가는 순간</b>이
+       다르다는 것이 보인다.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-move>① 라인 4: 이동 표집</button>
+      <button class="correct" data-weigh>② 라인 5: 가중치 부여</button>
+      <button data-resample>③ 라인 8~11: resampling</button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>particle 수 M</span><b id="pv-m">300</b></label>
+        <input type="range" id="ps-m" min="10" max="2000" step="10" value="300">
+      </div>
+      <div class="slider">
+        <label><span>모션 노이즈</span><b id="pv-r">5.0</b></label>
+        <input type="range" id="ps-r" min="0.5" max="20" step="0.5" value="5">
+      </div>
+      <div class="slider">
+        <label><span>resampling 방식</span><b id="pv-s">low variance</b></label>
+        <input type="range" id="ps-s" min="0" max="1" step="1" value="1">
+      </div>
+    </div>
+
+    <canvas id="pf-canvas" width="880" height="250"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>particle (높이 = 가중치)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>문 위치</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>실제 위치</span>
+    </div>
+    <div class="readout" id="pf-readout"></div>
+    <div class="log" id="pf-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var LEN = 300, DOORS = [45, 150, 245], DOOR_W = 14;
+  var cv = document.getElementById('pf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('pf-readout'), logEl = document.getElementById('pf-log');
+  var X, W, M, truth, weighted, entries;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function nearDoor(x) { return DOORS.some(function (d) { return Math.abs(x - d) < DOOR_W; }); }
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function reset() {
+    M = Math.round(val('ps-m'));
+    X = Array.from({ length: M }, function () { return Math.random() * LEN; });  // prior = 균등
+    W = new Array(M).fill(1 / M);
+    truth = 45; weighted = false; entries = []; logEl.innerHTML = '';
+    log('초기화: prior(균등)에서 M=' + M + '개 표집 — 고유 위치 ' + uniq() + '개');
+    draw(); status();
+  }
+  function log(t) {
+    entries.unshift(t);
+    logEl.innerHTML = entries.slice(0, 16).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+  function uniq() {
+    var s = {}; X.forEach(function (x) { s[x.toFixed(4)] = 1; });
+    return Object.keys(s).length;
+  }
+
+  // 라인 4: x ~ p(x_t | u_t, x_{t-1})
+  function predict() {
+    var u = 12, sd = val('ps-r');
+    X = X.map(function (x) { return Math.max(0, Math.min(LEN, x + u + sd * randn())); });
+    truth = Math.max(0, Math.min(LEN, truth + u + sd * randn()));
+    weighted = false;
+    log('라인4  각 particle을 모션 모델에서 표집 → 퍼짐. 가중치는 아직 균등');
+    W = new Array(M).fill(1 / M);
+    draw(); status();
+  }
+
+  // 라인 5: w = p(z | x)
+  function weigh() {
+    var sawDoor = nearDoor(truth);
+    var hit = 0.8;
+    var w = X.map(function (x) {
+      var isDoor = nearDoor(x);
+      return sawDoor ? (isDoor ? hit : 1 - hit) : (isDoor ? 1 - hit : hit);
+    });
+    var s = w.reduce(function (a, b) { return a + b; }, 0);
+    W = w.map(function (v) { return v / s; });
+    weighted = true;
+    log('라인5  관측: ' + (sawDoor ? '문 보임' : '벽만') +
+        ' → 가중치 부여 (particle 위치는 그대로, 높이만 변함).  ESS = ' + ess().toFixed(0) + '/' + M);
+    draw(); status();
+  }
+
+  function ess() {   // effective sample size — 가중치 분산의 척도
+    var s2 = W.reduce(function (a, w) { return a + w * w; }, 0);
+    return s2 > 0 ? 1 / s2 : M;
+  }
+
+  // 라인 8~11
+  function resample() {
+    var before = uniq(), lowVar = val('ps-s') === 1;
+    var newX = [];
+    if (lowVar) {                                   // Table 4.4
+      var r = Math.random() / M, c = W[0], i = 0;
+      for (var m = 0; m < M; m++) {
+        var U = r + m / M;
+        while (U > c && i < M - 1) { i++; c += W[i]; }
+        newX.push(X[i]);
+      }
+    } else {                                        // Table 4.3 라인 9의 순진한 독립 표집
+      var cum = [], acc = 0;
+      W.forEach(function (w) { acc += w; cum.push(acc); });
+      for (var k = 0; k < M; k++) {
+        var u = Math.random() * acc, lo = 0, hi = M - 1;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (cum[mid] < u) lo = mid + 1; else hi = mid; }
+        newX.push(X[lo]);
+      }
+    }
+    X = newX; W = new Array(M).fill(1 / M); weighted = false;
+    var after = uniq();
+    log('라인8~11  ' + (lowVar ? 'low variance' : '독립 무작위') + ' resampling → 고유 particle ' +
+        before + ' → ' + after + '  (' + (before - after) + '개 소멸)');
+    draw(); status();
+  }
+
+  function status() {
+    var mean = 0;
+    for (var i = 0; i < M; i++) mean += W[i] * X[i];
+    var varr = 0;
+    for (var j = 0; j < M; j++) varr += W[j] * Math.pow(X[j] - mean, 2);
+    out.innerHTML =
+      'M = <b>' + M + '</b> · 고유 particle <b>' + uniq() + '</b>개 · ESS <b>' + ess().toFixed(0) + '</b>' +
+      ' &nbsp;|&nbsp; 가중 평균 <b>' + mean.toFixed(1) + '</b> · σ <b>' + Math.sqrt(varr).toFixed(1) +
+      '</b> · 실제 <b>' + truth.toFixed(1) + '</b>' +
+      (weighted ? '<br><b>가중치가 붙은 상태</b> — particle 위치는 아직 안 움직였다 (라인 5까지)' : '');
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 250;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var padL = 12, padR = 12, base = h - 34, top = 26, plotW = w - padL - padR;
+    function px(x) { return padL + plotW * x / LEN; }
+
+    DOORS.forEach(function (d) {
+      ctx.fillStyle = css('--ink-faint') + '26';
+      ctx.fillRect(px(d - DOOR_W), top, px(2 * DOOR_W) - px(0), base - top);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('문', px(d), base + 14);
+    });
+
+    var mx = Math.max.apply(null, W) || 1;
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1;
+    ctx.globalAlpha = Math.max(0.18, Math.min(0.85, 60 / M));
+    for (var i = 0; i < M; i++) {
+      var hgt = 8 + (W[i] / mx) * (base - top - 12);
+      ctx.beginPath(); ctx.moveTo(px(X[i]), base); ctx.lineTo(px(X[i]), base - hgt); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR, base); ctx.stroke();
+
+    var tx = px(truth);
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(tx, top - 14); ctx.lineTo(tx, base); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink'); ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('실제', tx, top - 17);
+    ctx.textAlign = 'left';
+  }
+
+  document.querySelector('#w-pf [data-move]').addEventListener('click', predict);
+  document.querySelector('#w-pf [data-weigh]').addEventListener('click', weigh);
+  document.querySelector('#w-pf [data-resample]').addEventListener('click', resample);
+  document.querySelector('#w-pf [data-reset]').addEventListener('click', reset);
+  document.getElementById('ps-m').addEventListener('input', function (e) {
+    document.getElementById('pv-m').textContent = e.target.value; reset();
+  });
+  document.getElementById('ps-r').addEventListener('input', function (e) {
+    document.getElementById('pv-r').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('ps-s').addEventListener('input', function (e) {
+    document.getElementById('pv-s').textContent = e.target.value === '1' ? 'low variance' : '독립 무작위';
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

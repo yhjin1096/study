@@ -1,0 +1,186 @@
+<div class="lab" id="w-hist">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Histogram filter — 가우시안이 못 하는 것</span>
+    <span class="lab-note">multi-modal belief를 그대로 표현한다</span>
+  </div>
+  <div class="lab-body">
+    <p>1차원 복도의 로봇. 벽에 <b>구분 불가능한 문 3개</b>가 있어서, "문 앞이다"라는 관측은
+       <b>세 곳을 동시에 지지</b>한다. 가우시안 하나로는 표현할 수 없는 belief를 히스토그램은
+       그대로 담는다. 셀 개수를 바꿔가며 정확도와 계산량의 맞바꿈(4.1.2절)도 확인해보자.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-move>① 이동 (라인 3)</button>
+      <button class="correct" data-door>② 관측: 문이 보임 (라인 4)</button>
+      <button class="correct" data-nodoor>② 관측: 벽만 보임</button>
+      <button class="ghost" data-reset>초기화 (균등 = 완전한 무지)</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>셀 개수 K</span><b id="hv-k">50</b></label>
+        <input type="range" id="hs-k" min="10" max="200" step="10" value="50">
+      </div>
+      <div class="slider">
+        <label><span>이동량</span><b id="hv-u">12</b></label>
+        <input type="range" id="hs-u" min="1" max="30" step="1" value="12">
+      </div>
+      <div class="slider">
+        <label><span>모션 노이즈</span><b id="hv-r">4.0</b></label>
+        <input type="range" id="hs-r" min="0.5" max="15" step="0.5" value="4">
+      </div>
+    </div>
+
+    <canvas id="hf-canvas" width="880" height="230"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>belief (셀별 확률)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>문 위치</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>실제 위치</span>
+    </div>
+    <div class="readout" id="hf-readout"></div>
+    <div class="log" id="hf-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var LEN = 300, DOORS = [45, 150, 245], DOOR_W = 14;
+  var cv = document.getElementById('hf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('hf-readout'), logEl = document.getElementById('hf-log');
+  var bel, K, truth, entries;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function cellCenter(k) { return (k + 0.5) * LEN / K; }          // 식 (4) 대표점
+  function nearDoor(x) {
+    return DOORS.some(function (d) { return Math.abs(x - d) < DOOR_W; });
+  }
+  function normalize(a) {
+    var s = a.reduce(function (p, c) { return p + c; }, 0);
+    return s > 0 ? a.map(function (v) { return v / s; }) : a.map(function () { return 1 / a.length; });
+  }
+
+  function reset() {
+    K = Math.round(val('hs-k'));
+    bel = new Array(K).fill(1 / K);                                // 균등 = 완전한 무지
+    truth = 45; entries = []; logEl.innerHTML = '';
+    log('초기화: 모든 셀에 1/' + K + ' — 가우시안으로는 표현 불가한 균등 belief');
+    draw(); status();
+  }
+  function log(t) {
+    entries.unshift(t);
+    logEl.innerHTML = entries.slice(0, 14).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+
+  // 라인 3: p̄_k = Σ_i p(x_k | u, x_i) p_i
+  function predict() {
+    var u = val('hs-u'), sd = val('hs-r');
+    var cw = LEN / K;
+    var shift = Math.round(u / cw), half = Math.max(1, Math.ceil(3 * sd / cw));
+    var kern = [];
+    for (var d = -half; d <= half; d++) kern.push(Math.exp(-0.5 * (d * cw) * (d * cw) / (sd * sd)));
+    var next = new Array(K).fill(0);
+    for (var i = 0; i < K; i++) {
+      if (bel[i] < 1e-12) continue;
+      for (var d2 = -half; d2 <= half; d2++) {
+        var j = i + shift + d2;
+        if (j >= 0 && j < K) next[j] += bel[i] * kern[d2 + half];
+      }
+    }
+    bel = normalize(next);
+    truth = Math.min(LEN - 1, truth + u + (Math.random() * 2 - 1) * sd);
+    log('라인3 이동 +' + u + ' → 분포가 이동하고 넓어짐 (모드 수는 유지)');
+    draw(); status();
+  }
+
+  // 라인 4: p_k = η p(z | x_k) p̄_k    — 대표점으로 probe (식 5)
+  function correct(sawDoor) {
+    var hit = 0.75, miss = 0.25;
+    bel = normalize(bel.map(function (p, k) {
+      var isDoor = nearDoor(cellCenter(k));
+      var lik = sawDoor ? (isDoor ? hit : 1 - hit) : (isDoor ? miss : 1 - miss);
+      return p * lik;
+    }));
+    var modes = countModes();
+    log('라인4 관측: ' + (sawDoor ? '문 보임' : '벽만') + ' → 봉우리 ' + modes + '개' +
+        (sawDoor && modes > 1 ? '  ← 가우시안 하나로는 불가능한 belief' : ''));
+    draw(); status();
+  }
+
+  function countModes() {
+    var mx = Math.max.apply(null, bel), n = 0;
+    for (var k = 1; k < K - 1; k++) {
+      if (bel[k] > bel[k - 1] && bel[k] >= bel[k + 1] && bel[k] > mx * 0.25) n++;
+    }
+    return n || 1;
+  }
+
+  function status() {
+    var mean = 0, mx = 0, arg = 0;
+    for (var k = 0; k < K; k++) {
+      mean += cellCenter(k) * bel[k];
+      if (bel[k] > mx) { mx = bel[k]; arg = k; }
+    }
+    var varr = 0;
+    for (var j = 0; j < K; j++) varr += bel[j] * Math.pow(cellCenter(j) - mean, 2);
+    out.innerHTML =
+      '셀 <b>' + K + '</b>개 (폭 ' + (LEN / K).toFixed(1) + ') · 봉우리 <b>' + countModes() + '</b>개<br>' +
+      '가우시안이 낼 답: 평균 <b>' + mean.toFixed(1) + '</b>, σ <b>' + Math.sqrt(varr).toFixed(1) + '</b>' +
+      ' &nbsp;|&nbsp; 히스토그램 최빈 셀: <b>' + cellCenter(arg).toFixed(1) + '</b>' +
+      ' &nbsp;|&nbsp; 실제: <b>' + truth.toFixed(1) + '</b>';
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 230;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var padL = 12, padR = 12, base = h - 34, top = 24, plotW = w - padL - padR;
+    function px(x) { return padL + plotW * x / LEN; }
+
+    // 문 위치
+    DOORS.forEach(function (d) {
+      ctx.fillStyle = css('--ink-faint') + '2a';
+      ctx.fillRect(px(d - DOOR_W), top, px(2 * DOOR_W) - px(0), base - top);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('문', px(d), base + 14);
+    });
+
+    // belief 막대
+    var mx = Math.max.apply(null, bel) || 1;
+    var bw = plotW / K;
+    for (var k = 0; k < K; k++) {
+      var hgt = (bel[k] / mx) * (base - top);
+      ctx.fillStyle = css('--correct');
+      ctx.fillRect(px(0) + k * bw + 0.5, base - hgt, Math.max(bw - 1, 1), hgt);
+    }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR, base); ctx.stroke();
+
+    var tx = px(truth);
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(tx, top - 12); ctx.lineTo(tx, base); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink'); ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('실제', tx, top - 15);
+    ctx.textAlign = 'left';
+  }
+
+  document.querySelector('#w-hist [data-move]').addEventListener('click', predict);
+  document.querySelector('#w-hist [data-door]').addEventListener('click', function () { correct(true); });
+  document.querySelector('#w-hist [data-nodoor]').addEventListener('click', function () { correct(false); });
+  document.querySelector('#w-hist [data-reset]').addEventListener('click', reset);
+  document.getElementById('hs-k').addEventListener('input', function (e) {
+    document.getElementById('hv-k').textContent = e.target.value; reset();
+  });
+  [['hs-u', 'hv-u'], ['hs-r', 'hv-r']].forEach(function (p) {
+    document.getElementById(p[0]).addEventListener('input', function (e) {
+      document.getElementById(p[1]).textContent = parseFloat(e.target.value).toFixed(
+        p[0] === 'hs-r' ? 1 : 0);
+    });
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

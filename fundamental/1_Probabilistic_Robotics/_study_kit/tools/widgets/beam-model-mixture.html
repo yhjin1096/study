@@ -1,0 +1,228 @@
+<div class="lab" id="w-beam">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Beam model — 네 성분이 합쳐져 Figure 6.4가 되는 과정</span>
+    <span class="lab-note">Figure 6.3·6.4를 한 화면에서</span>
+  </div>
+  <div class="lab-body">
+    <p>식 (1)~(10)의 네 성분 <code>p_hit</code>·<code>p_short</code>·<code>p_max</code>·<code>p_rand</code>를
+       가중치 <code>z_hit … z_rand</code>로 섞어 <b>Figure 6.4의 pseudo-density</b>를 만든다.
+       옅은 곡선이 <b>가중치를 곱한 개별 성분</b>, 굵은 곡선이 <b>합쳐진 mixture</b>다.
+       가중치 슬라이더를 움직이면 합이 1이 되도록 나머지가 자동으로 재조정된다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>참 range z*<sub>t</sub> (cm)</span><b id="bv-zs">300</b></label>
+        <input type="range" id="bs-zs" min="50" max="470" step="5" value="300">
+      </div>
+      <div class="slider">
+        <label><span>σ<sub>hit</sub> (cm)</span><b id="bv-sig">10</b></label>
+        <input type="range" id="bs-sig" min="2" max="60" step="1" value="10">
+      </div>
+      <div class="slider">
+        <label><span>λ<sub>short</sub> (1/cm)</span><b id="bv-lam">0.010</b></label>
+        <input type="range" id="bs-lam" min="0.001" max="0.05" step="0.001" value="0.01">
+      </div>
+      <div class="slider">
+        <label><span>z<sub>hit</sub></span><b id="bv-whit">0.70</b></label>
+        <input type="range" id="bs-whit" min="0" max="1" step="0.01" value="0.7">
+      </div>
+      <div class="slider">
+        <label><span>z<sub>short</sub></span><b id="bv-wsh">0.10</b></label>
+        <input type="range" id="bs-wsh" min="0" max="1" step="0.01" value="0.1">
+      </div>
+      <div class="slider">
+        <label><span>z<sub>max</sub></span><b id="bv-wmx">0.15</b></label>
+        <input type="range" id="bs-wmx" min="0" max="1" step="0.01" value="0.15">
+      </div>
+      <div class="slider">
+        <label><span>z<sub>rand</sub></span><b id="bv-wrd">0.05</b></label>
+        <input type="range" id="bs-wrd" min="0" max="1" step="0.01" value="0.05">
+      </div>
+      <div class="slider">
+        <label><span>측정값 z<sup>k</sup><sub>t</sub> (cm) — 세로선</span><b id="bv-z">305</b></label>
+        <input type="range" id="bs-z" min="0" max="500" step="1" value="305">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="laser">레이저 (정확)</button>
+      <button data-preset="sonar">소나 (Fig 6.5a)</button>
+      <button data-preset="hitonly">z_hit = 1 (성분 하나만)</button>
+      <button class="ghost" data-parts>개별 성분 표시 켜기/끄기</button>
+    </div>
+
+    <canvas id="bm-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>mixture p(z<sup>k</sup><sub>t</sub> | x<sub>t</sub>, m)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>z<sub>hit</sub>·p<sub>hit</sub></span>
+      <span><i class="swatch" style="background:var(--predict)"></i>z<sub>short</sub>·p<sub>short</sub></span>
+      <span><i class="swatch" style="background:var(--accent)"></i>z<sub>max</sub>·p<sub>max</sub> / z<sub>rand</sub>·p<sub>rand</sub></span>
+    </div>
+    <div class="readout" id="bm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('bm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('bm-readout');
+  var ZMAX = 500, showParts = true, lastTouched = null;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  // 오차함수 — p_hit 절단 정규화(식 3)에 필요
+  function erf(x) {
+    var s = x < 0 ? -1 : 1; x = Math.abs(x);
+    var t = 1 / (1 + 0.3275911 * x);
+    var y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+              - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return s * y;
+  }
+
+  // 식 (1)(2)(3) — 절단 Gaussian
+  function pHit(z, zs, sig) {
+    if (z < 0 || z > ZMAX) return 0;
+    var cdf = function (a) { return 0.5 * (1 + erf((a - zs) / (sig * Math.SQRT2))); };
+    var eta = 1 / (cdf(ZMAX) - cdf(0));
+    return eta / Math.sqrt(2 * Math.PI * sig * sig) * Math.exp(-0.5 * (z - zs) * (z - zs) / (sig * sig));
+  }
+  // 식 (4)(5)(6) — 절단 지수분포
+  function pShort(z, zs, lam) {
+    if (z < 0 || z > zs) return 0;
+    var eta = 1 / (1 - Math.exp(-lam * zs));
+    return eta * lam * Math.exp(-lam * z);
+  }
+  // 식 (8) — 균등
+  function pRand(z) { return (z >= 0 && z < ZMAX) ? 1 / ZMAX : 0; }
+
+  // 식 (7) point mass는 밀도가 없다 — 책처럼 좁은 균등으로 "그리기 위한 근사"
+  var MAX_W = 8;   // cm
+  function pMaxDraw(z) { return (z >= ZMAX - MAX_W) ? 1 / MAX_W : 0; }
+
+  function weights() {
+    var w = [val('bs-whit'), val('bs-wsh'), val('bs-wmx'), val('bs-wrd')];
+    var s = w[0] + w[1] + w[2] + w[3];
+    if (s <= 0) return [1, 0, 0, 0];
+    return w.map(function (v) { return v / s; });   // 식 (9) 제약
+  }
+
+  function draw() {
+    var zs = val('bs-zs'), sig = val('bs-sig'), lam = val('bs-lam'), zq = val('bs-z');
+    var w = weights();
+    document.getElementById('bv-zs').textContent = zs.toFixed(0);
+    document.getElementById('bv-sig').textContent = sig.toFixed(0);
+    document.getElementById('bv-lam').textContent = lam.toFixed(3);
+    document.getElementById('bv-whit').textContent = w[0].toFixed(2);
+    document.getElementById('bv-wsh').textContent = w[1].toFixed(2);
+    document.getElementById('bv-wmx').textContent = w[2].toFixed(2);
+    document.getElementById('bv-wrd').textContent = w[3].toFixed(2);
+    document.getElementById('bv-z').textContent = zq.toFixed(0);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 16, padT = 16, padB = 34;
+    var PW = W - padL - padR, PH = H - padT - padB;
+
+    // 곡선 표본
+    var Nn = 700, zsAll = [], parts = [[], [], [], []], mix = [];
+    for (var i = 0; i <= Nn; i++) {
+      var z = ZMAX * i / Nn;
+      var a = w[0] * pHit(z, zs, sig), b = w[1] * pShort(z, zs, lam);
+      var c = w[2] * pMaxDraw(z), d = w[3] * pRand(z);
+      zsAll.push(z); parts[0].push(a); parts[1].push(b); parts[2].push(c); parts[3].push(d);
+      mix.push(a + b + c + d);
+    }
+    var ymax = Math.max.apply(null, mix) * 1.12 || 1;
+
+    function PX(z) { return padL + PW * z / ZMAX; }
+    function PY(p) { return padT + PH - PH * p / ymax; }
+
+    // 축
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + PH); ctx.lineTo(padL + PW, padT + PH); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    [0, 100, 200, 300, 400, 500].forEach(function (t) {
+      ctx.fillText(t, PX(t), padT + PH + 15);
+    });
+    ctx.fillText('z_t^k  (cm)', padL + PW / 2, padT + PH + 30);
+    ctx.save(); ctx.translate(13, padT + PH / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('likelihood', 0, 0); ctx.restore();
+
+    // z* 와 z_max 눈금
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = css('--rule');
+    ctx.beginPath(); ctx.moveTo(PX(zs), padT); ctx.lineTo(PX(zs), padT + PH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('z*', PX(zs), padT + 11);
+    ctx.fillText('z_max', PX(ZMAX) - 18, padT + 11);
+
+    function curve(arr, color, width, alpha) {
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      for (var i = 0; i <= Nn; i++) {
+        var x = PX(zsAll[i]), y = PY(arr[i]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+
+    if (showParts) {
+      curve(parts[0], css('--correct'), 1.4, 0.85);
+      curve(parts[1], css('--predict'), 1.4, 0.85);
+      curve(parts[2], css('--accent'), 1.4, 0.85);
+      curve(parts[3], css('--accent'), 1.4, 0.5);
+    }
+    curve(mix, css('--ink'), 2.4, 1);
+
+    // 질의 측정값
+    var qh = w[0] * pHit(zq, zs, sig), qs = w[1] * pShort(zq, zs, lam);
+    var qm = (zq >= ZMAX) ? w[2] : 0, qr = w[3] * pRand(zq);
+    var qTotalDraw = qh + qs + w[2] * pMaxDraw(zq) + qr;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(PX(zq), padT); ctx.lineTo(PX(zq), padT + PH); ctx.stroke();
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(zq), PY(qTotalDraw), 4, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'left';
+
+    // point mass는 밀도가 아니므로 실제 확률값은 따로 계산해 보여준다
+    var qTrue = qh + qs + qm + qr;
+    var dom = [['p_hit', qh], ['p_short', qs], ['p_max', qm], ['p_rand', qr]]
+      .sort(function (a, b) { return b[1] - a[1]; })[0];
+    out.innerHTML =
+      'z = <b>' + zq.toFixed(0) + '</b> cm 에서 &nbsp; ' +
+      'z_hit·p_hit = <b>' + qh.toExponential(3) + '</b> · ' +
+      'z_short·p_short = <b>' + qs.toExponential(3) + '</b> · ' +
+      'z_max·p_max = <b>' + qm.toFixed(3) + '</b> · ' +
+      'z_rand·p_rand = <b>' + qr.toExponential(3) + '</b><br>' +
+      '합 p(z | x, m) = <b>' + qTrue.toExponential(4) + '</b> · 지배 성분 <b>' + dom[0] + '</b>' +
+      ' &nbsp;(z = z_max 일 때 p_max는 밀도가 아닌 확률 1이므로 그래프의 막대 높이와 다르다)';
+  }
+
+  ['bs-zs', 'bs-sig', 'bs-lam', 'bs-whit', 'bs-wsh', 'bs-wmx', 'bs-wrd', 'bs-z'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-beam [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = {
+        laser:   { sig: 6,  lam: 0.004, w: [0.90, 0.03, 0.02, 0.05] },
+        sonar:   { sig: 28, lam: 0.012, w: [0.55, 0.15, 0.22, 0.08] },
+        hitonly: { sig: 10, lam: 0.010, w: [1.00, 0.00, 0.00, 0.00] }
+      }[b.dataset.preset];
+      set('bs-sig', p.sig); set('bs-lam', p.lam);
+      set('bs-whit', p.w[0]); set('bs-wsh', p.w[1]); set('bs-wmx', p.w[2]); set('bs-wrd', p.w[3]);
+      draw();
+    });
+  });
+  document.querySelector('#w-beam [data-parts]').addEventListener('click', function () {
+    showParts = !showParts; draw();
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

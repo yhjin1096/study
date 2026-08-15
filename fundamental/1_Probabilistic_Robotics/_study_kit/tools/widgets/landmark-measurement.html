@@ -1,0 +1,240 @@
+<div class="lab" id="w-lm">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">Landmark model — 관측 하나가 만드는 고리, 그리고 표본 pose</span>
+    <span class="lab-note">Table 6.4·6.5, Figure 6.13</span>
+  </div>
+  <div class="lab-body">
+    <p>랜드마크 ★ 를 거리 <code>r</code>, 상대 bearing <code>φ</code>로 관측했을 때
+       가능한 로봇 pose를 Table 6.5로 500개 표집한다. 초록 점이 표본, 짧은 선이 각 표본의 방향 θ다.
+       측정 하나는 pose 3자유도 중 2개만 묶으므로 <b>랜드마크 주위 고리</b>가 남는다(Figure 6.13a).
+       <b>두 번째 랜드마크를 켜면</b> 두 고리의 교점만 살아남아 pose가 좁혀지는 것을 볼 수 있다.
+       파란 ○ 가 참 pose이며, <b>격자를 클릭하면 참 pose가 그리로 옮겨가고 관측값 r·φ 도 그 pose에서
+       다시 계산된다</b> — 그러면 고리가 참 pose를 지나간다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>관측 range r (m)</span><b id="mv-r">5.0</b></label>
+        <input type="range" id="ms-r" min="1" max="9" step="0.1" value="5">
+      </div>
+      <div class="slider">
+        <label><span>관측 bearing φ (도)</span><b id="mv-phi">30</b></label>
+        <input type="range" id="ms-phi" min="-180" max="180" step="1" value="30">
+      </div>
+      <div class="slider">
+        <label><span>σ<sub>r</sub> (m)</span><b id="mv-sr">0.30</b></label>
+        <input type="range" id="ms-sr" min="0.01" max="1.2" step="0.01" value="0.3">
+      </div>
+      <div class="slider">
+        <label><span>σ<sub>φ</sub> (도)</span><b id="mv-sp">3.0</b></label>
+        <input type="range" id="ms-sp" min="0.2" max="25" step="0.2" value="3">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="fig613">Figure 6.13 (r=5m, φ=30°)</button>
+      <button data-preset="precise">정밀 센서</button>
+      <button data-preset="coarse">거친 센서</button>
+      <button class="ghost" data-second>랜드마크 2개 켜기/끄기</button>
+      <button class="ghost" data-heading>방향 표시 켜기/끄기</button>
+    </div>
+
+    <canvas id="lm-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>랜드마크</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>표본 pose 500개</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>참 pose</span>
+    </div>
+    <div class="readout" id="lm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('lm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lm-readout');
+  var N = 500, useSecond = false, showHeading = true, view = null;
+  var LM1 = { x: 6.0, y: 6.0, s: 1 }, LM2 = { x: -3.0, y: 5.0, s: 2 };
+  var truth = { x: 2.0, y: 3.0, th: 0.5 };
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function wrap(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  // Table 5.4 라인 2 방식 — 균등분포 12개 평균으로 정규 표본
+  function sampleNormal(sd) {
+    if (sd <= 0) return 0;
+    var b = sd * Math.sqrt(3), s = 0;         // 분산 sd^2 이 되도록
+    for (var i = 0; i < 12; i++) s += (Math.random() * 2 - 1) * b;
+    return s / 6;
+  }
+
+  // Table 6.5 — 랜드마크 측정에서 pose 표집
+  function samplePose(lm, r, phi, sr, sp) {
+    var g = Math.random() * 2 * Math.PI;              // 라인 3
+    var rh = r + sampleNormal(sr);                    // 라인 4
+    var ph = phi + sampleNormal(sp);                  // 라인 5
+    return {                                          // 라인 6~8
+      x: lm.x + rh * Math.cos(g),
+      y: lm.y + rh * Math.sin(g),
+      th: wrap(g - Math.PI - ph)
+    };
+  }
+
+  // 식 (3) 앞부분 — 노이즈 없는 range/bearing
+  function expect(lm, p) {
+    return {
+      r: Math.hypot(lm.x - p.x, lm.y - p.y),
+      phi: wrap(Math.atan2(lm.y - p.y, lm.x - p.x) - p.th)
+    };
+  }
+  // Table 6.4 — likelihood
+  function landmarkProb(lm, p, r, phi, s, sr, sp, ss) {
+    var e = expect(lm, p);
+    var g = function (d, sd) { return Math.exp(-0.5 * d * d / (sd * sd)) / Math.sqrt(2 * Math.PI * sd * sd); };
+    return g(r - e.r, sr) * g(wrap(phi - e.phi), sp) * g(s - lm.s, ss);
+  }
+
+  function draw() {
+    var r = val('ms-r'), phi = val('ms-phi') * Math.PI / 180;
+    var sr = val('ms-sr'), sp = val('ms-sp') * Math.PI / 180;
+    document.getElementById('mv-r').textContent = r.toFixed(1);
+    document.getElementById('mv-phi').textContent = val('ms-phi').toFixed(0);
+    document.getElementById('mv-sr').textContent = sr.toFixed(2);
+    document.getElementById('mv-sp').textContent = val('ms-sp').toFixed(1);
+
+    // 표본 생성 — 랜드마크 1 기준
+    var pts = [];
+    for (var i = 0; i < N; i++) pts.push(samplePose(LM1, r, phi, sr, sp));
+
+    // 랜드마크 2가 있으면, 두 번째 관측과의 일관성으로 걸러낸다 (교집합)
+    var obs2 = expect(LM2, truth);
+    var kept = pts;
+    if (useSecond) {
+      var scored = pts.map(function (p) {
+        return { p: p, w: landmarkProb(LM2, p, obs2.r, obs2.phi, LM2.s, sr, sp, 0.1) };
+      });
+      var wmax = Math.max.apply(null, scored.map(function (o) { return o.w; })) || 1;
+      kept = scored.filter(function (o) { return o.w > wmax * 0.05; }).map(function (o) { return o.p; });
+    }
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 좌표 범위
+    var xs = pts.map(function (p) { return p.x; }).concat([LM1.x, truth.x, useSecond ? LM2.x : LM1.x]);
+    var ys = pts.map(function (p) { return p.y; }).concat([LM1.y, truth.y, useSecond ? LM2.y : LM1.y]);
+    var minX = Math.min.apply(null, xs) - 1, maxX = Math.max.apply(null, xs) + 1;
+    var minY = Math.min.apply(null, ys) - 1, maxY = Math.max.apply(null, ys) + 1;
+    var pad = 16;
+    var sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
+    var offX = (W - sc * (maxX - minX)) / 2, offY = (H - sc * (maxY - minY)) / 2;
+    function PX(x) { return offX + (x - minX) * sc; }
+    function PY(y) { return H - (offY + (y - minY) * sc); }
+    view = { sc: sc, offX: offX, offY: offY, minX: minX, minY: minY, H: H };
+
+    // 격자
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g1 = Math.ceil(minX); g1 <= maxX; g1++) {
+      ctx.beginPath(); ctx.moveTo(PX(g1), 0); ctx.lineTo(PX(g1), H); ctx.stroke();
+    }
+    for (var g2 = Math.ceil(minY); g2 <= maxY; g2++) {
+      ctx.beginPath(); ctx.moveTo(0, PY(g2)); ctx.lineTo(W, PY(g2)); ctx.stroke();
+    }
+
+    // 표본
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.5;
+    kept.forEach(function (p) {
+      ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 2, 0, Math.PI * 2); ctx.fill();
+    });
+    if (showHeading) {
+      ctx.strokeStyle = css('--correct'); ctx.lineWidth = 0.9; ctx.globalAlpha = 0.35;
+      kept.forEach(function (p) {
+        ctx.beginPath(); ctx.moveTo(PX(p.x), PY(p.y));
+        ctx.lineTo(PX(p.x + 0.45 * Math.cos(p.th)), PY(p.y + 0.45 * Math.sin(p.th)));
+        ctx.stroke();
+      });
+    }
+    ctx.globalAlpha = 1;
+
+    // 랜드마크
+    function star(lm, label) {
+      ctx.fillStyle = css('--predict');
+      ctx.font = '600 17px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('★', PX(lm.x), PY(lm.y) + 6);
+      ctx.font = '11px system-ui, sans-serif'; ctx.fillStyle = css('--ink-faint');
+      ctx.fillText(label, PX(lm.x), PY(lm.y) - 12);
+    }
+    star(LM1, 'm₁ (' + LM1.x + ',' + LM1.y + ')');
+    if (useSecond) star(LM2, 'm₂ (' + LM2.x + ',' + LM2.y + ')');
+
+    // 참 pose
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.arc(PX(truth.x), PY(truth.y), 6.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PX(truth.x), PY(truth.y));
+    ctx.lineTo(PX(truth.x + 0.8 * Math.cos(truth.th)), PY(truth.y + 0.8 * Math.sin(truth.th)));
+    ctx.stroke();
+    // 참 pose에서 랜드마크로 가는 선
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PX(truth.x), PY(truth.y)); ctx.lineTo(PX(LM1.x), PY(LM1.y)); ctx.stroke();
+    if (useSecond) { ctx.beginPath(); ctx.moveTo(PX(truth.x), PY(truth.y)); ctx.lineTo(PX(LM2.x), PY(LM2.y)); ctx.stroke(); }
+    ctx.setLineDash([]);
+
+    // 통계
+    var e1 = expect(LM1, truth);
+    var q = landmarkProb(LM1, truth, r, phi, LM1.s, sr, sp, 0.1);
+    var mx = 0, my = 0;
+    kept.forEach(function (p) { mx += p.x; my += p.y; });
+    mx /= (kept.length || 1); my /= (kept.length || 1);
+    out.innerHTML =
+      '참 pose (' + truth.x.toFixed(2) + ', ' + truth.y.toFixed(2) + ', ' + truth.th.toFixed(2) + ') 에서 ' +
+      'm₁ 의 기대 관측: r̂ = <b>' + e1.r.toFixed(3) + '</b> m, φ̂ = <b>' + e1.phi.toFixed(3) + '</b> rad' +
+      ' &nbsp;→&nbsp; Table 6.4 의 q = <b>' + q.toExponential(3) + '</b><br>' +
+      '표본 <b>' + kept.length + '</b>개' +
+      (useSecond ? ' (m₂ 관측과 일관된 것만 남김 — 고리가 <b>교점</b>으로 좁혀진다)'
+                 : ' — 고리 전체에 퍼져 있다: 측정 2개 제약 < pose 3자유도, 남는 1자유도가 γ̂') +
+      ' · 표본 평균 (' + mx.toFixed(2) + ', ' + my.toFixed(2) + ')';
+  }
+
+  cv.addEventListener('click', function (e) {
+    if (!view) return;
+    var rect = cv.getBoundingClientRect();
+    var cxp = e.clientX - rect.left, cyp = e.clientY - rect.top;
+    // PX/PY의 역변환 — 화면 좌표를 세계 좌표로
+    truth.x = view.minX + (cxp - view.offX) / view.sc;
+    truth.y = view.minY + (view.H - cyp - view.offY) / view.sc;
+    // 관측값을 새 참 pose에서 다시 생성 (식 3의 노이즈 없는 부분)
+    var e = expect(LM1, truth);
+    document.getElementById('ms-r').value = Math.max(1, Math.min(9, e.r)).toFixed(1);
+    document.getElementById('ms-phi').value = Math.round(e.phi * 180 / Math.PI);
+    draw();
+  });
+
+  ['ms-r', 'ms-phi', 'ms-sr', 'ms-sp'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-lm [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = {
+        fig613:  { r: 5,   phi: 30, sr: 0.30, sp: 3.0 },
+        precise: { r: 5,   phi: 30, sr: 0.05, sp: 0.5 },
+        coarse:  { r: 5,   phi: 30, sr: 0.80, sp: 15  }
+      }[b.dataset.preset];
+      document.getElementById('ms-r').value = p.r;
+      document.getElementById('ms-phi').value = p.phi;
+      document.getElementById('ms-sr').value = p.sr;
+      document.getElementById('ms-sp').value = p.sp;
+      draw();
+    });
+  });
+  document.querySelector('#w-lm [data-second]').addEventListener('click', function () {
+    useSecond = !useSecond; draw();
+  });
+  document.querySelector('#w-lm [data-heading]').addEventListener('click', function () {
+    showHeading = !showHeading; draw();
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

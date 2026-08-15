@@ -1,0 +1,200 @@
+<div class="lab" id="w-mkv">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Markov localization — 1차원 복도에서 belief가 좁혀지는 과정</span>
+    <span class="lab-note">Figure 7.4·7.5를 직접 돌려보기</span>
+  </div>
+  <div class="lab-body">
+    <p>문 세 개가 있는 복도에서 Table 7.1을 한 줄씩 실행한다.
+       <b>측정(라인 4)</b>은 belief에 <code>p(z|x)</code>를 곱해 <b>뾰족하게</b> 만들고,
+       <b>이동(라인 3)</b>은 motion model과 convolve해 <b>밀면서 평평하게</b> 만든다.
+       Figure 7.5의 (a)→(e) 순서는 <b>측정 → 이동 → 측정</b>이며, 아래 버튼으로 그대로 따라갈 수 있다.
+       <b>“문 없음” 측정</b>은 책 7.8절이 말하는 <b>negative information</b>이다 — EKF는 이 정보를
+       쓸 수 없지만 Markov localization은 자연스럽게 처리한다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>p(문 봄 | 문 위치)</span><b id="kv-hit">0.60</b></label>
+        <input type="range" id="ks-hit" min="0.3" max="0.95" step="0.01" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>p(문 봄 | 문 아님) — 오검출</span><b id="kv-fa">0.20</b></label>
+        <input type="range" id="ks-fa" min="0.02" max="0.45" step="0.01" value="0.2">
+      </div>
+      <div class="slider">
+        <label><span>이동량 u (칸)</span><b id="kv-u">3</b></label>
+        <input type="range" id="ks-u" min="1" max="6" step="1" value="3">
+      </div>
+      <div class="slider">
+        <label><span>운동 노이즈 — 중앙 가중치</span><b id="kv-w">0.50</b></label>
+        <input type="range" id="ks-w" min="0.34" max="1" step="0.02" value="0.5">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="sense">측정: 문을 봄 (라인 4)</button>
+      <button data-act="nodoor" class="ghost">측정: 문 없음 (negative info)</button>
+      <button data-act="move">이동 (라인 3)</button>
+      <button class="correct" data-act="fig75">Figure 7.5 전체 재생</button>
+      <button class="ghost" data-act="reset">초기화 (균등)</button>
+    </div>
+
+    <canvas id="mk-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>bel(x)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>문 위치</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>참 로봇 위치</span>
+    </div>
+    <div class="readout" id="mk-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('mk-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('mk-readout');
+  var N = 40, DOORS = [8, 16, 31];
+  var bel = [], truth = 8, log = [];
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  function reset() {
+    bel = new Array(N).fill(1 / N);      // 식 (3) — 균등 prior
+    truth = DOORS[0];
+    log = ['초기화 — 균등 belief, 식 (3)'];
+    draw();
+  }
+
+  // Table 7.1 라인 4 — measurement update
+  function sense(sawDoor) {
+    var hit = val('ks-hit'), fa = val('ks-fa'), s = 0;
+    for (var x = 0; x < N; x++) {
+      var isDoor = DOORS.indexOf(x) >= 0;
+      var lik = isDoor ? hit : fa;
+      if (!sawDoor) lik = 1 - lik;
+      bel[x] *= lik;
+      s += bel[x];
+    }
+    for (var i = 0; i < N; i++) bel[i] /= s;   // 정규화 η
+    log.push(sawDoor ? '측정: 문을 봄 — bel ← η·p(z|x)·bel' :
+                       '측정: 문 없음 — negative information');
+    draw();
+  }
+
+  // Table 7.1 라인 3 — motion update (convolution)
+  function move() {
+    var u = Math.round(val('ks-u')), wc = val('ks-w'), ws = (1 - wc) / 2;
+    var nb = new Array(N).fill(0);
+    for (var x = 0; x < N; x++) {
+      [[u - 1, ws], [u, wc], [u + 1, ws]].forEach(function (p) {
+        var d = x + p[0];
+        if (d >= 0 && d < N) nb[d] += p[1] * bel[x];
+      });
+    }
+    var s = nb.reduce(function (a, b) { return a + b; }, 0);
+    for (var i = 0; i < N; i++) bel[i] = nb[i] / s;
+    truth = Math.min(N - 1, truth + u);
+    log.push('이동 u=' + u + ' — bel ← ∫p(x|u,x\')bel(x\')dx\' (평평해짐)');
+    draw();
+  }
+
+  function figure75() {
+    reset();
+    truth = DOORS[0];
+    sense(true);              // (b)
+    move();                   // (c)
+    truth = DOORS[1];         // 두 번째 문 앞에 도착했다고 두기
+    sense(true);              // (d)
+    move();                   // (e)
+    log.push('— Figure 7.5 (a)~(e) 재생 완료');
+    draw();
+  }
+
+  function entropy() {
+    var h = 0;
+    bel.forEach(function (p) { if (p > 1e-12) h -= p * Math.log2(p); });
+    return h;
+  }
+
+  function draw() {
+    document.getElementById('kv-hit').textContent = val('ks-hit').toFixed(2);
+    document.getElementById('kv-fa').textContent = val('ks-fa').toFixed(2);
+    document.getElementById('kv-u').textContent = Math.round(val('ks-u'));
+    document.getElementById('kv-w').textContent = val('ks-w').toFixed(2);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 12, padR = 12, cw = (W - padL - padR) / N;
+    var hallY = 16, hallH = 44;
+    var baseY = H - 34, plotH = baseY - (hallY + hallH) - 20;
+
+    // 복도 (Figure 7.4)
+    ctx.fillStyle = css('--rule-soft');
+    ctx.fillRect(padL, hallY, W - padL - padR, hallH);
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(padL, hallY, W - padL - padR, hallH);
+    DOORS.forEach(function (d, i) {
+      ctx.fillStyle = css('--accent');
+      ctx.fillRect(padL + d * cw, hallY, cw, hallH);
+      ctx.fillStyle = css('--panel-2') || '#fff';
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(i + 1, padL + (d + 0.5) * cw, hallY + hallH / 2 + 4);
+    });
+    // 참 로봇
+    ctx.fillStyle = css('--predict');
+    ctx.beginPath();
+    ctx.arc(padL + (truth + 0.5) * cw, hallY + hallH + 8, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // belief 막대
+    var bmax = Math.max.apply(null, bel);
+    ctx.fillStyle = css('--ink');
+    for (var x = 0; x < N; x++) {
+      var h = plotH * bel[x] / (bmax || 1);
+      ctx.fillRect(padL + x * cw + 0.6, baseY - h, cw - 1.2, h);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, baseY); ctx.lineTo(W - padR, baseY); ctx.stroke();
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('bel(x)', padL + 2, baseY - plotH - 4);
+    ctx.textAlign = 'right';
+    ctx.fillText('x', W - padR, baseY + 14);
+
+    // 통계
+    var best = bel.indexOf(bmax);
+    var modes = 0;
+    for (var i = 1; i < N - 1; i++) {
+      if (bel[i] > bel[i - 1] && bel[i] >= bel[i + 1] && bel[i] > bmax * 0.25) modes++;
+    }
+    out.innerHTML =
+      '<b>' + log[log.length - 1] + '</b><br>' +
+      '최빈 위치 x = <b>' + best + '</b> (확률 ' + bmax.toFixed(4) + ') · ' +
+      '뚜렷한 mode <b>' + modes + '개</b> · ' +
+      '엔트로피 <b>' + entropy().toFixed(3) + '</b> bit ' +
+      '(균등일 때 ' + Math.log2(N).toFixed(3) + ') · ' +
+      '참 위치 x = ' + truth +
+      (modes > 1 ? '<br><b>multi-modal — 이 belief는 하나의 Gaussian으로 표현할 수 없다 (7.4절 EKF의 한계)</b>' : '');
+  }
+
+  document.querySelectorAll('#w-mkv [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'sense') sense(true);
+      else if (a === 'nodoor') sense(false);
+      else if (a === 'move') move();
+      else if (a === 'fig75') figure75();
+      else reset();
+    });
+  });
+  ['ks-hit', 'ks-fa', 'ks-u', 'ks-w'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

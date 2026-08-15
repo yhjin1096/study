@@ -1,0 +1,213 @@
+<div class="lab" id="w-ekflin">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">선형화 오차 — Figure 3.4·3.5·3.6을 한 화면에서</span>
+    <span class="lab-note">불확실성과 비선형성이 근사를 어떻게 망가뜨리는가</span>
+  </div>
+  <div class="lab-body">
+    <p>책의 그림과 같은 배치다. <b>오른쪽 아래</b>가 입력 분포 <code>p(x)</code>,
+       <b>오른쪽 위</b>가 비선형 함수 <code>g(x)</code>와 평균에서 그은 접선,
+       <b>왼쪽 위</b>가 출력 분포 <code>p(y)</code>다.
+       회색 영역은 Monte-Carlo로 구한 <b>참</b> 분포, 파선은 <b>EKF의 가우시안 근사</b>다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>평균 μ — 비선형성이 다른 영역으로 (Fig 3.6)</span><b id="ev-m">0.00</b></label>
+        <input type="range" id="es-m" min="-3" max="3" step="0.05" value="0">
+      </div>
+      <div class="slider">
+        <label><span>표준편차 σ — 불확실성 (Fig 3.5)</span><b id="ev-s">0.60</b></label>
+        <input type="range" id="es-s" min="0.1" max="2.2" step="0.05" value="0.6">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="fig34">Fig 3.4 기본</button>
+      <button data-preset="wide">Fig 3.5(a) 불확실성 큼</button>
+      <button data-preset="narrow">Fig 3.5(b) 불확실성 작음</button>
+      <button data-preset="curvy">Fig 3.6(a) 비선형 영역</button>
+      <button data-preset="flat">Fig 3.6(b) 완만한 영역</button>
+    </div>
+
+    <canvas id="el-canvas" width="880" height="430"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>참 분포 (Monte-Carlo)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>참 분포의 가우시안</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>EKF 가우시안 (선형화)</span>
+    </div>
+    <div class="readout" id="el-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('el-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('el-readout');
+  var NS = 40000;              // Monte-Carlo 샘플 수
+  var XMIN = -4, XMAX = 4;
+
+  // 국소적으로 비선형성이 크게 다른 함수 (책 그림과 비슷한 성격)
+  function g(x) { return 2.2 * Math.sin(1.15 * x) + 0.45 * x; }
+  function gp(x) { return 2.2 * 1.15 * Math.cos(1.15 * x) + 0.45; }
+
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  }
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function draw() {
+    var mu = parseFloat(document.getElementById('es-m').value);
+    var sd = parseFloat(document.getElementById('es-s').value);
+    document.getElementById('ev-m').textContent = mu.toFixed(2);
+    document.getElementById('ev-s').textContent = sd.toFixed(2);
+
+    // --- Monte-Carlo: 참 분포
+    var ys = new Float64Array(NS), sum = 0;
+    for (var i = 0; i < NS; i++) { var y = g(mu + sd * randn()); ys[i] = y; sum += y; }
+    var mTrue = sum / NS, acc = 0;
+    for (var j = 0; j < NS; j++) { var d = ys[j] - mTrue; acc += d * d; }
+    var sTrue = Math.sqrt(acc / NS);
+
+    // --- EKF 선형화: y ≈ g(μ) + g'(μ)(x-μ)
+    var G = gp(mu), mEkf = g(mu), sEkf = Math.abs(G) * sd;
+
+    // --- 히스토그램
+    var YMIN = -4.5, YMAX = 4.5, BINS = 90;
+    var hist = new Float64Array(BINS), maxH = 0;
+    for (var k = 0; k < NS; k++) {
+      var b = Math.floor((ys[k] - YMIN) / (YMAX - YMIN) * BINS);
+      if (b >= 0 && b < BINS) { hist[b]++; if (hist[b] > maxH) maxH = hist[b]; }
+    }
+
+    // --- 캔버스 준비
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 430;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var gap = 14;
+    var leftW = Math.min(230, w * 0.3);
+    var funcX = leftW + gap, funcW = w - funcX - 6;
+    var funcY = 6, funcH = 250;
+    var inX = funcX, inY = funcH + gap + 6, inH = h - inY - 10;
+
+    function fx(x) { return funcX + funcW * (x - XMIN) / (XMAX - XMIN); }
+    function fy(y) { return funcY + funcH * (1 - (y - YMIN) / (YMAX - YMIN)); }
+
+    // 패널 테두리
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.strokeRect(funcX, funcY, funcW, funcH);
+    ctx.strokeRect(inX, inY, funcW, inH);
+    ctx.strokeRect(6, funcY, leftW - 6, funcH);
+
+    // ---- 오른쪽 위: 함수 g와 접선
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var p = 0; p <= 300; p++) {
+      var x = XMIN + (XMAX - XMIN) * p / 300, py = fy(g(x));
+      if (p === 0) ctx.moveTo(fx(x), py); else ctx.lineTo(fx(x), py);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(fx(XMIN), fy(g(mu) + G * (XMIN - mu)));
+    ctx.lineTo(fx(XMAX), fy(g(mu) + G * (XMAX - mu)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 평균 표시선
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(fx(mu), funcY); ctx.lineTo(fx(mu), inY + inH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6, fy(g(mu))); ctx.lineTo(fx(mu), fy(g(mu))); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = css('--ink-faint');
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('g(x) 와 μ 에서의 접선 (Taylor 1차)', funcX + 8, funcY + 14);
+
+    // ---- 오른쪽 아래: 입력 p(x)
+    var peakIn = 1 / (sd * Math.sqrt(2 * Math.PI));
+    ctx.beginPath();
+    ctx.moveTo(fx(XMIN), inY + inH);
+    for (var q = 0; q <= 300; q++) {
+      var xx = XMIN + (XMAX - XMIN) * q / 300;
+      var d2 = (xx - mu) / sd;
+      var v = Math.exp(-0.5 * d2 * d2) / (sd * Math.sqrt(2 * Math.PI));
+      ctx.lineTo(fx(xx), inY + inH - (v / peakIn) * (inH - 12));
+    }
+    ctx.lineTo(fx(XMAX), inY + inH);
+    ctx.closePath();
+    ctx.fillStyle = css('--accent') + '33'; ctx.fill();
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.8; ctx.stroke();
+    ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('p(x) — 입력 가우시안', inX + 8, inY + 14);
+
+    // ---- 왼쪽 위: 출력 p(y) (세로 방향)
+    var lx0 = leftW - 4;   // 오른쪽 기준선(= y축), 왼쪽으로 자란다
+    var lw = leftW - 16;
+    // 참 분포 히스토그램
+    ctx.beginPath();
+    ctx.moveTo(lx0, fy(YMIN));
+    for (var b2 = 0; b2 < BINS; b2++) {
+      var yv = YMIN + (YMAX - YMIN) * (b2 + 0.5) / BINS;
+      ctx.lineTo(lx0 - (hist[b2] / maxH) * lw, fy(yv));
+    }
+    ctx.lineTo(lx0, fy(YMAX));
+    ctx.closePath();
+    ctx.fillStyle = css('--ink-faint') + '44'; ctx.fill();
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1; ctx.stroke();
+
+    function vcurve(m, s, color, dash) {
+      var pk = 1 / (s * Math.sqrt(2 * Math.PI));
+      ctx.beginPath();
+      for (var r = 0; r <= 260; r++) {
+        var yv2 = YMIN + (YMAX - YMIN) * r / 260;
+        var dd = (yv2 - m) / s;
+        var vv = Math.exp(-0.5 * dd * dd) / (s * Math.sqrt(2 * Math.PI));
+        var px2 = lx0 - Math.min(vv / pk, 1) * lw * 0.92;
+        if (r === 0) ctx.moveTo(px2, fy(yv2)); else ctx.lineTo(px2, fy(yv2));
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      if (dash) ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    vcurve(mTrue, sTrue, css('--correct'), false);
+    vcurve(mEkf, sEkf, css('--predict'), true);
+
+    ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('p(y)', 12, funcY + 14);
+
+    var err = Math.abs(mEkf - mTrue), ratio = sEkf / sTrue;
+    out.innerHTML =
+      '참: 평균 <b>' + mTrue.toFixed(3) + '</b>, σ <b>' + sTrue.toFixed(3) + '</b> &nbsp;·&nbsp; ' +
+      'EKF: 평균 <b>' + mEkf.toFixed(3) + '</b>, σ <b>' + sEkf.toFixed(3) + '</b><br>' +
+      '평균 오차 <b>' + err.toFixed(3) + '</b> &nbsp;·&nbsp; σ 비율 <b>' + ratio.toFixed(2) + '×</b> ' +
+      (ratio < 0.8 ? '— EKF가 퍼짐을 <b>과소평가</b> (overconfident, 발산 위험)'
+                   : ratio > 1.2 ? '— EKF가 퍼짐을 과대평가' : '— 근사 양호');
+  }
+
+  document.querySelectorAll('#w-ekflin [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var m = { fig34: [0.9, 0.6], wide: [0.9, 1.9], narrow: [0.9, 0.25],
+                curvy: [1.35, 0.7], flat: [-2.75, 0.7] }[b.dataset.preset];
+      document.getElementById('es-m').value = m[0];
+      document.getElementById('es-s').value = m[1];
+      draw();
+    });
+  });
+  ['es-m', 'es-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

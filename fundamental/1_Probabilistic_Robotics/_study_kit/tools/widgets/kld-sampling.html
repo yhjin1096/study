@@ -1,0 +1,226 @@
+<div class="lab" id="w-kld">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">KLD-sampling — 채워진 bin 수가 particle 수를 정한다</span>
+    <span class="lab-note">Table 8.4 라인 16 · Figure 8.18</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽은 <b>Table 8.4 라인 16</b>의 식을 <code>k</code>(채워진 bin 수)의 함수로 그린 것이다.
+       큰 <code>k</code>에서는 <b>M<sub>χ</sub> ≈ (k−1)/2ε</b> 로 거의 직선이고, 작은 <code>k</code>에서
+       보정 항이 곡선을 위로 밀어 올린다. 오른쪽은 belief가 좁혀지는 동안 <b>k와 M<sub>χ</sub>가 함께
+       줄어드는 과정</b>으로, <b>Figure 8.18</b>에 해당한다(세로축 로그).
+       <code>ε</code>·<code>δ</code>·bin 크기를 바꿔 가며 particle 예산이 어떻게 달라지는지 보라.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>ε (오차 한계)</span><b id="kv-eps">0.050</b></label>
+        <input type="range" id="ks-eps" min="0.005" max="0.4" step="0.005" value="0.05">
+      </div>
+      <div class="slider">
+        <label><span>1 − δ (신뢰수준)</span><b id="kv-del">0.99</b></label>
+        <input type="range" id="ks-del" min="0.80" max="0.999" step="0.001" value="0.99">
+      </div>
+      <div class="slider">
+        <label><span>bin 크기 (cm, x·y)</span><b id="kv-bin">50</b></label>
+        <input type="range" id="ks-bin" min="10" max="150" step="5" value="50">
+      </div>
+      <div class="slider">
+        <label><span>belief 반경 (m) — 좁혀지는 정도</span><b id="kv-rad">6.0</b></label>
+        <input type="range" id="ks-rad" min="0.2" max="12" step="0.1" value="6">
+      </div>
+      <div class="slider">
+        <label><span>M<sub>χ min</sub> (하한)</span><b id="kv-min">100</b></label>
+        <input type="range" id="ks-min" min="20" max="1000" step="10" value="100">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="book">책 권장값 (ε=0.05, 1−δ=0.99, 50cm)</button>
+      <button data-preset="tight">엄격 (ε=0.015)</button>
+      <button data-preset="loose">느슨 (ε=0.3) — 발산 위험</button>
+    </div>
+
+    <canvas id="kl-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>M<sub>χ</sub>(k)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>선형 근사 (k−1)/2ε</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>현재 상태</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>M<sub>χ min</sub> 하한</span>
+    </div>
+    <div class="readout" id="kl-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('kl-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('kl-readout');
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // 표준정규 상위 분위수 (Acklam 근사)
+  function normQuantile(p) {
+    var a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+             1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+    var b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+             6.680131188771972e+01, -1.328068155288572e+01];
+    var c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+             -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+    var d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+             3.754408661907416e+00];
+    var pl = 0.02425, q, r;
+    if (p < pl) {
+      q = Math.sqrt(-2 * Math.log(p));
+      return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+    }
+    if (p > 1 - pl) {
+      q = Math.sqrt(-2 * Math.log(1 - p));
+      return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+    }
+    q = p - 0.5; r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  }
+
+  // Table 8.4 라인 16
+  function Mchi(k, eps, z) {
+    if (k <= 1) return 0;
+    var t = 2 / (9 * (k - 1));
+    return ((k - 1) / (2 * eps)) * Math.pow(1 - t + Math.sqrt(t) * z, 3);
+  }
+
+  // belief 반경 → 채워진 bin 수 (x·y 2-D + θ 는 bin 15도로 고정 가정)
+  function binsFor(radius_m, bin_cm) {
+    var b = bin_cm / 100;
+    var areaBins = Math.PI * radius_m * radius_m / (b * b);
+    var thetaBins = Math.min(24, Math.max(1, 2 * radius_m));   // 퍼질수록 방향도 다양해진다
+    return Math.max(1, Math.round(areaBins * thetaBins));
+  }
+
+  function draw() {
+    var eps = val('ks-eps'), conf = val('ks-del'), bin = val('ks-bin');
+    var rad = val('ks-rad'), Mmin = val('ks-min');
+    var z = normQuantile(conf);
+    document.getElementById('kv-eps').textContent = eps.toFixed(3);
+    document.getElementById('kv-del').textContent = conf.toFixed(3);
+    document.getElementById('kv-bin').textContent = bin.toFixed(0);
+    document.getElementById('kv-rad').textContent = rad.toFixed(1);
+    document.getElementById('kv-min').textContent = Mmin.toFixed(0);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var gap = 26, halfW = (W - gap) / 2;
+    var padL = 48, padB = 30, padT = 22;
+
+    // ================= 왼쪽: M_chi(k) =================
+    var kmax = 3000;
+    var vals = [], lin = [];
+    for (var k = 2; k <= kmax; k += 4) { vals.push([k, Mchi(k, eps, z)]); lin.push([k, (k - 1) / (2 * eps)]); }
+    var ymax = Math.max.apply(null, vals.map(function (p) { return p[1]; })) * 1.05;
+
+    function AX(k) { return padL + (halfW - padL - 10) * k / kmax; }
+    function AY(v) { return H - padB - (H - padB - padT) * v / ymax; }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(halfW - 10, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    [0, 1000, 2000, 3000].forEach(function (t) { ctx.fillText(t, AX(t), H - padB + 13); });
+    ctx.fillText('k  (채워진 bin 수)', (padL + halfW) / 2, H - 6);
+    ctx.textAlign = 'right';
+    [0, 0.5, 1].forEach(function (f) { ctx.fillText(Math.round(ymax * f), padL - 5, AY(ymax * f) + 3); });
+    ctx.textAlign = 'left';
+    ctx.fillText('M_χ', padL + 4, padT - 6);
+
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.3; ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    lin.forEach(function (p, i) { i ? ctx.lineTo(AX(p[0]), AY(p[1])) : ctx.moveTo(AX(p[0]), AY(p[1])); });
+    ctx.stroke(); ctx.setLineDash([]);
+
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    vals.forEach(function (p, i) { i ? ctx.lineTo(AX(p[0]), AY(p[1])) : ctx.moveTo(AX(p[0]), AY(p[1])); });
+    ctx.stroke();
+
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(padL, AY(Mmin)); ctx.lineTo(halfW - 10, AY(Mmin)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var kNow = binsFor(rad, bin), mNow = Math.max(Mchi(kNow, eps, z), Mmin);
+    if (kNow <= kmax) {
+      ctx.fillStyle = css('--correct');
+      ctx.beginPath(); ctx.arc(AX(kNow), AY(Math.min(mNow, ymax)), 5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ================= 오른쪽: 반경에 따른 M_chi (로그) =================
+    var rx0 = halfW + gap + 40, rx1 = W - 14;
+    function BX(r) { return rx0 + (rx1 - rx0) * (r - 0.2) / (12 - 0.2); }
+    var series = [];
+    for (var r = 0.2; r <= 12.001; r += 0.1) {
+      var kk = binsFor(r, bin);
+      series.push([r, Math.max(Mchi(kk, eps, z), Mmin)]);
+    }
+    var lo = Math.log10(Math.max(10, Mmin * 0.7));
+    var hi = Math.log10(Math.max.apply(null, series.map(function (p) { return p[1]; })) * 1.3);
+    function BY(v) { return H - padB - (H - padB - padT) * (Math.log10(Math.max(v, 1)) - lo) / (hi - lo); }
+
+    ctx.strokeStyle = css('--rule');
+    ctx.beginPath(); ctx.moveTo(rx0, padT); ctx.lineTo(rx0, H - padB); ctx.lineTo(rx1, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    [0.2, 3, 6, 9, 12].forEach(function (t) { ctx.fillText(t, BX(t), H - padB + 13); });
+    ctx.fillText('belief 반경 (m) — 오른쪽이 global, 왼쪽이 tracking', (rx0 + rx1) / 2, H - 6);
+    ctx.textAlign = 'right';
+    for (var e = Math.ceil(lo); e <= Math.floor(hi); e++) {
+      var yy = BY(Math.pow(10, e));
+      ctx.fillText('1e' + e, rx0 - 5, yy + 3);
+      ctx.strokeStyle = css('--rule-soft');
+      ctx.beginPath(); ctx.moveTo(rx0, yy); ctx.lineTo(rx1, yy); ctx.stroke();
+    }
+    ctx.textAlign = 'left'; ctx.fillStyle = css('--ink-faint');
+    ctx.fillText('필요 particle 수 (로그)', rx0 + 4, padT - 6);
+
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2; ctx.beginPath();
+    series.forEach(function (p, i) { i ? ctx.lineTo(BX(p[0]), BY(p[1])) : ctx.moveTo(BX(p[0]), BY(p[1])); });
+    ctx.stroke();
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(rx0, BY(Mmin)); ctx.lineTo(rx1, BY(Mmin)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--correct');
+    ctx.beginPath(); ctx.arc(BX(rad), BY(mNow), 5, 0, Math.PI * 2); ctx.fill();
+
+    // 비교: global(반경 10m) vs tracking(반경 0.5m)
+    var kG = binsFor(10, bin), kT = binsFor(0.5, bin);
+    var mG = Math.max(Mchi(kG, eps, z), Mmin), mT = Math.max(Mchi(kT, eps, z), Mmin);
+    out.innerHTML =
+      'z<sub>1−δ</sub> = <b>' + z.toFixed(3) + '</b> · ' +
+      '현재 belief 반경 ' + rad.toFixed(1) + ' m → 채워진 bin k ≈ <b>' + kNow + '</b> → ' +
+      'M<sub>χ</sub> = <b>' + Math.round(mNow) + '</b>개' +
+      (mNow <= Mmin + 0.5 ? ' <b>(하한에 걸림)</b>' : '') + '<br>' +
+      'global(반경 10m) <b>' + Math.round(mG) + '</b>개 → tracking(반경 0.5m) <b>' + Math.round(mT) +
+      '</b>개 · <b>' + (mG / mT).toFixed(0) + '배 절약</b>' +
+      (eps > 0.2 ? ' &nbsp;<b>⚠ ε 가 너무 크다 — Figure 8.19의 발산 영역</b>' : '');
+  }
+
+  ['ks-eps', 'ks-del', 'ks-bin', 'ks-rad', 'ks-min'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-kld [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = {
+        book:  {eps: 0.05,  del: 0.99, bin: 50},
+        tight: {eps: 0.015, del: 0.99, bin: 50},
+        loose: {eps: 0.30,  del: 0.95, bin: 50}
+      }[b.dataset.preset];
+      document.getElementById('ks-eps').value = p.eps;
+      document.getElementById('ks-del').value = p.del;
+      document.getElementById('ks-bin').value = p.bin;
+      draw();
+    });
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

@@ -1,0 +1,254 @@
+<div class="lab" id="w-gvm">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Grid vs MCL — 같은 복도, 두 가지 표현</span>
+    <span class="lab-note">Figure 8.1과 Figure 8.11을 나란히</span>
+  </div>
+  <div class="lab-body">
+    <p>같은 1차원 복도에서 <b>grid localization</b>(위, Table 8.1)과 <b>MCL</b>(아래, Table 8.2)을
+       동시에 돌린다. 두 알고리즘은 <b>같은 Bayes filter</b>이고 표현만 다르다.
+       <b>측정</b>을 누르면 grid는 칸 값에, MCL은 <b>particle 무게</b>에 <code>p(z|x)</code>를 곱한다
+       — MCL에서 <b>particle은 움직이지 않고 막대 높이만 바뀐다</b>(Figure 8.11b의 요점).
+       <b>이동</b>을 누르면 grid는 칸 사이로 확률을 흘리고, MCL은 <b>resampling 후</b> 각 particle을
+       motion model로 표집한다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>격자 칸 수 K</span><b id="gv-K">40</b></label>
+        <input type="range" id="gs-K" min="10" max="80" step="1" value="40">
+      </div>
+      <div class="slider">
+        <label><span>particle 수 M</span><b id="gv-M">300</b></label>
+        <input type="range" id="gs-M" min="20" max="2000" step="10" value="300">
+      </div>
+      <div class="slider">
+        <label><span>p(문 봄 | 문 위치)</span><b id="gv-hit">0.60</b></label>
+        <input type="range" id="gs-hit" min="0.3" max="0.95" step="0.01" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>운동 노이즈 σ (m)</span><b id="gv-sig">0.6</b></label>
+        <input type="range" id="gs-sig" min="0.1" max="2.5" step="0.1" value="0.6">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="sense">측정: 문을 봄</button>
+      <button data-act="move">이동 (+3 m)</button>
+      <button class="correct" data-act="auto">측정 → 이동 → 측정 자동 재생</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="gm-canvas" width="880" height="420"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>grid: bel(x)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>MCL: particle</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>문 위치</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>참 로봇</span>
+    </div>
+    <div class="readout" id="gm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('gm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('gm-readout');
+  var L = 20;                                  // 복도 길이 (m)
+  var DOORS = [4.0, 8.0, 15.5], DOORW = 0.7;
+  var grid = [], parts = [], weights = null, truth = 4.0, msg = '';
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function nearDoor(x) {
+    return DOORS.some(function (d) { return Math.abs(x - d) < DOORW; });
+  }
+  function lik(x) {                             // p(z = door | x)
+    var hit = val('gs-hit');
+    return nearDoor(x) ? hit : (1 - hit) * 0.45;
+  }
+
+  function reset() {
+    var K = Math.round(val('gs-K')), M = Math.round(val('gs-M'));
+    grid = new Array(K).fill(1 / K);            // 식 (1) 균등
+    parts = [];
+    for (var i = 0; i < M; i++) parts.push(Math.random() * L);
+    weights = null;
+    truth = DOORS[0];
+    msg = '초기화 — grid: 균등 histogram · MCL: 균등하게 뿌린 particle';
+    draw();
+  }
+
+  function sense() {
+    // grid: Table 8.1 라인 4
+    var K = grid.length, s = 0;
+    for (var k = 0; k < K; k++) {
+      var xc = (k + 0.5) * L / K;               // mean(x_k) — 질량중심
+      grid[k] *= lik(xc);
+      s += grid[k];
+    }
+    for (var k2 = 0; k2 < K; k2++) grid[k2] /= s;
+    // MCL: Table 8.2 라인 5 — 위치는 그대로, 무게만
+    weights = parts.map(lik);
+    msg = '측정 — grid는 칸 값에, MCL은 <b>무게에만</b> p(z|x)를 곱했다 (particle 위치는 그대로)';
+    draw();
+  }
+
+  function move() {
+    var u = 3.0, sig = val('gs-sig');
+    // grid: Table 8.1 라인 3 — convolution
+    var K = grid.length, cw = L / K, nb = new Array(K).fill(0);
+    for (var i = 0; i < K; i++) {
+      if (grid[i] < 1e-12) continue;
+      var xi = (i + 0.5) * cw;
+      for (var j = 0; j < K; j++) {
+        var xj = (j + 0.5) * cw;
+        var d = xj - (xi + u);
+        nb[j] += grid[i] * Math.exp(-0.5 * d * d / (sig * sig));
+      }
+    }
+    var s = nb.reduce(function (a, b) { return a + b; }, 0);
+    for (var k = 0; k < K; k++) grid[k] = nb[k] / s;
+
+    // MCL: 라인 8~11 resampling (무게가 있으면) 후 라인 4 sampling
+    if (weights) {
+      var tot = weights.reduce(function (a, b) { return a + b; }, 0);
+      var cum = [], acc = 0;
+      weights.forEach(function (w) { acc += w / tot; cum.push(acc); });
+      var np = [], M = parts.length, r = Math.random() / M;   // low-variance resampling
+      var idx = 0;
+      for (var m = 0; m < M; m++) {
+        var target = r + m / M;
+        while (idx < M - 1 && cum[idx] < target) idx++;
+        np.push(parts[idx]);
+      }
+      parts = np;
+      weights = null;
+    }
+    parts = parts.map(function (x) {
+      var nx = x + u + gauss() * sig;
+      return Math.max(0, Math.min(L, nx));
+    });
+    truth = Math.min(L, truth + u);
+    msg = '이동 — grid는 칸 사이로 확률을 흘렸고(convolution), MCL은 <b>resampling 후</b> 각 particle을 표집했다';
+    draw();
+  }
+
+  function draw() {
+    var K = Math.round(val('gs-K')), M = Math.round(val('gs-M'));
+    if (grid.length !== K || parts.length !== M) { reset(); return; }
+    document.getElementById('gv-K').textContent = K;
+    document.getElementById('gv-M').textContent = M;
+    document.getElementById('gv-hit').textContent = val('gs-hit').toFixed(2);
+    document.getElementById('gv-sig').textContent = val('gs-sig').toFixed(1);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 420;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 14, padR = 14, PW = W - padL - padR;
+    function PX(x) { return padL + PW * x / L; }
+
+    // 복도
+    var hy = 12, hh = 40;
+    ctx.fillStyle = css('--rule-soft'); ctx.fillRect(padL, hy, PW, hh);
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1; ctx.strokeRect(padL, hy, PW, hh);
+    DOORS.forEach(function (d, i) {
+      ctx.fillStyle = css('--accent');
+      ctx.fillRect(PX(d - DOORW), hy, PX(d + DOORW) - PX(d - DOORW), hh);
+      ctx.fillStyle = '#fff'; ctx.font = '600 10px system-ui,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(i + 1, PX(d), hy + hh / 2 + 4);
+    });
+    ctx.fillStyle = css('--predict');
+    ctx.beginPath(); ctx.arc(PX(truth), hy + hh + 7, 5, 0, Math.PI * 2); ctx.fill();
+
+    // --- grid (위) ---
+    var g0 = 70, gh = 130, gb = g0 + gh;
+    var gmax = Math.max.apply(null, grid) || 1, cw = PW / K;
+    ctx.fillStyle = css('--ink');
+    for (var k = 0; k < K; k++) {
+      var h = gh * grid[k] / gmax;
+      ctx.fillRect(padL + k * cw + 0.5, gb - h, cw - 1, h);
+    }
+    ctx.strokeStyle = css('--rule');
+    ctx.beginPath(); ctx.moveTo(padL, gb); ctx.lineTo(W - padR, gb); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Grid localization — bel(x) = {p_k}   (Table 8.1)', padL, g0 - 4);
+
+    // --- MCL (아래) ---
+    var m0 = gb + 44, mh = 130, mb = m0 + mh;
+    ctx.strokeStyle = css('--rule');
+    ctx.beginPath(); ctx.moveTo(padL, mb); ctx.lineTo(W - padR, mb); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+    ctx.fillText('Monte Carlo localization — particle' +
+                 (weights ? ' + importance weight (막대 높이)' : ' (무게 균등 → 밀도가 belief)'),
+                 padL, m0 - 4);
+
+    if (weights) {
+      var wmax = Math.max.apply(null, weights) || 1;
+      ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1; ctx.globalAlpha = 0.75;
+      parts.forEach(function (x, i) {
+        var h = mh * weights[i] / wmax;
+        ctx.beginPath(); ctx.moveTo(PX(x), mb); ctx.lineTo(PX(x), mb - h); ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    } else {
+      // 무게가 균등하면 밀도를 보여준다
+      var NB = K, hist = new Array(NB).fill(0);
+      parts.forEach(function (x) { hist[Math.min(NB - 1, Math.floor(x / L * NB))]++; });
+      var hmax = Math.max.apply(null, hist) || 1;
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.35;
+      for (var b = 0; b < NB; b++) {
+        var hh2 = mh * hist[b] / hmax;
+        ctx.fillRect(padL + b * cw + 0.5, mb - hh2, cw - 1, hh2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--correct');
+      parts.forEach(function (x) {
+        ctx.beginPath(); ctx.arc(PX(x), mb + 8, 1.6, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+
+    // 통계
+    function ent(p) { var h = 0; p.forEach(function (v) { if (v > 1e-12) h -= v * Math.log2(v); }); return h; }
+    var NB2 = K, hist2 = new Array(NB2).fill(0);
+    parts.forEach(function (x, i) {
+      hist2[Math.min(NB2 - 1, Math.floor(x / L * NB2))] += weights ? weights[i] : 1;
+    });
+    var tot2 = hist2.reduce(function (a, b) { return a + b; }, 0);
+    var mp = hist2.map(function (v) { return v / tot2; });
+    var occupied = hist2.filter(function (v) { return v > 0; }).length;
+    var ess = weights
+      ? Math.pow(weights.reduce(function (a, b) { return a + b; }, 0), 2) /
+        weights.reduce(function (a, b) { return a + b * b; }, 0)
+      : parts.length;
+
+    out.innerHTML = msg + '<br>' +
+      'grid 엔트로피 <b>' + ent(grid).toFixed(3) + '</b> bit · ' +
+      'MCL 엔트로피 <b>' + ent(mp).toFixed(3) + '</b> bit (균등 = ' + Math.log2(K).toFixed(3) + ')<br>' +
+      '채워진 bin <b>' + occupied + '/' + K + '</b> → KLD-sampling이라면 필요 particle ≈ <b>' +
+      Math.round(Math.max(occupied - 1, 1) / (2 * 0.05)) + '</b>개 (8.3.7절) · ' +
+      '유효 표본 수 ESS <b>' + ess.toFixed(0) + '</b>/' + parts.length;
+  }
+
+  document.querySelectorAll('#w-gvm [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'sense') sense();
+      else if (a === 'move') move();
+      else if (a === 'auto') { reset(); sense(); move(); truth = DOORS[1]; sense(); }
+      else reset();
+    });
+  });
+  ['gs-K', 'gs-M', 'gs-hit', 'gs-sig'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      if (id === 'gs-K' || id === 'gs-M') reset(); else draw();
+    });
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

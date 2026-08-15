@@ -1,0 +1,169 @@
+<div class="lab" id="w-if">
+  <div class="lab-head">
+    <span class="lab-tag">실험 4</span>
+    <span class="lab-title">KF ↔ IF 쌍대성 — 같은 belief, 두 좌표계</span>
+    <span class="lab-note">같은 답이 나오지만 계산의 난이도가 뒤집힌다</span>
+  </div>
+  <div class="lab-body">
+    <p>같은 1차원 문제를 <b>KF(μ, σ²)</b>와 <b>IF(ξ, Ω)</b>로 동시에 돌린다. 두 결과가 항상 일치하는 것과,
+       <b>이동</b>은 KF 쪽이 <b>측정</b>은 IF 쪽이 단순한 식으로 끝나는 것을 확인해보자.</p>
+
+    <div class="btnrow">
+      <button class="predict" data-move>① 이동 (prediction)</button>
+      <button class="correct" data-sense>② 측정 (measurement update)</button>
+      <button class="ghost" data-reset>초기화</button>
+      <button data-ignorant>Ω = 0 에서 시작 (완전한 무지)</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>이동량 B·u</span><b id="iv-u">6.0</b></label>
+        <input type="range" id="is-u" min="-10" max="10" step="0.5" value="6">
+      </div>
+      <div class="slider">
+        <label><span>모션 노이즈 R</span><b id="iv-r">4.0</b></label>
+        <input type="range" id="is-r" min="0.5" max="20" step="0.5" value="4">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 Q</span><b id="iv-q">3.0</b></label>
+        <input type="range" id="is-q" min="0.5" max="25" step="0.5" value="3">
+      </div>
+    </div>
+
+    <canvas id="if-canvas" width="880" height="180"></canvas>
+    <div class="readout" id="if-readout"></div>
+    <div class="log" id="if-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('if-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('if-readout'), logEl = document.getElementById('if-log');
+  var mu, s2, xi, om, truth, entries;
+  var XMIN = 0, XMAX = 60;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  function reset(ignorant) {
+    if (ignorant) { om = 0; xi = 0; s2 = Infinity; mu = NaN; }
+    else { mu = 8; s2 = 16; om = 1 / s2; xi = om * mu; }
+    truth = 8; entries = []; logEl.innerHTML = '';
+    log(ignorant ? '초기화: Ω = 0 (완전한 무지) — moments로는 σ² = ∞ 라 표현 불가'
+                 : '초기화: μ = 8.00, σ² = 16.00  ⇔  Ω = 0.0625, ξ = 0.5000');
+    draw(); status();
+  }
+  function log(t) {
+    entries.unshift(t);
+    logEl.innerHTML = entries.slice(0, 16).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+  function fmt(v) { return isFinite(v) ? v.toFixed(4) : '∞'; }
+
+  function status() {
+    var muFromIF = om > 0 ? xi / om : NaN;
+    var s2FromIF = om > 0 ? 1 / om : Infinity;
+    var agree = (isFinite(mu) && isFinite(muFromIF) &&
+                 Math.abs(mu - muFromIF) < 1e-9 && Math.abs(s2 - s2FromIF) < 1e-9);
+    out.innerHTML =
+      'KF&nbsp; μ = <b>' + (isFinite(mu) ? mu.toFixed(4) : '—') + '</b>&nbsp; σ² = <b>' + fmt(s2) + '</b><br>' +
+      'IF&nbsp;&nbsp; ξ = <b>' + xi.toFixed(4) + '</b>&nbsp; Ω = <b>' + om.toFixed(4) + '</b>' +
+      '&nbsp;→ 되돌리면 μ = <b>' + (om > 0 ? muFromIF.toFixed(4) : '—') +
+      '</b>, σ² = <b>' + fmt(s2FromIF) + '</b><br>' +
+      (om === 0 ? '<b>Ω = 0</b> — 정보 없음. μ = Ω⁻¹ξ 를 계산할 수 없다 (3.5.1절 연습문제 2)'
+                : agree ? '두 표현이 <b>정확히 일치</b> — 같은 가우시안의 다른 좌표' : '');
+  }
+
+  function predict() {
+    var u = val('is-u'), R = val('is-r');
+    // KF (A=B=1): 라인 2·3 — 덧셈 두 번
+    if (isFinite(s2)) { mu = mu + u; s2 = s2 + R; }
+    // IF: 라인 2·3 — 역행렬 두 번 중첩
+    var omInv = om > 0 ? 1 / om : Infinity;
+    var barOm = isFinite(omInv) ? 1 / (omInv + R) : 1 / R * 0;   // Ω=0 이면 Ω̄ = 0
+    var barXi = om > 0 ? barOm * (omInv * xi + u) : 0;
+    om = barOm; xi = barXi;
+    if (!isFinite(s2)) { s2 = om > 0 ? 1 / om : Infinity; mu = om > 0 ? xi / om : NaN; }
+    truth += u + (Math.random() * 2 - 1) * Math.sqrt(R);
+    log('이동  KF: μ+=' + u.toFixed(1) + ', σ²+=' + R.toFixed(1) + ' (덧셈)   |   ' +
+        'IF: Ω̄=(Ω⁻¹+R)⁻¹ (역행렬 2회) → Ω=' + om.toFixed(4));
+    draw(); status();
+  }
+
+  function correct() {
+    var Q = val('is-q');
+    var z = truth + (Math.random() * 2 - 1) * Math.sqrt(Q);
+    // IF (C=1): 라인 4·5 — 순수 덧셈
+    om = om + 1 / Q;
+    xi = xi + z / Q;
+    // KF: 라인 4·5·6 — gain 계산 필요
+    if (isFinite(s2)) {
+      var K = s2 / (s2 + Q);
+      mu = mu + K * (z - mu);
+      s2 = (1 - K) * s2;
+      log('측정 z=' + z.toFixed(2) + '  KF: K=' + K.toFixed(3) + ' 계산 후 갱신 (나눗셈)   |   ' +
+          'IF: Ω+=1/Q, ξ+=z/Q (덧셈만)');
+    } else {
+      s2 = 1 / om; mu = xi / om;
+      log('측정 z=' + z.toFixed(2) + '  KF: σ²=∞ 라 시작 불가   |   ' +
+          'IF: Ω+=1/Q, ξ+=z/Q → 한 번에 유한한 belief 획득');
+    }
+    draw(); status();
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 180;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var padL = 14, padR = 14, base = h - 26, top = 16, plotW = w - padL - padR;
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR, base); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 60; t += 10) {
+      ctx.fillText(String(t), padL + plotW * (t - XMIN) / (XMAX - XMIN), base + 15);
+    }
+
+    if (om > 0 && isFinite(s2)) {
+      var m = xi / om, v = 1 / om;
+      var peak = 1 / Math.sqrt(2 * Math.PI * v);
+      var scale = (base - top) / (1 / Math.sqrt(2 * Math.PI * 2));
+      ctx.beginPath(); ctx.moveTo(padL, base);
+      for (var i = 0; i <= 400; i++) {
+        var x = XMIN + (XMAX - XMIN) * i / 400;
+        var y = Math.exp(-0.5 * (x - m) * (x - m) / v) / Math.sqrt(2 * Math.PI * v);
+        ctx.lineTo(padL + plotW * i / 400, base - Math.min(y * scale, base - top));
+      }
+      ctx.lineTo(w - padR, base); ctx.closePath();
+      ctx.fillStyle = css('--correct') + '2e'; ctx.fill();
+      ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2.2; ctx.stroke();
+    } else {
+      ctx.fillStyle = css('--ink-faint'); ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Ω = 0 — 균등한 무지 상태 (moments로는 σ² = ∞)', w / 2, (base + top) / 2);
+      ctx.strokeStyle = css('--ink-faint'); ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(padL, base - 18); ctx.lineTo(w - padR, base - 18); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    var tx = padL + plotW * (truth - XMIN) / (XMAX - XMIN);
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(tx, top - 8); ctx.lineTo(tx, base); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink'); ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('실제', tx, top - 11);
+    ctx.textAlign = 'left';
+  }
+
+  document.querySelector('#w-if [data-move]').addEventListener('click', predict);
+  document.querySelector('#w-if [data-sense]').addEventListener('click', correct);
+  document.querySelector('#w-if [data-reset]').addEventListener('click', function () { reset(false); });
+  document.querySelector('#w-if [data-ignorant]').addEventListener('click', function () { reset(true); });
+  [['is-u', 'iv-u'], ['is-r', 'iv-r'], ['is-q', 'iv-q']].forEach(function (p) {
+    document.getElementById(p[0]).addEventListener('input', function (e) {
+      document.getElementById(p[1]).textContent = parseFloat(e.target.value).toFixed(1);
+    });
+  });
+  window.addEventListener('resize', draw);
+  reset(false);
+})();
+</script>

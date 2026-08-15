@@ -1,0 +1,157 @@
+<div class="lab" id="w-logodds">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">Log odds — 왜 확률 대신 이걸 쓰는가</span>
+    <span class="lab-note">Table 4.2를 한 줄씩 실행하며 두 축을 나란히 본다</span>
+  </div>
+  <div class="lab-body">
+    <p>위 축이 <b>log odds</b> <code>l</code>, 아래 축이 <b>확률</b> <code>bel(x)</code>다.
+       측정 버튼을 누를 때마다 <b>같은 크기의 덧셈</b>이 일어나는데, 확률 축에서는 0이나 1에 가까울수록
+       움직임이 눌려 보이는 것을 확인해보자 — 이것이 "절단 문제를 피한다"의 의미다.</p>
+
+    <div class="btnrow">
+      <button class="correct" data-obs="1">측정: x를 지지</button>
+      <button class="predict" data-obs="0">측정: ¬x를 지지</button>
+      <button class="ghost" data-reset>초기화</button>
+    </div>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>inverse model p(x | z) — x를 지지할 때</span><b id="lv-h">0.70</b></label>
+        <input type="range" id="ls-h" min="0.51" max="0.99" step="0.01" value="0.7">
+      </div>
+      <div class="slider">
+        <label><span>prior p(x)</span><b id="lv-p">0.50</b></label>
+        <input type="range" id="ls-p" min="0.05" max="0.95" step="0.05" value="0.5">
+      </div>
+    </div>
+
+    <canvas id="lo-canvas" width="880" height="240"></canvas>
+    <div class="readout" id="lo-readout"></div>
+    <div class="log" id="lo-log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('lo-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lo-readout'), logEl = document.getElementById('lo-log');
+  var LMIN = -8, LMAX = 8;
+  var l, hist, entries;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function logOdds(p) { return Math.log(p / (1 - p)); }            // 식 (16)
+  function prob(L) { return 1 - 1 / (1 + Math.exp(L)); }           // 식 (17)
+
+  function reset() {
+    var prior = val('ls-p');
+    l = logOdds(prior);                                            // 식 (24)
+    hist = [l]; entries = []; logEl.innerHTML = '';
+    log('초기화  l₀ = log(' + prior.toFixed(2) + '/' + (1 - prior).toFixed(2) + ') = ' + l.toFixed(3) +
+        '   bel = ' + prob(l).toFixed(4));
+    draw(); status();
+  }
+  function log(t) {
+    entries.unshift(t);
+    logEl.innerHTML = entries.slice(0, 14).map(function (e) { return '<div>' + e + '</div>'; }).join('');
+  }
+
+  // Table 4.2 라인 2
+  function step(supportsX) {
+    var prior = val('ls-p'), h = val('ls-h');
+    var pxz = supportsX ? h : 1 - h;
+    var delta = logOdds(pxz) - logOdds(prior);
+    var before = prob(l);
+    l = l + delta;
+    hist.push(l);
+    log('라인2  Δl = log(' + pxz.toFixed(2) + '/' + (1 - pxz).toFixed(2) + ') − log(' +
+        prior.toFixed(2) + '/' + (1 - prior).toFixed(2) + ') = ' + delta.toFixed(3) +
+        '   →  l = ' + l.toFixed(3) + ',  bel ' + before.toFixed(4) + ' → ' + prob(l).toFixed(4));
+    draw(); status();
+  }
+
+  function status() {
+    var p = prob(l);
+    var margin = Math.min(p, 1 - p);
+    out.innerHTML =
+      'l = <b>' + l.toFixed(4) + '</b> &nbsp;·&nbsp; bel(x) = <b>' + p.toFixed(6) + '</b>' +
+      ' &nbsp;·&nbsp; 1에서의 거리 = <b>' + (1 - p).toExponential(2) + '</b><br>' +
+      (margin < 1e-4
+        ? '확률 축에서는 <b>거의 구분이 안 되지만</b> log odds는 아직 여유가 많다 — 절단 문제 회피'
+        : '스텝 ' + (hist.length - 1) + '회');
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 240;
+    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var padL = 46, padR = 16, plotW = w - padL - padR;
+    var topY = 22, topH = 78, botY = 140, botH = 72;
+
+    function drawAxis(y, hh, label, ticks, mapv) {
+      ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, y + hh); ctx.lineTo(w - padR, y + hh); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ticks.forEach(function (t) {
+        var x = padL + plotW * mapv(t);
+        ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, y + hh + 4); ctx.stroke();
+        ctx.fillText(String(t), x, y + hh + 15);
+      });
+      ctx.textAlign = 'right';
+      ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = css('--ink-soft');
+      ctx.fillText(label, padL - 8, y + hh / 2 + 4);
+      ctx.textAlign = 'left';
+    }
+
+    var mapL = function (v) { return (v - LMIN) / (LMAX - LMIN); };
+    var mapP = function (v) { return v; };
+    drawAxis(topY, topH, 'log odds', [-8, -4, -2, 0, 2, 4, 8], mapL);
+    drawAxis(botY, botH, '확률', [0, 0.25, 0.5, 0.75, 1], mapP);
+
+    // 이력 궤적
+    hist.forEach(function (L, i) {
+      var a = 0.18 + 0.82 * (i / Math.max(hist.length - 1, 1));
+      var xL = padL + plotW * Math.max(0, Math.min(1, mapL(L)));
+      var xP = padL + plotW * mapP(prob(L));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = css('--accent');
+      ctx.beginPath(); ctx.arc(xL, topY + topH - 10, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = css('--correct');
+      ctx.beginPath(); ctx.arc(xP, botY + botH - 10, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // 현재 값 강조 + 연결선
+    var cxL = padL + plotW * Math.max(0, Math.min(1, mapL(l)));
+    var cxP = padL + plotW * mapP(prob(l));
+    ctx.strokeStyle = css('--ink-faint'); ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cxL, topY + topH - 10); ctx.lineTo(cxP, botY + botH - 10); ctx.stroke();
+    ctx.setLineDash([]);
+    [[cxL, topY + topH - 10, css('--accent')], [cxP, botY + botH - 10, css('--correct')]]
+      .forEach(function (p) {
+        ctx.fillStyle = p[2];
+        ctx.beginPath(); ctx.arc(p[0], p[1], 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = css('--ground');
+        ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill();
+      });
+  }
+
+  document.querySelectorAll('#w-logodds [data-obs]').forEach(function (b) {
+    b.addEventListener('click', function () { step(b.dataset.obs === '1'); });
+  });
+  document.querySelector('#w-logodds [data-reset]').addEventListener('click', reset);
+  document.getElementById('ls-h').addEventListener('input', function (e) {
+    document.getElementById('lv-h').textContent = parseFloat(e.target.value).toFixed(2);
+  });
+  document.getElementById('ls-p').addEventListener('input', function (e) {
+    document.getElementById('lv-p').textContent = parseFloat(e.target.value).toFixed(2);
+    reset();
+  });
+  window.addEventListener('resize', draw);
+  reset();
+})();
+</script>

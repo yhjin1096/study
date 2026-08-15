@@ -1,0 +1,26 @@
+# 6장 Robot Perception — Figure/Table 파일명 매핑
+# 사용: python3 tools/extract_figures.py --chapter 6 --pages 170-207 \
+#         --out part1_basics/06_robot_perception/images --names tools/figure_names/ch6.txt
+
+Figure 6.1  = fig6_1_sonar_scan_and_specular_reflection
+Figure 6.2  = fig6_2_laser_range_scan
+Figure 6.3  = fig6_3_four_components
+Figure 6.4  = fig6_4_mixture_pseudo_density
+Table 6.1   = table6_1_beam_range_finder_model
+Figure 6.5  = fig6_5_sonar_laser_data
+Table 6.2   = table6_2_learn_intrinsic_parameters
+Figure 6.6  = fig6_6_ml_approximation
+Figure 6.7  = fig6_7_scan_likelihood_in_map
+Figure 6.8  = fig6_8_likelihood_field_example
+Figure 6.9  = fig6_9_likelihood_along_beam
+Table 6.3   = table6_3_likelihood_field_model
+Figure 6.10 = fig6_10_tech_museum_likelihood_field
+Figure 6.11 = fig6_11_local_likelihood_field
+Figure 6.12 = fig6_12_local_map
+Table 6.4   = table6_4_landmark_model_known_correspondence
+Table 6.5   = table6_5_sample_landmark_model
+Figure 6.13 = fig6_13_landmark_pose_posterior
+
+# 캡션이 없어 이 스크립트로 잡히지 않는 그림 (직접 clip 지정해 추출했다):
+#   fig6_ex1_symmetric_marker   PDF p.206, clip=(280, 200, 410, 275)   연습문제 1의 대칭 십자 마커
+#   fig6_ex2_asymmetric_marker  PDF p.207, clip=(280, 230, 410, 305)   연습문제 2의 비대칭 T자 마커

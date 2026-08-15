@@ -1,0 +1,226 @@
+<div class="lab" id="w-vel">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Velocity motion model — 원 궤적과 바나나 모양 posterior</span>
+    <span class="lab-note">Figure 5.3·5.4·5.5를 한 화면에서</span>
+  </div>
+  <div class="lab-body">
+    <p>로봇이 <code>(v, ω)</code>로 <code>Δt</code>초 움직인다. 검은 곡선이 <b>노이즈 없는 원 궤적</b>
+       (식 9), 회색 점이 <b>Table 5.3으로 표집한 500개 표본</b>(식 15)이다.
+       <b>α₁·α₂</b>를 키우면 궤적을 따라 <b>길게</b>, <b>α₃·α₄</b>를 키우면 궤적에 <b>수직으로 부채꼴</b>로
+       퍼진다 — Figure 5.3(b)와 (c)의 차이가 이것이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>병진 속도 v (m/s)</span><b id="vv-v">1.00</b></label>
+        <input type="range" id="vs-v" min="0.1" max="2" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>회전 속도 ω (rad/s)</span><b id="vv-w">0.50</b></label>
+        <input type="range" id="vs-w" min="-1.2" max="1.2" step="0.05" value="0.5">
+      </div>
+      <div class="slider">
+        <label><span>Δt (s)</span><b id="vv-t">2.0</b></label>
+        <input type="range" id="vs-t" min="0.5" max="5" step="0.1" value="2">
+      </div>
+      <div class="slider">
+        <label><span>α₁, α₂ — 병진 오차</span><b id="vv-a">0.02</b></label>
+        <input type="range" id="vs-a" min="0" max="0.3" step="0.005" value="0.02">
+      </div>
+      <div class="slider">
+        <label><span>α₃, α₄ — 회전 오차</span><b id="vv-b">0.02</b></label>
+        <input type="range" id="vs-b" min="0" max="0.3" step="0.005" value="0.02">
+      </div>
+      <div class="slider">
+        <label><span>α₅, α₆ — 최종 회전 γ̂</span><b id="vv-c">0.01</b></label>
+        <input type="range" id="vs-c" min="0" max="0.2" step="0.005" value="0.01">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-preset="a">Fig 5.3(a) 중간</button>
+      <button data-preset="b">Fig 5.3(b) 병진 오차 큼</button>
+      <button data-preset="c">Fig 5.3(c) 회전 오차 큼</button>
+      <button class="ghost" data-heading>방향 표시 켜기/끄기</button>
+    </div>
+
+    <canvas id="vm-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>노이즈 없는 원 궤적</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>원의 중심 (x_c, y_c)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>표본 500개</span>
+    </div>
+    <div class="readout" id="vm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('vm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('vm-readout');
+  var N = 500, showHeading = false;
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // Table 5.4 라인 2 — 균등분포 12개 평균
+  function sampleNormal(b2) {
+    if (b2 <= 0) return 0;
+    var b = Math.sqrt(b2), s = 0;
+    for (var i = 0; i < 12; i++) s += (Math.random() * 2 - 1) * b;
+    return 0.5 * s;
+  }
+
+  // 식 (9) — 노이즈 없는 운동
+  function exactMotion(x, y, th, v, w, dt) {
+    if (Math.abs(w) < 1e-6) {
+      return [x + v * dt * Math.cos(th), y + v * dt * Math.sin(th), th];
+    }
+    var r = v / w;
+    return [x - r * Math.sin(th) + r * Math.sin(th + w * dt),
+            y + r * Math.cos(th) - r * Math.cos(th + w * dt),
+            th + w * dt];
+  }
+
+  // Table 5.3 — 표집
+  function sampleMotion(x, y, th, v, w, dt, a) {
+    var vh = v + sampleNormal(a[0] * v * v + a[1] * w * w);      // 라인 2
+    var wh = w + sampleNormal(a[2] * v * v + a[3] * w * w);      // 라인 3
+    var gh = sampleNormal(a[4] * v * v + a[5] * w * w);          // 라인 4
+    var p = exactMotion(x, y, th, vh, wh, dt);                   // 라인 5·6
+    return [p[0], p[1], p[2] + gh * dt];                         // 라인 7
+  }
+
+  function draw() {
+    var v = val('vs-v'), w = val('vs-w'), dt = val('vs-t');
+    var aT = val('vs-a'), aR = val('vs-b'), aG = val('vs-c');
+    [['vv-v', v, 2], ['vv-w', w, 2], ['vv-t', dt, 1],
+     ['vv-a', aT, 3], ['vv-b', aR, 3], ['vv-c', aG, 3]].forEach(function (p) {
+      document.getElementById(p[0]).textContent = p[1].toFixed(p[2]);
+    });
+    var alpha = [aT, aT, aR, aR, aG, aG];
+
+    var x0 = 0, y0 = 0, th0 = 0;
+    var end = exactMotion(x0, y0, th0, v, w, dt);
+
+    // 표본 생성
+    var pts = [];
+    for (var i = 0; i < N; i++) pts.push(sampleMotion(x0, y0, th0, v, w, dt, alpha));
+
+    // 화면 범위 자동 결정
+    var xs = pts.map(function (p) { return p[0]; }).concat([x0, end[0]]);
+    var ys = pts.map(function (p) { return p[1]; }).concat([y0, end[1]]);
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var padWorld = 0.35 * Math.max(maxX - minX, maxY - minY, 0.5);
+    minX -= padWorld; maxX += padWorld; minY -= padWorld; maxY += padWorld;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var pad = 18;
+    var sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
+    var offX = (W - sc * (maxX - minX)) / 2, offY = (H - sc * (maxY - minY)) / 2;
+    function PX(x) { return offX + (x - minX) * sc; }
+    function PY(y) { return H - (offY + (y - minY) * sc); }   // y축 위로
+
+    // 격자
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g = Math.ceil(minX); g <= maxX; g++) {
+      ctx.beginPath(); ctx.moveTo(PX(g), 0); ctx.lineTo(PX(g), H); ctx.stroke();
+    }
+    for (var g2 = Math.ceil(minY); g2 <= maxY; g2++) {
+      ctx.beginPath(); ctx.moveTo(0, PY(g2)); ctx.lineTo(W, PY(g2)); ctx.stroke();
+    }
+
+    // 표본
+    ctx.fillStyle = css('--correct');
+    ctx.globalAlpha = 0.45;
+    pts.forEach(function (p) {
+      ctx.beginPath(); ctx.arc(PX(p[0]), PY(p[1]), 1.9, 0, Math.PI * 2); ctx.fill();
+    });
+    if (showHeading) {
+      ctx.strokeStyle = css('--correct'); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.3;
+      pts.forEach(function (p) {
+        ctx.beginPath();
+        ctx.moveTo(PX(p[0]), PY(p[1]));
+        ctx.lineTo(PX(p[0] + 0.18 * Math.cos(p[2])), PY(p[1] + 0.18 * Math.sin(p[2])));
+        ctx.stroke();
+      });
+    }
+    ctx.globalAlpha = 1;
+
+    // 노이즈 없는 궤적
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (var s = 0; s <= 80; s++) {
+      var p2 = exactMotion(x0, y0, th0, v, w, dt * s / 80);
+      if (s === 0) ctx.moveTo(PX(p2[0]), PY(p2[1])); else ctx.lineTo(PX(p2[0]), PY(p2[1]));
+    }
+    ctx.stroke();
+
+    // 원의 중심 (식 7)
+    var r = null, xc = null, yc = null;
+    if (Math.abs(w) > 1e-6) {
+      r = v / w; xc = x0 - r * Math.sin(th0); yc = y0 + r * Math.cos(th0);
+      if (PX(xc) > -60 && PX(xc) < W + 60 && PY(yc) > -60 && PY(yc) < H + 60) {
+        ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(PX(xc), PY(yc)); ctx.lineTo(PX(x0), PY(y0)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(PX(xc), PY(yc)); ctx.lineTo(PX(end[0]), PY(end[1])); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = css('--accent');
+        ctx.beginPath(); ctx.arc(PX(xc), PY(yc), 4.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // 시작·끝 로봇
+    function robot(p, color, label) {
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(PX(p[0]), PY(p[1]), 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(PX(p[0]), PY(p[1]));
+      ctx.lineTo(PX(p[0] + 0.42 * Math.cos(p[2])), PY(p[1] + 0.42 * Math.sin(p[2])));
+      ctx.stroke();
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, PX(p[0]), PY(p[1]) - 11);
+      ctx.textAlign = 'left';
+    }
+    robot([x0, y0, th0], css('--ink-soft'), 'x_{t-1}');
+    robot(end, css('--ink'), 'x_t (노이즈 없음)');
+
+    // 통계
+    var mx = 0, my = 0;
+    pts.forEach(function (p) { mx += p[0]; my += p[1]; });
+    mx /= N; my /= N;
+    var sxx = 0, syy = 0;
+    pts.forEach(function (p) { sxx += (p[0] - mx) * (p[0] - mx); syy += (p[1] - my) * (p[1] - my); });
+    out.innerHTML =
+      (r === null ? 'ω ≈ 0 → <b>직선 운동</b> (반지름 ∞)'
+                  : '반지름 r = |v/ω| = <b>' + Math.abs(r).toFixed(2) + '</b> m · 중심 (' +
+                    xc.toFixed(2) + ', ' + yc.toFixed(2) + ') · 회전각 ωΔt = <b>' +
+                    (w * dt).toFixed(2) + '</b> rad') + '<br>' +
+      '노이즈 없는 도착: (' + end[0].toFixed(2) + ', ' + end[1].toFixed(2) + ', ' + end[2].toFixed(2) + ')' +
+      ' · 표본 평균: (' + mx.toFixed(2) + ', ' + my.toFixed(2) + ')' +
+      ' · 표본 σx <b>' + Math.sqrt(sxx / N).toFixed(3) + '</b>, σy <b>' + Math.sqrt(syy / N).toFixed(3) + '</b>';
+  }
+
+  ['vs-v', 'vs-w', 'vs-t', 'vs-a', 'vs-b', 'vs-c'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  document.querySelectorAll('#w-vel [data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = { a: [0.02, 0.02, 0.01], b: [0.20, 0.005, 0.01], c: [0.005, 0.20, 0.01] }[b.dataset.preset];
+      document.getElementById('vs-a').value = p[0];
+      document.getElementById('vs-b').value = p[1];
+      document.getElementById('vs-c').value = p[2];
+      draw();
+    });
+  });
+  document.querySelector('#w-vel [data-heading]').addEventListener('click', function () {
+    showHeading = !showHeading; draw();
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
