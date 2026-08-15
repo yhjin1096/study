@@ -1,0 +1,266 @@
+<!--
+  위젯 4 — 연속 확률분포 탐색기  (원문 §6.2, 식 (34)~(52) 보조)
+
+  Uniform · Gaussian · Chi-square · Exponential · Gamma · Beta 의 pdf 와 CDF 를 그린다.
+  readout 은 원문 공식 모멘트와, pdf 를 사다리꼴 적분해 얻은 수치 모멘트를 나란히 찍는다.
+-->
+<div class="lab" id="w-cont">
+  <div class="lab-head">
+    <span class="lab-tag">실험 4</span>
+    <span class="lab-title">연속 확률분포 탐색기 — pdf · CDF · 모멘트</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §6.2 식 (34)~(52) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>§6.2의 여섯 분포다. 회색 곡선은 CDF로, 원문 예제에서 "…이하일 확률은 CDF로 구할 수 있다"고 한 바로
+       그 함수다. readout의 <b>공식값</b>(원문 식)과 <b>수치값</b>(pdf를 직접 적분)이 일치하는지 확인하라.
+       Gamma의 <code>k=1</code>은 Exponential과, Chi-square <code>χ²(n)</code>은
+       <code>Γ(n/2, 2)</code>와 같아지는 것도 슬라이더로 확인할 수 있다.</p>
+
+    <div class="btnrow">
+      <button data-dist="unif">Uniform (34)~(36)</button>
+      <button data-dist="norm">Gaussian (37)~(39)</button>
+      <button data-dist="chi2">Chi-square (40)~(43)</button>
+      <button data-dist="expo">Exponential (44)~(46)</button>
+      <button data-dist="gam">Gamma (47)~(49)</button>
+      <button data-dist="beta">Beta (50)~(52)</button>
+    </div>
+    <div class="sliders">
+      <div class="slider" id="cn-w-1">
+        <label><span id="cn-l-1">파라미터 1</span><b id="cn-v-1">0.00</b></label>
+        <input type="range" id="cn-s-1" min="0" max="1" step="0.01" value="0.5">
+      </div>
+      <div class="slider" id="cn-w-2">
+        <label><span id="cn-l-2">파라미터 2</span><b id="cn-v-2">1.00</b></label>
+        <input type="range" id="cn-s-2" min="0" max="1" step="0.01" value="0.5">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="ghost" data-act="cdf">CDF 켜기/끄기</button>
+      <button class="ghost" data-act="reset">파라미터 초기화</button>
+    </div>
+
+    <canvas id="cn-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>pdf p(x)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>CDF</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>E(x)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>E(x) ± σ</span>
+    </div>
+    <div class="readout" id="cn-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('cn-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cn-readout');
+  var dist = 'norm', showCdf = true;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var S1 = document.getElementById('cn-s-1'), S2 = document.getElementById('cn-s-2');
+
+  var LG = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+            -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+            9.9843695780195716e-6, 1.5056327351493116e-7];
+  function lgamma(z) {
+    if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+    z -= 1;
+    var x = 0.99999999999980993;
+    for (var i = 0; i < 8; i++) x += LG[i] / (z + i + 1);
+    var t = z + 7.5;
+    return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+  }
+
+  // 분포별 슬라이더 설정 [min, max, step, default, 라벨]
+  var SPEC = {
+    unif: [[-4, 4, 0.1, 0, 'a (구간 시작)'], [-3.9, 8, 0.1, 1, 'b (구간 끝)']],
+    norm: [[-4, 4, 0.05, 0, 'μ (평균)'], [0.2, 3, 0.05, 1, 'σ (표준편차)']],
+    chi2: [[1, 20, 1, 4, 'n (자유도)'], null],
+    expo: [[0.1, 3, 0.05, 0.5, 'λ (비율)'], null],
+    gam: [[0.5, 10, 0.1, 3, 'k (형상)'], [0.2, 3, 0.05, 1, 'θ (스케일)']],
+    beta: [[0.5, 8, 0.1, 2, 'α (형상)'], [0.5, 8, 0.1, 3, 'β (형상)']]
+  };
+
+  function applySpec(resetVals) {
+    var sp = SPEC[dist];
+    [[S1, sp[0], 'cn-w-1', 'cn-l-1'], [S2, sp[1], 'cn-w-2', 'cn-l-2']].forEach(function (t) {
+      var el = t[0], s = t[1];
+      if (!s) { document.getElementById(t[2]).style.display = 'none'; return; }
+      document.getElementById(t[2]).style.display = '';
+      document.getElementById(t[3]).textContent = s[4];
+      el.min = s[0]; el.max = s[1]; el.step = s[2];
+      if (resetVals) el.value = s[3];
+      el.value = Math.min(s[1], Math.max(s[0], parseFloat(el.value)));
+    });
+  }
+
+  // pdf 와 원문 공식 모멘트
+  function model() {
+    var a = parseFloat(S1.value), b = parseFloat(S2.value);
+    var pdf, mean, vari, lo, hi, name, params, formula;
+    if (dist === 'unif') {
+      if (b <= a) { b = a + 0.1; S2.value = b; }
+      pdf = function (x) { return (x >= a && x <= b) ? 1 / (b - a) : 0; };
+      mean = (a + b) / 2; vari = (b - a) * (b - a) / 12;
+      lo = a - (b - a) * 0.35; hi = b + (b - a) * 0.35;
+      name = 'Uniform 𝒰(a, b)'; params = 'a = ' + a.toFixed(2) + ', b = ' + b.toFixed(2);
+      formula = 'E = (a+b)/2, var = (b−a)²/12   ← 식 (36)';
+    } else if (dist === 'norm') {
+      pdf = function (x) { return Math.exp(-0.5 * (x - a) * (x - a) / (b * b)) / (b * Math.sqrt(2 * Math.PI)); };
+      mean = a; vari = b * b;
+      lo = a - 4.5 * b; hi = a + 4.5 * b;
+      name = 'Gaussian 𝒩(μ, σ²)'; params = 'μ = ' + a.toFixed(2) + ', σ = ' + b.toFixed(2);
+      formula = 'E = μ, var = σ²   ← 식 (39)';
+    } else if (dist === 'chi2') {
+      var n = Math.round(a);
+      pdf = function (x) {
+        if (x < 0) return 0;
+        if (x === 0) return n < 2 ? 0 : (n === 2 ? 0.5 : 0);
+        return Math.exp((n / 2 - 1) * Math.log(x) - x / 2 - (n / 2) * Math.LN2 - lgamma(n / 2));
+      };
+      mean = n; vari = 2 * n;
+      lo = 0; hi = Math.max(8, n + 5 * Math.sqrt(2 * n));
+      name = 'Chi-square χ²(n)'; params = 'n = ' + n;
+      formula = 'E = n, var = 2n   ← 식 (43)';
+    } else if (dist === 'expo') {
+      pdf = function (x) { return x >= 0 ? a * Math.exp(-a * x) : 0; };
+      mean = 1 / a; vari = 1 / (a * a);
+      lo = 0; hi = 7 / a;
+      name = 'Exponential Exp(λ)'; params = 'λ = ' + a.toFixed(2);
+      formula = 'E = 1/λ, var = 1/λ²   ← 식 (46)';
+    } else if (dist === 'gam') {
+      pdf = function (x) {
+        if (x <= 0) return 0;
+        return Math.exp((a - 1) * Math.log(x) - x / b - lgamma(a) - a * Math.log(b));
+      };
+      mean = a * b; vari = a * b * b;
+      lo = 0; hi = Math.max(4 * b, a * b + 5 * Math.sqrt(a) * b);
+      name = 'Gamma Γ(k, θ)'; params = 'k = ' + a.toFixed(1) + ', θ = ' + b.toFixed(2);
+      formula = 'E = kθ, var = kθ²   ← 식 (49)';
+    } else {
+      var lB = lgamma(a) + lgamma(b) - lgamma(a + b);
+      pdf = function (x) {
+        if (x <= 0 || x >= 1) return 0;
+        return Math.exp((a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x) - lB);
+      };
+      mean = a / (a + b); vari = a * b / ((a + b) * (a + b) * (a + b + 1));
+      lo = 0; hi = 1;
+      name = 'Beta Beta(α, β)'; params = 'α = ' + a.toFixed(1) + ', β = ' + b.toFixed(1);
+      formula = 'E = α/(α+β), var = αβ/((α+β)²(α+β+1))   ← 식 (52)';
+    }
+    return { pdf: pdf, mean: mean, vari: vari, lo: lo, hi: hi, name: name, params: params, formula: formula };
+  }
+
+  function draw() {
+    var m = model();
+    document.getElementById('cn-v-1').textContent = parseFloat(S1.value).toFixed(2);
+    document.getElementById('cn-v-2').textContent = parseFloat(S2.value).toFixed(2);
+    document.querySelectorAll('#w-cont [data-dist]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.dist === dist);
+    });
+
+    // 수치 적분 (사다리꼴) — 검산용. 꼬리를 넉넉히 잡는다.
+    var N = 4000, ilo = m.lo, ihi = m.hi + (m.hi - m.lo) * 0.6, dx = (ihi - ilo) / N;
+    var s0 = 0, s1 = 0, s2 = 0;
+    for (var i = 0; i <= N; i++) {
+      var x = ilo + i * dx, w = (i === 0 || i === N) ? 0.5 : 1, f = m.pdf(x);
+      s0 += w * f * dx; s1 += w * x * f * dx; s2 += w * x * x * f * dx;
+    }
+    var nMean = s1 / (s0 || 1), nVar = s2 / (s0 || 1) - nMean * nMean;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 50, padR = 44, padT = 18, padB = 32, NP = 500;
+    var ymax = 0, ys = [], cum = [], c = 0, ddx = (m.hi - m.lo) / NP;
+    for (var k = 0; k <= NP; k++) {
+      var xx = m.lo + k * ddx, v = m.pdf(xx);
+      if (!isFinite(v)) v = 0;
+      ys.push(v); if (v > ymax) ymax = v;
+      c += v * ddx; cum.push(c);
+    }
+    ymax = ymax > 0 ? ymax * 1.15 : 1;
+    function PX(x) { return padL + (W - padL - padR) * (x - m.lo) / (m.hi - m.lo); }
+    function PY(y) { return H - padB - (H - padT - padB) * Math.min(y / ymax, 1); }
+    function PC(y) { return H - padB - (H - padT - padB) * Math.min(y, 1); }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    for (var g = 1; g <= 4; g++) {
+      var yv = ymax * g / 4;
+      ctx.fillText(yv.toFixed(2), padL - 7, PY(yv) + 4);
+      ctx.strokeStyle = css('--rule-soft');
+      ctx.beginPath(); ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    for (var t = 0; t <= 6; t++) {
+      var xv = m.lo + (m.hi - m.lo) * t / 6;
+      ctx.fillText(xv.toFixed(Math.abs(xv) < 10 ? 1 : 0), PX(xv), H - padB + 15);
+    }
+
+    // pdf 채우기 + 곡선
+    ctx.beginPath(); ctx.moveTo(PX(m.lo), H - padB);
+    for (var i2 = 0; i2 <= NP; i2++) ctx.lineTo(PX(m.lo + i2 * ddx), PY(ys[i2]));
+    ctx.lineTo(PX(m.hi), H - padB); ctx.closePath();
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (var i3 = 0; i3 <= NP; i3++) {
+      var px = PX(m.lo + i3 * ddx), py = PY(ys[i3]);
+      i3 ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+
+    // CDF
+    if (showCdf) {
+      ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]); ctx.beginPath();
+      for (var i4 = 0; i4 <= NP; i4++) {
+        var qx = PX(m.lo + i4 * ddx), qy = PC(cum[i4]);
+        i4 ? ctx.lineTo(qx, qy) : ctx.moveTo(qx, qy);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left'; ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText('1.0', W - padR + 5, PC(1) + 4);
+      ctx.fillText('0.5', W - padR + 5, PC(0.5) + 4);
+      ctx.fillText('CDF', W - padR + 5, PC(0.5) - 12);
+    }
+
+    // 평균과 ±σ
+    var sd = Math.sqrt(Math.max(0, m.vari));
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+    [m.mean - sd, m.mean + sd].forEach(function (v2) {
+      if (v2 >= m.lo && v2 <= m.hi) { ctx.beginPath(); ctx.moveTo(PX(v2), padT); ctx.lineTo(PX(v2), H - padB); ctx.stroke(); }
+    });
+    ctx.setLineDash([]);
+    if (m.mean >= m.lo && m.mean <= m.hi) {
+      ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(PX(m.mean), padT); ctx.lineTo(PX(m.mean), H - padB); ctx.stroke();
+    }
+
+    out.innerHTML =
+      '<b>' + m.name + '</b> (' + m.params + ')<br>' +
+      '공식값 &nbsp;E(x) = <b>' + m.mean.toFixed(4) + '</b>, var(x) = <b>' + m.vari.toFixed(4) +
+      '</b> &nbsp;<span style="opacity:.75">' + m.formula + '</span><br>' +
+      '수치값 &nbsp;∫x·p(x)dx = <b>' + nMean.toFixed(4) + '</b>, ∫x²p(x)dx − (∫xp(x)dx)² = <b>' + nVar.toFixed(4) + '</b>' +
+      ' &nbsp;·&nbsp; 차이 ' + Math.abs(nMean - m.mean).toExponential(1) + ' / ' + Math.abs(nVar - m.vari).toExponential(1) + '<br>' +
+      '∫p(x)dx = <b>' + s0.toFixed(5) + '</b> — 1에 가까워야 한다 (식 (6)의 정규화 조건)';
+  }
+
+  document.querySelectorAll('#w-cont [data-dist]').forEach(function (b) {
+    b.addEventListener('click', function () { dist = b.dataset.dist; applySpec(true); draw(); });
+  });
+  document.querySelectorAll('#w-cont [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.act === 'cdf') showCdf = !showCdf;
+      else applySpec(true);
+      draw();
+    });
+  });
+  [S1, S2].forEach(function (el) { el.addEventListener('input', draw); });
+  window.addEventListener('resize', draw);
+  applySpec(true);
+  draw();
+})();
+</script>

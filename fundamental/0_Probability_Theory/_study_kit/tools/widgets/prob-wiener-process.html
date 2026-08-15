@@ -1,0 +1,205 @@
+<!--
+  위젯 9 — Wiener process 와 정상성  (원문 §9.3~9.5, 식 (111)~(120) 보조)
+
+  sample path 를 여러 개 뽑아 그리고, 같은 표본으로
+    평균함수 m_x(t)      ← 식 (111)
+    ACF  R_xx(t,s)       ← 식 (112)
+  를 실제로 계산해 이론값과 대조한다. Wiener 는 R_xx(t,s)=min(t,s) 라 τ=t−s 만의 함수가 아니므로
+  WSS 가 아니고, 백색잡음은 WSS 다 (식 (118)~(120)).
+-->
+<div class="lab" id="w-wien">
+  <div class="lab-head">
+    <span class="lab-tag">실험 9</span>
+    <span class="lab-title">Wiener process — sample path와 정상성 판정</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §9.3~9.5 식 (111)~(120) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>표본공간에서 함수 하나를 뽑는 것이 곧 <b>sample path</b>다(§9.1의 "for fixed w"). 여러 개를 겹쳐
+       그리고, <b>같은 표본으로 평균함수와 ACF를 직접 계산</b>해 이론값과 비교한다. Wiener는
+       <code>R<sub>xx</sub>(t,s) = min(t,s)</code>라 시간 차이 <code>τ</code>만의 함수가 아니므로
+       <b>WSS가 아니다</b>. 백색잡음으로 바꾸면 <code>R<sub>xx</sub></code>가 <code>τ</code>에만
+       의존해 WSS가 된다(식 120).</p>
+
+    <div class="btnrow">
+      <button data-mode="wiener">Wiener process</button>
+      <button data-mode="white">백색잡음 (WSS)</button>
+      <button class="ghost" data-act="resample">경로 다시 뽑기</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label><span>그릴 경로 수</span><b id="wp-v-k">12</b></label>
+        <input type="range" id="wp-s-k" min="1" max="40" step="1" value="12">
+      </div>
+      <div class="slider">
+        <label><span>시간 t</span><b id="wp-v-t">0.30</b></label>
+        <input type="range" id="wp-s-t" min="0.02" max="1" step="0.02" value="0.3">
+      </div>
+      <div class="slider">
+        <label><span>시간 s</span><b id="wp-v-s">0.70</b></label>
+        <input type="range" id="wp-s-s" min="0.02" max="1" step="0.02" value="0.7">
+      </div>
+    </div>
+
+    <canvas id="wp-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>sample path</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>±2√t (Wiener 이론 표준편차)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>t · s 위치</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>평균함수 m<sub>x</sub>(t)</span>
+    </div>
+    <div class="readout" id="wp-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('wp-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('wp-readout');
+  var mode = 'wiener';
+  var M = 400, STEPS = 250, paths = [];        // 통계는 400개 경로로, 그림은 일부만
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function resample() {
+    var dt = 1 / STEPS, sq = Math.sqrt(dt);
+    paths = [];
+    for (var m = 0; m < M; m++) {
+      var p = new Float64Array(STEPS + 1), w = 0;
+      for (var i = 1; i <= STEPS; i++) {
+        if (mode === 'wiener') { w += sq * gauss(); p[i] = w; }
+        else p[i] = gauss();                    // 백색잡음: 매 시점 독립
+      }
+      if (mode === 'white') p[0] = gauss();
+      paths.push(p);
+    }
+    draw();
+  }
+
+  function idxOf(t) { return Math.max(0, Math.min(STEPS, Math.round(t * STEPS))); }
+
+  function draw() {
+    var K = Math.round(val('wp-s-k')), t = val('wp-s-t'), s = val('wp-s-s');
+    document.getElementById('wp-v-k').textContent = K;
+    document.getElementById('wp-v-t').textContent = t.toFixed(2);
+    document.getElementById('wp-v-s').textContent = s.toFixed(2);
+    document.querySelectorAll('#w-wien [data-mode]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.mode === mode);
+    });
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 44, padR = 18, padT = 18, padB = 32;
+    var ylim = mode === 'wiener' ? 2.6 : 3.6;
+    function PX(x) { return padL + (W - padL - padR) * x; }
+    function PY(y) { return padT + (H - padT - padB) * (1 - (y + ylim) / (2 * ylim)); }
+
+    // 격자
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    for (var g = -3; g <= 3; g++) {
+      var yv = ylim * g / 3;
+      ctx.beginPath(); ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+      ctx.fillText(yv.toFixed(1), padL - 6, PY(yv) + 4);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(padL, PY(0)); ctx.lineTo(W - padR, PY(0)); ctx.stroke();
+    ctx.textAlign = 'center';
+    for (var q = 0; q <= 5; q++) ctx.fillText((q / 5).toFixed(1), PX(q / 5), H - padB + 15);
+    ctx.textAlign = 'left';
+    ctx.fillText('t  (인덱스 집합 ℐ)', padL, H - 6);
+
+    // ±2√t 포락선 (Wiener 이론)
+    if (mode === 'wiener') {
+      ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+      [1, -1].forEach(function (sg) {
+        ctx.beginPath();
+        for (var i = 0; i <= STEPS; i++) {
+          var tt = i / STEPS, yy = sg * 2 * Math.sqrt(tt);
+          i ? ctx.lineTo(PX(tt), PY(yy)) : ctx.moveTo(PX(tt), PY(yy));
+        }
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+    }
+
+    // sample path
+    ctx.lineWidth = 1.2;
+    for (var k = 0; k < Math.min(K, paths.length); k++) {
+      ctx.strokeStyle = css('--predict');
+      ctx.globalAlpha = 0.25 + 0.45 / Math.sqrt(K);
+      ctx.beginPath();
+      for (var i2 = 0; i2 <= STEPS; i2++) {
+        var xx = PX(i2 / STEPS), yy2 = PY(paths[k][i2]);
+        i2 ? ctx.lineTo(xx, yy2) : ctx.moveTo(xx, yy2);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 표본으로 계산한 평균함수 m_x(t)
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2; ctx.beginPath();
+    var means = new Float64Array(STEPS + 1);
+    for (var i3 = 0; i3 <= STEPS; i3++) {
+      var acc = 0;
+      for (var m2 = 0; m2 < M; m2++) acc += paths[m2][i3];
+      means[i3] = acc / M;
+      i3 ? ctx.lineTo(PX(i3 / STEPS), PY(means[i3])) : ctx.moveTo(PX(i3 / STEPS), PY(means[i3]));
+    }
+    ctx.stroke();
+
+    // t, s 표시
+    var it = idxOf(t), is = idxOf(s);
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]);
+    [t, s].forEach(function (v) {
+      ctx.beginPath(); ctx.moveTo(PX(v), padT); ctx.lineTo(PX(v), H - padB); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--correct'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('t', PX(t), padT + 10); ctx.fillText('s', PX(s), padT + 10);
+
+    // ── ACF·평균 수치 계산 ───────────────────────────────────────
+    var mt = means[it], ms = means[is], rts = 0, vt = 0;
+    for (var m3 = 0; m3 < M; m3++) {
+      rts += paths[m3][it] * paths[m3][is];
+      vt += paths[m3][it] * paths[m3][it];
+    }
+    rts /= M; vt /= M;
+    var theoR = mode === 'wiener' ? Math.min(t, s) : (it === is ? 1 : 0);
+    var tau = Math.abs(t - s);
+    // 같은 τ, 다른 절대 시간에서 ACF 를 한 번 더 재 본다 — 정상성 판정의 핵심
+    var t2 = Math.min(0.98, Math.max(0.02, Math.min(t, s) + 0.3));
+    var s2 = Math.min(1, t2 + tau);
+    var i4 = idxOf(t2), i5 = idxOf(s2), rts2 = 0;
+    for (var m4 = 0; m4 < M; m4++) rts2 += paths[m4][i4] * paths[m4][i5];
+    rts2 /= M;
+
+    out.innerHTML =
+      '경로 ' + M + '개로 계산 &nbsp;·&nbsp; m<sub>x</sub>(t) = <b>' + mt.toFixed(4) +
+      '</b>, m<sub>x</sub>(s) = <b>' + ms.toFixed(4) + '</b> (이론 0, 식 111)<br>' +
+      'R<sub>xx</sub>(t,s) = E(x<sub>t</sub>x<sub>s</sub>) = <b>' + rts.toFixed(4) +
+      '</b> &nbsp;(이론 ' + theoR.toFixed(4) + (mode === 'wiener' ? ' = min(t,s)' : '') + ', 식 112)<br>' +
+      '같은 시간차 τ = ' + tau.toFixed(2) + ' 를 (t,s) = (' + t2.toFixed(2) + ', ' + s2.toFixed(2) +
+      ') 에서 다시 재면 R<sub>xx</sub> = <b>' + rts2.toFixed(4) + '</b> → ' +
+      (mode === 'wiener'
+        ? '값이 달라진다. 절대 시간에 의존하므로 <b>WSS가 아니다</b> (식 120 위배)'
+        : '값이 같다. τ에만 의존하므로 <b>WSS다</b> (식 118~120)');
+  }
+
+  document.querySelectorAll('#w-wien [data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () { mode = b.dataset.mode; resample(); });
+  });
+  document.querySelectorAll('#w-wien [data-act]').forEach(function (b) { b.addEventListener('click', resample); });
+  ['wp-s-k', 'wp-s-t', 'wp-s-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  resample();
+})();
+</script>

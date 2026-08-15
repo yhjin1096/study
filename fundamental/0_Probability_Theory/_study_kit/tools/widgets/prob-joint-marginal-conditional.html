@@ -1,0 +1,222 @@
+<!--
+  위젯 5 — joint → marginal → conditional  (원문 §6.3~6.5, 식 (53)~(60) 보조)
+
+  6×5 이산 결합확률표 P(x,y) 를 만들고
+    · 열/행을 합해 주변확률분포 P(x) = Σ_y P(x,y)   ← 식 (54)
+    · 한 열을 그 합으로 나눠 조건부확률분포 P(y|x) = P(x,y)/P(x)   ← 식 (56)
+  를 그대로 보여준다. 결합 강도를 0으로 두면 독립이 되어 P(y|x) = P(y) 가 된다 ← 식 (58)
+-->
+<div class="lab" id="w-jmc">
+  <div class="lab-head">
+    <span class="lab-tag">실험 5</span>
+    <span class="lab-title">결합 → 주변 → 조건부 확률분포</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §6.3~6.5 식 (53)~(60) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>가운데 격자가 결합확률분포 <code>P(x,y)</code>다(칸 넓이·색 = 확률). <b>열을 세로로 합하면</b>
+       위쪽 띠의 <code>P(x)</code>, <b>행을 가로로 합하면</b> 오른쪽 띠의 <code>P(y)</code>가 된다(식 54).
+       격자의 열을 클릭하면 그 열을 열합으로 나눈 <code>P(y|x)</code>가 아래에 그려진다(식 56).
+       <b>결합 강도를 0으로 내리면</b> 두 변수가 독립이 되어 <code>P(y|x)</code>가 <code>P(y)</code>와
+       포개진다(식 58).</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>결합 강도 (0이면 독립)</span><b id="jm-v-t">1.60</b></label>
+        <input type="range" id="jm-s-t" min="-3" max="3" step="0.05" value="1.6">
+      </div>
+      <div class="slider">
+        <label><span>선택한 열 x</span><b id="jm-v-x">3</b></label>
+        <input type="range" id="jm-s-x" min="1" max="6" step="1" value="3">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="indep">독립으로 (강도 0)</button>
+      <button class="ghost" data-act="shuffle">표 다시 만들기</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="jm-canvas" width="880" height="430"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>결합 P(x,y)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>주변 P(x), P(y)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>조건부 P(y|x)</span>
+    </div>
+    <div class="readout" id="jm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('jm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('jm-readout');
+  var NX = 6, NY = 5, base = [];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // base 는 반드시 곱 형태 px⊗py 로 만든다 — 그래야 결합 강도 0 에서 정확히 독립이 된다
+  function shuffle() {
+    var px = [], py = [], i, j;
+    for (i = 0; i < NX; i++) px.push(0.35 + Math.random());
+    for (j = 0; j < NY; j++) py.push(0.35 + Math.random());
+    base = [];
+    for (i = 0; i < NX; i++) {
+      base.push([]);
+      for (j = 0; j < NY; j++) base[i].push(px[i] * py[j]);
+    }
+  }
+  shuffle();
+
+  // 결합표: base 에 exp(t·z_i·z_j) 를 곱해 상관을 넣고 전체합 1로 정규화
+  function table() {
+    var t = val('jm-s-t'), J = [], s = 0, i, j;
+    for (i = 0; i < NX; i++) {
+      J.push([]);
+      var zi = (i / (NX - 1)) - 0.5;
+      for (j = 0; j < NY; j++) {
+        var zj = (j / (NY - 1)) - 0.5;
+        var v = base[i][j] * Math.exp(t * zi * zj * 4);
+        J[i].push(v); s += v;
+      }
+    }
+    for (i = 0; i < NX; i++) for (j = 0; j < NY; j++) J[i][j] /= s;
+    return J;
+  }
+
+  function draw() {
+    var J = table(), i, j;
+    var sel = Math.round(val('jm-s-x')) - 1;
+    document.getElementById('jm-v-t').textContent = val('jm-s-t').toFixed(2);
+    document.getElementById('jm-v-x').textContent = (sel + 1);
+
+    var Px = [], Py = new Array(NY).fill(0);
+    for (i = 0; i < NX; i++) {
+      var c = 0;
+      for (j = 0; j < NY; j++) { c += J[i][j]; Py[j] += J[i][j]; }
+      Px.push(c);
+    }
+    var cond = J[sel].map(function (v) { return v / Px[sel]; });
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 430;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var mL = 44, mT = 46, stripe = 26, gap = 10;
+    var gridW = Math.min(W - mL - 120, 470), gridH = 190;
+    var cw = gridW / NX, ch = gridH / NY;
+    var gx = mL, gy = mT + stripe + gap;
+    var jmax = 0;
+    for (i = 0; i < NX; i++) for (j = 0; j < NY; j++) jmax = Math.max(jmax, J[i][j]);
+
+    ctx.font = '10.5px system-ui, sans-serif';
+
+    // 위쪽 띠 — P(x)
+    var pxmax = Math.max.apply(null, Px);
+    for (i = 0; i < NX; i++) {
+      var h = stripe * (Px[i] / pxmax);
+      ctx.fillStyle = css('--predict'); ctx.globalAlpha = i === sel ? 0.95 : 0.5;
+      ctx.fillRect(gx + i * cw + 1, mT + stripe - h, cw - 2, h);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+      ctx.fillText(Px[i].toFixed(3), gx + i * cw + cw / 2, mT - 4);
+    }
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left'; ctx.font = '11.5px system-ui, sans-serif';
+    ctx.fillText('P(x) = Σ_y P(x,y)   ← 식 (54)', gx, mT - 20);
+
+    // 격자 — P(x,y)
+    for (i = 0; i < NX; i++) {
+      for (j = 0; j < NY; j++) {
+        ctx.fillStyle = css('--accent');
+        ctx.globalAlpha = 0.08 + 0.82 * (J[i][j] / jmax);
+        ctx.fillRect(gx + i * cw + 1, gy + j * ch + 1, cw - 2, ch - 2);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = css('--ink'); ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(J[i][j].toFixed(3), gx + i * cw + cw / 2, gy + j * ch + ch / 2 + 3.5);
+      }
+    }
+    // 선택 열 강조
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2.2;
+    ctx.strokeRect(gx + sel * cw, gy, cw, gridH);
+
+    // 축 라벨
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10.5px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (i = 0; i < NX; i++) ctx.fillText('x' + (i + 1), gx + i * cw + cw / 2, gy + gridH + 14);
+    ctx.textAlign = 'right';
+    for (j = 0; j < NY; j++) ctx.fillText('y' + (j + 1), gx - 6, gy + j * ch + ch / 2 + 4);
+
+    // 오른쪽 띠 — P(y)
+    var pymax = Math.max.apply(null, Py), rx = gx + gridW + gap;
+    for (j = 0; j < NY; j++) {
+      var w2 = stripe * (Py[j] / pymax);
+      ctx.fillStyle = css('--predict'); ctx.globalAlpha = 0.5;
+      ctx.fillRect(rx, gy + j * ch + 1, w2, ch - 2);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left'; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(Py[j].toFixed(3), rx + stripe + 4, gy + j * ch + ch / 2 + 3.5);
+    }
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('P(y)', rx, gy - 6);
+
+    // 아래 — 조건부 P(y|x_sel) 과 P(y) 비교
+    var by = gy + gridH + 44, bh = 110, bw = gridW;
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif';
+    ctx.fillText('P(y | x' + (sel + 1) + ') = P(x' + (sel + 1) + ',y) / P(x' + (sel + 1) + ')   ← 식 (56)   ·   회색은 P(y)', gx, by - 8);
+    var cmax = Math.max(Math.max.apply(null, cond), pymax) * 1.15;
+    var slot = bw / NY;
+    for (j = 0; j < NY; j++) {
+      var x0 = gx + j * slot;
+      // P(y) 회색 배경 막대
+      var hy = bh * (Py[j] / cmax);
+      ctx.fillStyle = css('--ink-faint'); ctx.globalAlpha = 0.35;
+      ctx.fillRect(x0 + slot * 0.12, by + bh - hy, slot * 0.76, hy);
+      // 조건부
+      var hc = bh * (cond[j] / cmax);
+      ctx.globalAlpha = 0.95; ctx.fillStyle = css('--correct');
+      ctx.fillRect(x0 + slot * 0.26, by + bh - hc, slot * 0.48, hc);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('y' + (j + 1), x0 + slot / 2, by + bh + 13);
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(cond[j].toFixed(3), x0 + slot / 2, by + bh - hc - 5);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, by + bh); ctx.lineTo(gx + bw, by + bh); ctx.stroke();
+
+    var maxDiff = 0;
+    for (j = 0; j < NY; j++) maxDiff = Math.max(maxDiff, Math.abs(cond[j] - Py[j]));
+    var total = 0;
+    for (i = 0; i < NX; i++) for (j = 0; j < NY; j++) total += J[i][j];
+
+    out.innerHTML =
+      'ΣΣ P(x,y) = <b>' + total.toFixed(6) + '</b> &nbsp;·&nbsp; ' +
+      'P(x' + (sel + 1) + ') = <b>' + Px[sel].toFixed(4) + '</b> &nbsp;·&nbsp; ' +
+      'Σ_y P(y|x' + (sel + 1) + ') = <b>' + cond.reduce(function (a, b) { return a + b; }, 0).toFixed(6) + '</b><br>' +
+      '|P(y|x) − P(y)| 최대 = <b>' + maxDiff.toFixed(4) + '</b> → ' +
+      (maxDiff < 1e-6
+        ? '<b>독립</b>이다. P(x,y) = P(x)P(y) 이므로 조건을 걸어도 분포가 그대로다 (식 58)'
+        : '독립이 아니다 — x를 알면 y의 분포가 바뀐다');
+  }
+
+  // 격자 클릭으로 열 선택
+  cv.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect(), W = cv.clientWidth;
+    var mL = 44, gridW = Math.min(W - mL - 120, 470), cw = gridW / NX;
+    var i = Math.floor((e.clientX - r.left - mL) / cw);
+    if (i >= 0 && i < NX) { document.getElementById('jm-s-x').value = i + 1; draw(); }
+  });
+  document.querySelectorAll('#w-jmc [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'indep') document.getElementById('jm-s-t').value = 0;
+      else if (a === 'shuffle') shuffle();
+      else { document.getElementById('jm-s-t').value = 1.6; document.getElementById('jm-s-x').value = 3; shuffle(); }
+      draw();
+    });
+  });
+  ['jm-s-t', 'jm-s-x'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

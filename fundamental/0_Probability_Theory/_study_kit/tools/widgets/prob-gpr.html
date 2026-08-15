@@ -1,0 +1,266 @@
+<!--
+  위젯 11 — Gaussian process regression  (원문 §11.1.5, 식 (151)=(162) 보조)
+
+  캔버스를 클릭해 관측점을 추가하면 식 (151) 을 그대로 계산해 사후 평균과 2σ 띠를 그린다.
+      mean = k(x*,X)(k(X,X) + σn²I)⁻¹ y
+      var  = k(x*,x*) − k(x*,X)(k(X,X) + σn²I)⁻¹ k(X,x*)
+  선형계는 Cholesky 로 푼다. function-space view (식 157·162) 도 같은 식이다.
+-->
+<div class="lab" id="w-gpr">
+  <div class="lab-head">
+    <span class="lab-tag">실험 11</span>
+    <span class="lab-title">GPR — 관측이 늘수록 좁아지는 불확실성</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §11.1.5 식 (151)(162) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p><b>캔버스를 클릭하면 관측점이 추가된다.</b> 그때마다 식 (151)을 그대로 계산해 사후 평균(굵은 선)과
+       2σ 띠를 다시 그린다. 관측이 없는 구간에서 띠가 넓게 벌어지고 관측점 근처에서 좁아지는 것이
+       GPR이 주는 "예측 불확실성의 정량화"(§11.3.1)다. <code>σn</code>을 키우면 곡선이 점을 덜 따라가고,
+       <code>ℓ</code>을 줄이면 급격히 꺾인다. 이 식은 function-space view의 (162)와 완전히 같다.</p>
+
+    <div class="btnrow">
+      <button data-act="demo">예시 데이터 넣기</button>
+      <button class="ghost" data-act="clear">점 모두 지우기</button>
+      <button class="ghost" data-act="samp">사후 함수 표집 켜기/끄기</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label><span>length scale ℓ</span><b id="gr-v-l">0.12</b></label>
+        <input type="range" id="gr-s-l" min="0.02" max="0.5" step="0.01" value="0.12">
+      </div>
+      <div class="slider">
+        <label><span>진폭 σf</span><b id="gr-v-a">1.00</b></label>
+        <input type="range" id="gr-s-a" min="0.2" max="2.5" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>관측 노이즈 σn</span><b id="gr-v-n">0.10</b></label>
+        <input type="range" id="gr-s-n" min="0.01" max="1" step="0.01" value="0.1">
+      </div>
+      <div class="slider">
+        <label><span>질의점 x∗</span><b id="gr-v-x">0.50</b></label>
+        <input type="range" id="gr-s-x" min="0" max="1" step="0.005" value="0.5">
+      </div>
+    </div>
+
+    <canvas id="gr-canvas" width="880" height="340"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>관측 (X, y)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>사후 평균</span>
+      <span><i class="swatch" style="background:var(--accent-soft)"></i>±2σ 띠</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>사후 표집 함수</span>
+    </div>
+    <div class="readout" id="gr-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('gr-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('gr-readout');
+  var X = [], Y = [], showSamp = false, NG = 220;
+  var YLIM = 2.4;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function k(a, b) {
+    var sf = val('gr-s-a'), l = val('gr-s-l');
+    return sf * sf * Math.exp(-(a - b) * (a - b) / (2 * l * l));
+  }
+  function demo() {
+    X = [0.08, 0.2, 0.33, 0.52, 0.63, 0.85];
+    Y = X.map(function (x) { return Math.sin(6.0 * x) * 1.1; });
+  }
+  demo();
+
+  function chol(A, n) {
+    var L = [];
+    for (var i = 0; i < n; i++) L.push(new Float64Array(n));
+    for (var i2 = 0; i2 < n; i2++) {
+      for (var j = 0; j <= i2; j++) {
+        var s = A[i2][j];
+        for (var q = 0; q < j; q++) s -= L[i2][q] * L[j][q];
+        L[i2][j] = (i2 === j) ? Math.sqrt(Math.max(1e-12, s)) : s / L[j][j];
+      }
+    }
+    return L;
+  }
+  function cholSolve(L, b, n) {       // L Lᵀ x = b
+    var y = new Float64Array(n), x = new Float64Array(n), i, j;
+    for (i = 0; i < n; i++) {
+      var s = b[i];
+      for (j = 0; j < i; j++) s -= L[i][j] * y[j];
+      y[i] = s / L[i][i];
+    }
+    for (i = n - 1; i >= 0; i--) {
+      var s2 = y[i];
+      for (j = i + 1; j < n; j++) s2 -= L[j][i] * x[j];
+      x[i] = s2 / L[i][i];
+    }
+    return x;
+  }
+
+  function draw() {
+    var sn = val('gr-s-n'), xq = val('gr-s-x');
+    document.getElementById('gr-v-l').textContent = val('gr-s-l').toFixed(2);
+    document.getElementById('gr-v-a').textContent = val('gr-s-a').toFixed(2);
+    document.getElementById('gr-v-n').textContent = sn.toFixed(2);
+    document.getElementById('gr-v-x').textContent = xq.toFixed(2);
+
+    var n = X.length, i, j, L = null, alpha = null;
+    if (n > 0) {
+      var A = [];
+      for (i = 0; i < n; i++) {
+        A.push(new Float64Array(n));
+        for (j = 0; j < n; j++) A[i][j] = k(X[i], X[j]) + (i === j ? sn * sn : 0);
+      }
+      L = chol(A, n);
+      alpha = cholSolve(L, Y, n);          // (K + σn²I)⁻¹ y
+    }
+
+    // 격자 위 사후 평균·분산 (식 151)
+    var gm = new Float64Array(NG + 1), gv = new Float64Array(NG + 1), ks = new Float64Array(Math.max(1, n));
+    for (var g = 0; g <= NG; g++) {
+      var xs = g / NG, mean = 0, va = k(xs, xs);
+      if (n > 0) {
+        for (i = 0; i < n; i++) ks[i] = k(xs, X[i]);
+        for (i = 0; i < n; i++) mean += ks[i] * alpha[i];
+        var w = cholSolve(L, ks, n);
+        for (i = 0; i < n; i++) va -= ks[i] * w[i];
+      }
+      gm[g] = mean; gv[g] = Math.max(0, va);
+    }
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 340;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 44, padR = 18, padT = 16, padB = 30;
+    // 범위 — 평균 ± 2σ 와 관측점을 모두 포함 (3_Pitfalls.md C2)
+    var ylim = 1.2;
+    for (var g2 = 0; g2 <= NG; g2++) ylim = Math.max(ylim, Math.abs(gm[g2]) + 2 * Math.sqrt(gv[g2]));
+    for (i = 0; i < n; i++) ylim = Math.max(ylim, Math.abs(Y[i]) + 0.3);
+    ylim = Math.min(ylim * 1.05, 12);
+    YLIM = ylim;
+    function PX(x) { return padL + (W - padL - padR) * x; }
+    function PY(y) { return padT + (H - padT - padB) * (1 - (y + ylim) / (2 * ylim)); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    for (var t = -2; t <= 2; t++) {
+      var yv = ylim * t / 2;
+      ctx.beginPath(); ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+      ctx.fillText(yv.toFixed(1), padL - 6, PY(yv) + 4);
+    }
+    ctx.textAlign = 'center';
+    for (var q = 0; q <= 5; q++) ctx.fillText((q / 5).toFixed(1), PX(q / 5), H - padB + 15);
+
+    // ±2σ 띠
+    ctx.beginPath();
+    for (var a = 0; a <= NG; a++) { var xa = a / NG; a ? ctx.lineTo(PX(xa), PY(gm[a] + 2 * Math.sqrt(gv[a]))) : ctx.moveTo(PX(xa), PY(gm[a] + 2 * Math.sqrt(gv[a]))); }
+    for (var b = NG; b >= 0; b--) { var xb = b / NG; ctx.lineTo(PX(xb), PY(gm[b] - 2 * Math.sqrt(gv[b]))); }
+    ctx.closePath();
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+
+    // 사후 표집 — 격자를 성기게 잡아 Cholesky 비용을 줄인다
+    if (showSamp) {
+      var SN = 60, ts = [], i2, j2;
+      for (i2 = 0; i2 < SN; i2++) ts.push(i2 / (SN - 1));
+      var Kp = [];
+      for (i2 = 0; i2 < SN; i2++) {
+        Kp.push(new Float64Array(SN));
+        for (j2 = 0; j2 < SN; j2++) Kp[i2][j2] = k(ts[i2], ts[j2]) + (i2 === j2 ? 1e-7 : 0);
+      }
+      if (n > 0) {
+        for (i2 = 0; i2 < SN; i2++) {
+          var kiv = new Float64Array(n);
+          for (var m0 = 0; m0 < n; m0++) kiv[m0] = k(ts[i2], X[m0]);
+          var wi = cholSolve(L, kiv, n);
+          for (j2 = 0; j2 < SN; j2++) {
+            var acc = 0;
+            for (var m1 = 0; m1 < n; m1++) acc += wi[m1] * k(ts[j2], X[m1]);
+            Kp[i2][j2] -= acc;
+          }
+        }
+      }
+      var Ls = chol(Kp, SN);
+      ctx.lineWidth = 1.2;
+      for (var s3 = 0; s3 < 5; s3++) {
+        var z = new Float64Array(SN);
+        for (i2 = 0; i2 < SN; i2++) z[i2] = gauss();
+        ctx.strokeStyle = css('--predict'); ctx.globalAlpha = 0.5; ctx.beginPath();
+        for (i2 = 0; i2 < SN; i2++) {
+          var v3 = 0;
+          for (j2 = 0; j2 <= i2; j2++) v3 += Ls[i2][j2] * z[j2];
+          var mIdx = Math.round(ts[i2] * NG);
+          var yv3 = gm[mIdx] + v3;
+          i2 ? ctx.lineTo(PX(ts[i2]), PY(yv3)) : ctx.moveTo(PX(ts[i2]), PY(yv3));
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // 사후 평균
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.6; ctx.beginPath();
+    for (var c = 0; c <= NG; c++) { var xc = c / NG; c ? ctx.lineTo(PX(xc), PY(gm[c])) : ctx.moveTo(PX(xc), PY(gm[c])); }
+    ctx.stroke();
+
+    // 관측점
+    ctx.fillStyle = css('--correct');
+    for (i = 0; i < n; i++) {
+      ctx.beginPath(); ctx.arc(PX(X[i]), PY(Y[i]), 4.2, 0, 6.2832); ctx.fill();
+    }
+
+    // 질의점
+    var gi = Math.round(xq * NG), mq = gm[gi], sq = Math.sqrt(gv[gi]);
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(PX(xq), padT); ctx.lineTo(PX(xq), H - padB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(PX(xq), PY(mq - 2 * sq)); ctx.lineTo(PX(xq), PY(mq + 2 * sq)); ctx.stroke();
+    ctx.fillStyle = css('--ink');
+    ctx.beginPath(); ctx.arc(PX(xq), PY(mq), 3.4, 0, 6.2832); ctx.fill();
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('클릭해서 관측점 추가', padL + 6, padT + 12);
+
+    out.innerHTML =
+      '관측 수 n = <b>' + n + '</b> &nbsp;·&nbsp; ℓ = ' + val('gr-s-l').toFixed(2) +
+      ', σf = ' + val('gr-s-a').toFixed(2) + ', σn = ' + sn.toFixed(2) + '<br>' +
+      '식 (151) 질의점 x∗ = ' + xq.toFixed(3) + ' 에서 &nbsp;평균 = <b>' + mq.toFixed(4) +
+      '</b>, 분산 = <b>' + gv[gi].toFixed(4) + '</b> &nbsp;(95% 구간 ' +
+      (mq - 2 * sq).toFixed(3) + ' ~ ' + (mq + 2 * sq).toFixed(3) + ')<br>' +
+      'prior 분산 k(x∗,x∗) = ' + k(xq, xq).toFixed(4) + ' → 관측 덕분에 <b>' +
+      (k(xq, xq) > 0 ? ((1 - gv[gi] / k(xq, xq)) * 100).toFixed(1) : '0') + '%</b> 줄었다' +
+      (n > 0 ? ' &nbsp;·&nbsp; (k(X,X)+σn²I) 는 ' + n + '×' + n + ' — 역행렬 비용 O(n³), §11.3.2' : '');
+  }
+
+  cv.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect();
+    var W = cv.clientWidth, H = 340, padL = 44, padR = 18, padT = 16, padB = 30;
+    var x = (e.clientX - r.left - padL) / (W - padL - padR);
+    var y = ((padT + (H - padT - padB)) - (e.clientY - r.top)) / (H - padT - padB) * 2 * YLIM - YLIM;
+    if (x < 0 || x > 1) return;
+    X.push(Math.max(0, Math.min(1, x))); Y.push(y);
+    draw();
+  });
+  document.querySelectorAll('#w-gpr [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'clear') { X = []; Y = []; }
+      else if (a === 'demo') demo();
+      else showSamp = !showSamp;
+      draw();
+    });
+  });
+  ['gr-s-l', 'gr-s-a', 'gr-s-n', 'gr-s-x'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

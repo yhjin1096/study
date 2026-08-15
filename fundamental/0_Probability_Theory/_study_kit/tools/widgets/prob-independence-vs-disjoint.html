@@ -1,0 +1,164 @@
+<!--
+  위젯 1 — 독립 vs 배반  (원문 §4.4, 식 (7)·(8) 보조)
+
+  표본공간 Ω를 넓이 1의 정사각형으로 두고 사건 A, B를 세로 띠로 그린다.
+  띠의 폭이 곧 확률이므로 Pr(A∩B) 는 겹친 폭으로 정확히 계산된다 (근사 없음).
+  B를 좌우로 밀면 배반(겹침 0) → 독립(겹침 = Pr(A)Pr(B)) → 포함 순으로 지나간다.
+-->
+<div class="lab" id="w-indep">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">독립(independent)과 배반(disjoint)은 다르다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §4.4 식 (7)(8) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>표본공간 <code>Ω</code>는 넓이 1의 사각형이고, 사건 <code>A</code>·<code>B</code>는 세로 띠다.
+       띠의 폭이 곧 확률이므로 <b>겹친 폭 = Pr(A∩B)</b>가 된다.
+       <code>B</code>를 좌우로 밀면서 <b>Pr(A∩B)</b>와 <b>Pr(A)Pr(B)</b>가 언제 같아지는지 보라 —
+       그 순간이 식 (7)의 독립이고, 겹침이 0인 순간이 식 (8)의 배반이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>Pr(A)</span><b id="iv-v-a">0.40</b></label>
+        <input type="range" id="iv-s-a" min="0.05" max="0.9" step="0.01" value="0.4">
+      </div>
+      <div class="slider">
+        <label><span>Pr(B)</span><b id="iv-v-b">0.50</b></label>
+        <input type="range" id="iv-s-b" min="0.05" max="0.9" step="0.01" value="0.5">
+      </div>
+      <div class="slider">
+        <label><span>B의 위치</span><b id="iv-v-s">0.50</b></label>
+        <input type="range" id="iv-s-s" min="0" max="1" step="0.005" value="0.5">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="disjoint">배반으로 맞추기</button>
+      <button class="correct" data-act="indep">독립으로 맞추기</button>
+      <button class="ghost" data-act="contain">A ⊂ B 로 맞추기</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="iv-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>사건 A</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>사건 B</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>A ∩ B</span>
+    </div>
+    <div class="readout" id="iv-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('iv-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('iv-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  // B 의 왼쪽 끝 위치. 슬라이더 s∈[0,1] 를 [0, 1-pb] 로 사상해 항상 Ω 안에 있게 한다.
+  function bStart(pb, s) { return s * (1 - pb); }
+
+  function draw() {
+    var pa = val('iv-s-a'), pb = val('iv-s-b'), s = val('iv-s-s');
+    var b0 = bStart(pb, s), b1 = b0 + pb;
+    var inter = Math.max(0, Math.min(pa, b1) - Math.max(0, b0));   // A=[0,pa]
+    var prod = pa * pb;
+
+    document.getElementById('iv-v-a').textContent = pa.toFixed(2);
+    document.getElementById('iv-v-b').textContent = pb.toFixed(2);
+    document.getElementById('iv-v-s').textContent = s.toFixed(2);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 26, padR = 26, padT = 34, padB = 56;
+    var BW = W - padL - padR, BH = H - padT - padB;
+    function PX(u) { return padL + BW * u; }
+
+    // Ω 테두리
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.4;
+    ctx.strokeRect(padL, padT, BW, BH);
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.fillText('Ω  (넓이 = 1)', padL, padT - 12);
+
+    // A
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.30;
+    ctx.fillRect(PX(0), padT, BW * pa, BH);
+    // B
+    ctx.fillStyle = css('--predict'); ctx.globalAlpha = 0.30;
+    ctx.fillRect(PX(b0), padT, BW * pb, BH);
+    // A∩B
+    if (inter > 0) {
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.55;
+      ctx.fillRect(PX(Math.max(0, b0)), padT, BW * inter, BH);
+    }
+    ctx.globalAlpha = 1;
+
+    // 라벨
+    ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = css('--accent'); ctx.fillText('A', PX(pa / 2), padT + 22);
+    ctx.fillStyle = css('--predict'); ctx.fillText('B', PX(b0 + pb / 2), padT + BH - 12);
+    if (inter > 0.02) {
+      ctx.fillStyle = css('--correct');
+      ctx.fillText('A∩B', PX(Math.max(0, b0) + inter / 2), padT + BH / 2 + 5);
+    }
+
+    // 아래쪽 비교 막대: Pr(A∩B) 와 Pr(A)Pr(B)
+    var by = padT + BH + 18, bh = 10;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Pr(A∩B)', padL, by + 9);
+    ctx.fillText('Pr(A)Pr(B)', padL, by + 9 + bh + 8);
+    var barX = padL + 74, barW = BW - 74;
+    ctx.fillStyle = css('--rule-soft');
+    ctx.fillRect(barX, by, barW, bh); ctx.fillRect(barX, by + bh + 8, barW, bh);
+    ctx.fillStyle = css('--correct'); ctx.fillRect(barX, by, barW * inter, bh);
+    ctx.fillStyle = css('--ink-soft'); ctx.fillRect(barX, by + bh + 8, barW * prod, bh);
+
+    // 판정
+    var isIndep = Math.abs(inter - prod) < 0.004;
+    var isDisj = inter < 1e-9;
+    var verdict = isDisj
+      ? '<b>배반(disjoint)</b> — Pr(A∩B)=0. Pr(A),Pr(B)&gt;0 이므로 <b>독립이 아니다</b> (식 8)'
+      : (isIndep
+        ? '<b>독립(independent)</b> — Pr(A∩B) = Pr(A)Pr(B) (식 7). 겹치는데도 독립이다'
+        : '독립도 배반도 아님');
+    out.innerHTML =
+      'Pr(A) = <b>' + pa.toFixed(3) + '</b> · Pr(B) = <b>' + pb.toFixed(3) + '</b><br>' +
+      'Pr(A∩B) = <b>' + inter.toFixed(3) + '</b> vs Pr(A)Pr(B) = <b>' + prod.toFixed(3) + '</b> ' +
+      '(차이 ' + Math.abs(inter - prod).toFixed(3) + ')<br>' +
+      'Pr(A|B) = Pr(A∩B)/Pr(B) = <b>' + (inter / pb).toFixed(3) + '</b> ' +
+      '&nbsp;·&nbsp; 독립이면 이 값이 Pr(A)=' + pa.toFixed(3) + '와 같아야 한다<br>' +
+      '→ ' + verdict;
+  }
+
+  document.querySelectorAll('#w-indep [data-act]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var a = btn.dataset.act, pa = val('iv-s-a'), pb = val('iv-s-b');
+      if (a === 'disjoint') {
+        // B 를 A 오른쪽 바깥으로. pa+pb>1 이면 완전 분리가 불가능하므로 pb 를 줄인다.
+        if (pa + pb > 1) { pb = 1 - pa; set('iv-s-b', pb); }
+        set('iv-s-s', ((pa) / Math.max(1e-9, 1 - pb)).toFixed(3));
+      } else if (a === 'indep') {
+        // 겹침이 pa*pb 가 되도록: b0 = pa - pa*pb  (A 오른쪽 끝에서 pa*pb 만큼 물리게)
+        var b0 = pa - pa * pb;
+        if (b0 + pb > 1) { pb = (1 - pa) / (1 - pa) * pb; }        // 안전장치
+        set('iv-s-s', Math.max(0, Math.min(1, b0 / Math.max(1e-9, 1 - pb))).toFixed(3));
+      } else if (a === 'contain') {
+        if (pb < pa) { pb = Math.min(0.9, pa + 0.2); set('iv-s-b', pb); }
+        set('iv-s-s', '0');
+      } else {
+        set('iv-s-a', 0.4); set('iv-s-b', 0.5); set('iv-s-s', 0.5);
+      }
+      draw();
+    });
+  });
+  ['iv-s-a', 'iv-s-b', 'iv-s-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

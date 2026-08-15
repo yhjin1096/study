@@ -1,0 +1,177 @@
+<!--
+  위젯 7 — 중심극한정리  (원문 §8.1, 식 (78) 보조)
+
+  모집단에서 n 개를 뽑아 합을 만들고 (Σx − nμ)/(σ√n) 로 표준화한 값을 M 번 모아 히스토그램을 그린다.
+  모집단 모양과 무관하게 n 이 커질수록 N(0,1) 곡선에 겹쳐지는 것이 식 (78) 이다.
+-->
+<div class="lab" id="w-clt">
+  <div class="lab-head">
+    <span class="lab-tag">실험 7</span>
+    <span class="lab-title">중심극한정리 — 모집단이 무엇이든 표준정규로</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §8.1 식 (78) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽이 모집단 분포, 오른쪽이 <b>표준화한 표본합</b>
+       <code>(Σx − nμ)/(σ√n)</code>의 히스토그램이다(식 78). 모집단을 지수분포나 베르누이처럼
+       정규분포와 전혀 다른 것으로 바꿔도, <code>n</code>을 키우면 검은 <code>𝒩(0,1)</code> 곡선에
+       달라붙는다. <code>n = 1</code>로 두면 모집단 모양이 그대로 나타나는 것도 확인해 보라.</p>
+
+    <div class="btnrow">
+      <button data-pop="unif">균등 𝒰(0,1)</button>
+      <button data-pop="expo">지수 Exp(1)</button>
+      <button data-pop="bern">베르누이 Ber(0.3)</button>
+      <button data-pop="bimod">이봉(bimodal)</button>
+      <button class="ghost" data-act="resample">다시 뽑기</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label><span>표본 크기 n</span><b id="cl-v-n">1</b></label>
+        <input type="range" id="cl-s-n" min="1" max="60" step="1" value="1">
+      </div>
+      <div class="slider">
+        <label><span>반복 횟수 M</span><b id="cl-v-m">4000</b></label>
+        <input type="range" id="cl-s-m" min="200" max="20000" step="200" value="4000">
+      </div>
+    </div>
+
+    <canvas id="cl-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>모집단</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>표준화한 표본합</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>𝒩(0,1)</span>
+    </div>
+    <div class="readout" id="cl-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('cl-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cl-readout');
+  var pop = 'expo', stats = [];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // 모집단: 표본추출기 + 이론 평균/분산 + 그리기용 범위
+  var POP = {
+    unif: { name: '𝒰(0,1)', s: function () { return Math.random(); }, mu: 0.5, va: 1 / 12, lo: -0.2, hi: 1.2 },
+    expo: { name: 'Exp(1)', s: function () { return -Math.log(1 - Math.random()); }, mu: 1, va: 1, lo: 0, hi: 5 },
+    bern: { name: 'Ber(0.3)', s: function () { return Math.random() < 0.3 ? 1 : 0; }, mu: 0.3, va: 0.21, lo: -0.4, hi: 1.4 },
+    bimod: {
+      name: '이봉', s: function () {
+        var u = 1 - Math.random(), v = Math.random();
+        var g = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * 0.35;
+        return (Math.random() < 0.5 ? -1 : 1) + g;
+      },
+      mu: 0, va: 1 + 0.1225, lo: -2.6, hi: 2.6
+    }
+  };
+
+  function resample() {
+    var n = Math.round(val('cl-s-n')), M = Math.round(val('cl-s-m')), P = POP[pop];
+    stats = [];
+    var sd = Math.sqrt(P.va);
+    for (var m = 0; m < M; m++) {
+      var s = 0;
+      for (var i = 0; i < n; i++) s += P.s();
+      stats.push((s - n * P.mu) / (sd * Math.sqrt(n)));   // 식 (78)
+    }
+    draw();
+  }
+
+  function hist(data, lo, hi, NB) {
+    var h = new Array(NB).fill(0), k;
+    for (k = 0; k < data.length; k++) {
+      var b = Math.floor((data[k] - lo) / (hi - lo) * NB);
+      if (b >= 0 && b < NB) h[b]++;
+    }
+    var bw = (hi - lo) / NB;
+    for (k = 0; k < NB; k++) h[k] /= (data.length * bw);   // 밀도로 정규화
+    return h;
+  }
+  function npdf(x) { return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI); }
+
+  function draw() {
+    var n = Math.round(val('cl-s-n')), M = Math.round(val('cl-s-m')), P = POP[pop];
+    document.getElementById('cl-v-n').textContent = n;
+    document.getElementById('cl-v-m').textContent = M;
+    document.querySelectorAll('#w-clt [data-pop]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.pop === pop);
+    });
+    if (stats.length !== M) { resample(); return; }
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padT = 30, padB = 30, gapX = 34;
+    var leftW = Math.min(230, W * 0.28), rightX = leftW + gapX, rightW = W - rightX - 16;
+    var plotH = H - padT - padB;
+
+    // ── 왼쪽: 모집단 (표본 3000개로 근사) ─────────────────────────
+    var popSamp = [];
+    for (var i = 0; i < 3000; i++) popSamp.push(P.s());
+    var ph = hist(popSamp, P.lo, P.hi, 32), pmax = Math.max.apply(null, ph) || 1;
+    ctx.fillStyle = css('--predict'); ctx.globalAlpha = 0.55;
+    for (var b = 0; b < 32; b++) {
+      var bh = plotH * Math.min(ph[b] / (pmax * 1.1), 1);
+      ctx.fillRect(16 + (leftW - 16) * b / 32, padT + plotH - bh, (leftW - 16) / 32 - 1, bh);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(16, padT + plotH); ctx.lineTo(leftW, padT + plotH); ctx.stroke();
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('모집단 ' + P.name + '  (μ=' + P.mu.toFixed(2) + ', σ²=' + P.va.toFixed(3) + ')', 16, padT - 12);
+
+    // ── 오른쪽: 표준화 표본합 ────────────────────────────────────
+    var lo = -4.2, hi = 4.2, NB = 56;
+    var sh = hist(stats, lo, hi, NB);
+    var ymax = Math.max(npdf(0) * 1.35, Math.max.apply(null, sh) * 1.1);
+    function PX(x) { return rightX + rightW * (x - lo) / (hi - lo); }
+    function PY(y) { return padT + plotH - plotH * Math.min(y / ymax, 1); }
+
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.5;
+    for (var k = 0; k < NB; k++) {
+      var x0 = PX(lo + (hi - lo) * k / NB), x1 = PX(lo + (hi - lo) * (k + 1) / NB);
+      ctx.fillRect(x0, PY(sh[k]), x1 - x0 - 0.6, padT + plotH - PY(sh[k]));
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (var t = 0; t <= 300; t++) {
+      var xv = lo + (hi - lo) * t / 300;
+      t ? ctx.lineTo(PX(xv), PY(npdf(xv))) : ctx.moveTo(PX(xv), PY(npdf(xv)));
+    }
+    ctx.stroke();
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rightX, padT + plotH); ctx.lineTo(rightX + rightW, padT + plotH); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var g = -4; g <= 4; g += 2) ctx.fillText(g, PX(g), padT + plotH + 15);
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('(Σx − nμ) / (σ√n),  n = ' + n + ',  M = ' + M + '회', rightX, padT - 12);
+
+    // 통계량 — 표준화가 제대로 되었으면 평균 0, 분산 1
+    var m1 = 0, m2 = 0, m3 = 0, N = stats.length;
+    for (var q = 0; q < N; q++) m1 += stats[q];
+    m1 /= N;
+    for (var q2 = 0; q2 < N; q2++) { var d = stats[q2] - m1; m2 += d * d; m3 += d * d * d; }
+    m2 /= N; m3 /= N;
+    var skew = m3 / Math.pow(Math.max(1e-12, m2), 1.5);
+
+    out.innerHTML =
+      '표준화 통계량: 평균 <b>' + m1.toFixed(4) + '</b> (이론 0) · 분산 <b>' + m2.toFixed(4) + '</b> (이론 1)<br>' +
+      '왜도(skewness, 식 63의 3차 적률) = <b>' + skew.toFixed(4) + '</b> — 정규분포면 0에 가까워야 한다. ' +
+      'n을 키우면 이 값이 0으로 줄어드는 것이 수렴의 신호다.';
+  }
+
+  document.querySelectorAll('#w-clt [data-pop]').forEach(function (b) {
+    b.addEventListener('click', function () { pop = b.dataset.pop; resample(); });
+  });
+  document.querySelectorAll('#w-clt [data-act]').forEach(function (b) { b.addEventListener('click', resample); });
+  ['cl-s-n', 'cl-s-m'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', resample);
+  });
+  window.addEventListener('resize', draw);
+  resample();
+})();
+</script>

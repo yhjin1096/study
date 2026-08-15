@@ -1,0 +1,143 @@
+<!--
+  위젯 2 — Bayes rule 계산기  (원문 §4.8, 식 (14) 보조)
+
+  Pr(A|B) = Pr(B|A)Pr(A) / Pr(B),  Pr(B) = Pr(B|A)Pr(A) + Pr(B|Aᶜ)Pr(Aᶜ)  (전확률 정리, 식 10)
+  왼쪽: 넓이가 곧 확률인 사각형 분해. 오른쪽: prior → posterior 막대.
+-->
+<div class="lab" id="w-bayes">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">Bayes rule — prior가 posterior로 갱신되는 과정</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §4.8 식 (14) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>사각형 전체가 <code>Ω</code>다. 가로로 <code>A</code>와 <code>Aᶜ</code>를 나누고, 각 칸에서 세로로
+       <code>B</code>가 일어나는 비율을 칠했다. <b>칠해진 두 칸의 넓이 비</b>가 곧
+       <code>Pr(A|B)</code>다. 식 (14)의 분모 <code>Pr(B)</code>는 두 칸의 넓이 합(식 (10)의 전확률
+       정리)이다. 기본값은 유병률 1%의 질병 검사 예시다 — 검사가 99% 정확해도 posterior가 50%에
+       한참 못 미치는 것을 확인해 보라.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>prior Pr(A)</span><b id="by-v-pa">0.010</b></label>
+        <input type="range" id="by-s-pa" min="0.001" max="0.999" step="0.001" value="0.01">
+      </div>
+      <div class="slider">
+        <label><span>likelihood Pr(B|A)</span><b id="by-v-lp">0.99</b></label>
+        <input type="range" id="by-s-lp" min="0.01" max="1" step="0.01" value="0.99">
+      </div>
+      <div class="slider">
+        <label><span>오탐 Pr(B|Aᶜ)</span><b id="by-v-lf">0.05</b></label>
+        <input type="range" id="by-s-lf" min="0" max="1" step="0.01" value="0.05">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="disease">질병 검사 (1% · 99% · 5%)</button>
+      <button class="ghost" data-act="fair">정보 없는 검사 (likelihood = 오탐)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="by-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>A ∩ B</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>Aᶜ ∩ B</span>
+      <span><i class="swatch" style="background:var(--rule-soft)"></i>B가 아닌 부분</span>
+    </div>
+    <div class="readout" id="by-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('by-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('by-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  function draw() {
+    var pa = val('by-s-pa'), lp = val('by-s-lp'), lf = val('by-s-lf');
+    document.getElementById('by-v-pa').textContent = pa.toFixed(3);
+    document.getElementById('by-v-lp').textContent = lp.toFixed(2);
+    document.getElementById('by-v-lf').textContent = lf.toFixed(2);
+
+    var joint = lp * pa;                 // Pr(A∩B)
+    var jointC = lf * (1 - pa);          // Pr(Aᶜ∩B)
+    var pb = joint + jointC;             // Pr(B)  — 전확률 정리
+    var post = pb > 0 ? joint / pb : 0;  // Pr(A|B)
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padT = 34, padB = 30;
+    var boxW = Math.min(430, W * 0.52), boxH = H - padT - padB, boxX = 24;
+
+    // ── 왼쪽: 넓이 분해 ────────────────────────────────────────────
+    var wA = boxW * pa;
+    ctx.fillStyle = css('--rule-soft');
+    ctx.fillRect(boxX, padT, boxW, boxH);
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.85;
+    ctx.fillRect(boxX, padT, wA, boxH * lp);
+    ctx.fillStyle = css('--predict'); ctx.globalAlpha = 0.85;
+    ctx.fillRect(boxX + wA, padT, boxW - wA, boxH * lf);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+    ctx.strokeRect(boxX, padT, boxW, boxH);
+    ctx.beginPath(); ctx.moveTo(boxX + wA, padT); ctx.lineTo(boxX + wA, padT + boxH); ctx.stroke();
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11.5px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Ω — 가로 = Pr(A), 세로 = Pr(B | ·)', boxX, padT - 12);
+    ctx.textAlign = 'center';
+    if (wA > 26) ctx.fillText('A', boxX + wA / 2, padT + boxH + 16);
+    ctx.fillText('Aᶜ', boxX + wA + (boxW - wA) / 2, padT + boxH + 16);
+
+    // ── 오른쪽: prior vs posterior 막대 ────────────────────────────
+    var rx = boxX + boxW + 46, rw = W - rx - 26;
+    if (rw > 90) {
+      var barH = 26, gap = 46, top = padT + 12;
+      function bar(y, label, v, color) {
+        ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif';
+        ctx.textAlign = 'left'; ctx.fillText(label, rx, y - 7);
+        ctx.fillStyle = css('--rule-soft'); ctx.fillRect(rx, y, rw, barH);
+        ctx.fillStyle = css(color); ctx.fillRect(rx, y, rw * v, barH);
+        ctx.fillStyle = css('--ink'); ctx.font = '12px ui-monospace, monospace';
+        ctx.textAlign = 'right'; ctx.fillText((v * 100).toFixed(2) + '%', rx + rw - 6, y + 18);
+      }
+      bar(top, 'prior  Pr(A)', pa, '--ink-soft');
+      bar(top + barH + gap, 'posterior  Pr(A|B)', post, '--accent');
+      // 화살표
+      ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.4;
+      var ax = rx + rw / 2, y0 = top + barH + 8, y1 = top + barH + gap - 16;
+      ctx.beginPath(); ctx.moveTo(ax, y0); ctx.lineTo(ax, y1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax - 5, y1 - 6); ctx.lineTo(ax, y1); ctx.lineTo(ax + 5, y1 - 6); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText('× Pr(B|A)/Pr(B) = ' + (pb > 0 ? (lp / pb).toFixed(2) : '—'), ax + 8, (y0 + y1) / 2 + 4);
+    }
+
+    out.innerHTML =
+      'Pr(A∩B) = Pr(B|A)Pr(A) = <b>' + joint.toFixed(5) + '</b> &nbsp;·&nbsp; ' +
+      'Pr(Aᶜ∩B) = <b>' + jointC.toFixed(5) + '</b><br>' +
+      'Pr(B) = Pr(B|A)Pr(A) + Pr(B|Aᶜ)Pr(Aᶜ) = <b>' + pb.toFixed(5) + '</b> &nbsp;(식 10 전확률 정리)<br>' +
+      'Pr(A|B) = ' + joint.toFixed(5) + ' / ' + pb.toFixed(5) + ' = <b>' + post.toFixed(5) + '</b> ' +
+      '= <b>' + (post * 100).toFixed(2) + '%</b> &nbsp;(식 14)';
+  }
+
+  document.querySelectorAll('#w-bayes [data-act]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var a = btn.dataset.act;
+      if (a === 'disease') { set('by-s-pa', 0.01); set('by-s-lp', 0.99); set('by-s-lf', 0.05); }
+      else if (a === 'fair') { set('by-s-lf', val('by-s-lp')); }   // likelihood = 오탐 → posterior = prior
+      else { set('by-s-pa', 0.01); set('by-s-lp', 0.99); set('by-s-lf', 0.05); }
+      draw();
+    });
+  });
+  ['by-s-pa', 'by-s-lp', 'by-s-lf'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

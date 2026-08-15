@@ -1,0 +1,205 @@
+<!--
+  위젯 8 — 조건부 가우시안  (원문 §8.4·8.4.1, 식 (85)=(95) 보조)
+
+  2차원 가우시안의 등고선을 그리고 x = x₀ 로 자른다.
+  잘린 단면을 정규화한 것이 p(y|x₀) 이며, 그 평균과 분산이 식 (85) 와 맞는지
+  격자 위에서 수치적으로 다시 계산해 나란히 찍는다 (3_Pitfalls.md B1).
+-->
+<div class="lab" id="w-cgauss">
+  <div class="lab-head">
+    <span class="lab-tag">실험 8</span>
+    <span class="lab-title">조건부 가우시안 — 자르고 정규화하면 다시 가우시안</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §8.4 식 (85)(95) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽은 결합분포 <code>p(x,y)</code>의 등고선(1σ·2σ)이다. 세로선 <code>x = x₀</code>로 자른 단면을
+       정규화하면 오른쪽의 <code>p(y|x₀)</code>가 된다. 회색은 자르기 전의 주변분포
+       <code>p(y) ~ 𝒩(0, C<sub>yy</sub>)</code>다 — <b>조건을 걸면 봉우리가 옮겨가고 폭이 좁아진다.</b>
+       식 (85)가 말한 대로 <code>C<sub>y|x</sub> = C<sub>yy</sub> − C<sub>yx</sub>C<sub>xx</sub><sup>-1</sup>C<sub>yx</sub><sup>⊺</sup> ≤ C<sub>yy</sub></code>이며,
+       <code>ρ = 0</code>일 때만 등호가 성립한다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>σx</span><b id="cg-v-sx">1.00</b></label>
+        <input type="range" id="cg-s-sx" min="0.3" max="2.5" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>σy</span><b id="cg-v-sy">1.20</b></label>
+        <input type="range" id="cg-s-sy" min="0.3" max="2.5" step="0.05" value="1.2">
+      </div>
+      <div class="slider">
+        <label><span>상관계수 ρ</span><b id="cg-v-r">0.75</b></label>
+        <input type="range" id="cg-s-r" min="-0.95" max="0.95" step="0.01" value="0.75">
+      </div>
+      <div class="slider">
+        <label><span>자르는 위치 x₀</span><b id="cg-v-x">1.00</b></label>
+        <input type="range" id="cg-s-x" min="-3" max="3" step="0.05" value="1">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="rho0">ρ = 0 (독립)</button>
+      <button class="ghost" data-act="rho9">ρ = 0.95 (강한 상관)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="cg-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>결합분포 등고선</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>p(y | x₀)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>주변분포 p(y)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>E(y | x₀)</span>
+    </div>
+    <div class="readout" id="cg-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('cg-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cg-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  function draw() {
+    var sx = val('cg-s-sx'), sy = val('cg-s-sy'), rho = val('cg-s-r'), x0 = val('cg-s-x');
+    document.getElementById('cg-v-sx').textContent = sx.toFixed(2);
+    document.getElementById('cg-v-sy').textContent = sy.toFixed(2);
+    document.getElementById('cg-v-r').textContent = rho.toFixed(2);
+    document.getElementById('cg-v-x').textContent = x0.toFixed(2);
+
+    var Cxx = sx * sx, Cyy = sy * sy, Cyx = rho * sx * sy;      // 식 (83)의 블록들
+    var Eyx = Cyx / Cxx * x0;                                    // 식 (85) 평균
+    var Cy_x = Cyy - Cyx * Cyx / Cxx;                            // 식 (85) 분산
+    var sd_y_x = Math.sqrt(Math.max(1e-12, Cy_x));
+
+    // 결합 pdf
+    var det = Cxx * Cyy - Cyx * Cyx;
+    function pjoint(x, y) {
+      var q = (Cyy * x * x - 2 * Cyx * x * y + Cxx * y * y) / det;
+      return Math.exp(-0.5 * q) / (2 * Math.PI * Math.sqrt(det));
+    }
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padT = 20, padB = 30, plotH = H - padT - padB;
+    var condW = Math.min(210, W * 0.26);
+    var leftW = W - condW - 30, leftX = 34;
+    // 화면 범위 — 2σ 타원과 자르는 위치를 모두 포함 (3_Pitfalls.md C2)
+    var lim = Math.max(2.6 * sx, 2.6 * sy, Math.abs(x0) + 0.6, Math.abs(Eyx) + 2.6 * sd_y_x) * 1.05;
+    function PX(x) { return leftX + (leftW - leftX) * (x + lim) / (2 * lim); }
+    function PY(y) { return padT + plotH * (1 - (y + lim) / (2 * lim)); }
+
+    // 격자 · 축
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g = -3; g <= 3; g++) {
+      var gv = lim * g / 3;
+      ctx.beginPath(); ctx.moveTo(PX(gv), padT); ctx.lineTo(PX(gv), padT + plotH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(leftX, PY(gv)); ctx.lineTo(leftW, PY(gv)); ctx.stroke();
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+    ctx.strokeRect(leftX, padT, leftW - leftX, plotH);
+
+    // 등고선 (1σ, 2σ) — 고유분해 없이 매개변수 곡선으로 그린다
+    var L11 = sx, L21 = rho * sy, L22 = sy * Math.sqrt(Math.max(0, 1 - rho * rho));  // Cholesky
+    [1, 2].forEach(function (k, idx) {
+      ctx.strokeStyle = css('--accent');
+      ctx.lineWidth = idx === 0 ? 2.2 : 1.3;
+      ctx.globalAlpha = idx === 0 ? 1 : 0.6;
+      ctx.beginPath();
+      for (var t = 0; t <= 120; t++) {
+        var th = t / 120 * 2 * Math.PI;
+        var ux = k * Math.cos(th), uy = k * Math.sin(th);
+        var x = L11 * ux, y = L21 * ux + L22 * uy;
+        t ? ctx.lineTo(PX(x), PY(y)) : ctx.moveTo(PX(x), PY(y));
+      }
+      ctx.closePath(); ctx.stroke(); ctx.globalAlpha = 1;
+    });
+
+    // 자르는 선과 조건부 평균 점
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(PX(x0), padT); ctx.lineTo(PX(x0), padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--predict');
+    ctx.beginPath(); ctx.arc(PX(x0), PY(Eyx), 4.5, 0, 6.2832); ctx.fill();
+    // 회귀선 E(y|x) = (Cyx/Cxx)·x
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.moveTo(PX(-lim), PY(-lim * Cyx / Cxx)); ctx.lineTo(PX(lim), PY(lim * Cyx / Cxx));
+    ctx.stroke(); ctx.globalAlpha = 1;
+
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('x', leftW - 8, padT + plotH + 16);
+    ctx.textAlign = 'right'; ctx.fillText('y', leftX - 6, padT + 10);
+    ctx.fillText('x₀ = ' + x0.toFixed(2), PX(x0) + 34, padT + 12);
+
+    // ── 오른쪽: p(y|x₀) 와 p(y) ──────────────────────────────────
+    var cx0 = W - condW - 6;
+    function gpdf(y, m, s) { return Math.exp(-0.5 * (y - m) * (y - m) / (s * s)) / (s * Math.sqrt(2 * Math.PI)); }
+    var vmax = Math.max(gpdf(Eyx, Eyx, sd_y_x), gpdf(0, 0, sy)) * 1.12;
+    function CW(v) { return cx0 + condW * (v / vmax); }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx0, padT); ctx.lineTo(cx0, padT + plotH); ctx.stroke();
+    // 주변 p(y)
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.5; ctx.beginPath();
+    for (var i = 0; i <= 200; i++) {
+      var yy = -lim + 2 * lim * i / 200;
+      i ? ctx.lineTo(CW(gpdf(yy, 0, sy)), PY(yy)) : ctx.moveTo(CW(gpdf(yy, 0, sy)), PY(yy));
+    }
+    ctx.stroke();
+    // 조건부 p(y|x0)
+    ctx.beginPath();
+    for (var j = 0; j <= 200; j++) {
+      var yj = -lim + 2 * lim * j / 200;
+      j ? ctx.lineTo(CW(gpdf(yj, Eyx, sd_y_x)), PY(yj)) : ctx.moveTo(CW(gpdf(yj, Eyx, sd_y_x)), PY(yj));
+    }
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.lineTo(cx0, PY(-lim)); ctx.lineTo(cx0, PY(lim)); ctx.closePath();
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(cx0, PY(Eyx)); ctx.lineTo(cx0 + condW, PY(Eyx)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('p(y | x₀)', cx0 + 6, padT + 12);
+
+    // ── 수치 검산: 결합분포를 격자로 잘라 직접 평균·분산 계산 ──────
+    var N = 2000, ylo = -12 * sy, yhi = 12 * sy, dy = (yhi - ylo) / N;
+    var s0 = 0, s1 = 0, s2 = 0;
+    for (var k2 = 0; k2 <= N; k2++) {
+      var y2 = ylo + k2 * dy, w = (k2 === 0 || k2 === N) ? 0.5 : 1, f = pjoint(x0, y2) * dy * w;
+      s0 += f; s1 += y2 * f; s2 += y2 * y2 * f;
+    }
+    var nMean = s1 / s0, nVar = s2 / s0 - nMean * nMean;
+
+    out.innerHTML =
+      'C<sub>xx</sub> = <b>' + Cxx.toFixed(4) + '</b>, C<sub>yy</sub> = <b>' + Cyy.toFixed(4) +
+      '</b>, C<sub>yx</sub> = ρσxσy = <b>' + Cyx.toFixed(4) + '</b><br>' +
+      '식 (85) &nbsp;E(y|x₀) = C<sub>yx</sub>C<sub>xx</sub><sup>-1</sup>x₀ = <b>' + Eyx.toFixed(4) +
+      '</b> &nbsp;·&nbsp; C<sub>y|x</sub> = <b>' + Cy_x.toFixed(4) + '</b><br>' +
+      '수치값 &nbsp;∫y·p(x₀,y)dy / ∫p(x₀,y)dy = <b>' + nMean.toFixed(4) + '</b> &nbsp;·&nbsp; 분산 = <b>' +
+      nVar.toFixed(4) + '</b> &nbsp;(차이 ' + Math.abs(nMean - Eyx).toExponential(1) + ' / ' +
+      Math.abs(nVar - Cy_x).toExponential(1) + ')<br>' +
+      'C<sub>y|x</sub> / C<sub>yy</sub> = <b>' + (Cy_x / Cyy).toFixed(4) + '</b> = 1 − ρ² → ' +
+      (Math.abs(rho) < 1e-9
+        ? 'ρ = 0 이므로 불확실성이 줄지 않는다 (조건이 정보를 주지 않음)'
+        : '조건 x₀ 를 알아 분산이 <b>' + ((1 - Cy_x / Cyy) * 100).toFixed(1) + '%</b> 줄었다');
+  }
+
+  document.querySelectorAll('#w-cgauss [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'rho0') set('cg-s-r', 0);
+      else if (a === 'rho9') set('cg-s-r', 0.95);
+      else { set('cg-s-sx', 1); set('cg-s-sy', 1.2); set('cg-s-r', 0.75); set('cg-s-x', 1); }
+      draw();
+    });
+  });
+  ['cg-s-sx', 'cg-s-sy', 'cg-s-r', 'cg-s-x'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

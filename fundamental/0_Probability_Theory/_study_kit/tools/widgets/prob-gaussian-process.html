@@ -1,0 +1,204 @@
+<!--
+  위젯 10 — 가우시안 프로세스 prior 표집  (원문 §10·10.1, 식 (122)·(126)~(128) 보조)
+
+  평균함수 0, 공분산함수 k(t,s) 인 GP 에서 함수를 직접 뽑는다.
+  격자 위 공분산 행렬을 Cholesky 분해해 f = L·z (z ~ N(0,I)) 로 표집한다.
+  '원문 toy example' 버튼은 x_t = tA, A~N(0,1) 즉 k(t,s) = ts 인 §10.1 문제를 그대로 재현한다.
+-->
+<div class="lab" id="w-gp">
+  <div class="lab-head">
+    <span class="lab-tag">실험 10</span>
+    <span class="lab-title">가우시안 프로세스 — 함수를 뽑아 본다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §10·10.1 식 (122)(126)~(128) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>GP는 "임의의 시점들을 골라도 그 값들이 결합 가우시안"인 랜덤프로세스다(식 122). 여기서는 시점을
+       촘촘한 격자로 잡고 공분산행렬 <code>k(t,s)</code>를 Cholesky 분해해 <b>함수 자체를 표집</b>한다.
+       <b>원문 toy example</b> 버튼을 누르면 §10.1의 <code>x<sub>t</sub> = tA</code>가 되어
+       <code>k(t,s) = ts</code>인 직선들이 뽑힌다 — 식 (128)의
+       <code>x<sub>t</sub> ~ 𝒢𝒫(0, ts)</code>가 눈에 보이는 형태다.</p>
+
+    <div class="btnrow">
+      <button data-k="rbf">RBF 커널</button>
+      <button data-k="toy">원문 toy example k(t,s) = ts</button>
+      <button data-k="brown">Brownian k(t,s) = min(t,s)</button>
+      <button class="ghost" data-act="resample">다시 뽑기</button>
+    </div>
+    <div class="sliders">
+      <div class="slider" id="gp-w-l">
+        <label><span>length scale ℓ (RBF)</span><b id="gp-v-l">0.15</b></label>
+        <input type="range" id="gp-s-l" min="0.02" max="0.6" step="0.01" value="0.15">
+      </div>
+      <div class="slider">
+        <label><span>진폭 σf</span><b id="gp-v-a">1.00</b></label>
+        <input type="range" id="gp-s-a" min="0.2" max="2.5" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>뽑을 함수 수</span><b id="gp-v-n">6</b></label>
+        <input type="range" id="gp-s-n" min="1" max="25" step="1" value="6">
+      </div>
+    </div>
+
+    <canvas id="gp-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>표집한 함수</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>±2·√k(t,t)</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>평균함수 m(t) = 0</span>
+    </div>
+    <div class="readout" id="gp-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('gp-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('gp-readout');
+  var kern = 'rbf', N = 140, samples = [];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  var TS = [];
+  for (var i = 0; i < N; i++) TS.push(i / (N - 1));
+
+  function kfun(t, s) {
+    var a = val('gp-s-a'), l = val('gp-s-l');
+    if (kern === 'rbf') return a * a * Math.exp(-(t - s) * (t - s) / (2 * l * l));
+    if (kern === 'toy') return a * a * t * s;
+    return a * a * Math.min(t, s);
+  }
+
+  // Cholesky (하삼각). 특이에 가까운 커널(toy·brownian)을 위해 jitter 를 넣는다.
+  function chol(K, n) {
+    var L = [];
+    for (var i = 0; i < n; i++) L.push(new Float64Array(n));
+    for (var i2 = 0; i2 < n; i2++) {
+      for (var j = 0; j <= i2; j++) {
+        var s = K[i2][j];
+        for (var k = 0; k < j; k++) s -= L[i2][k] * L[j][k];
+        if (i2 === j) L[i2][j] = Math.sqrt(Math.max(1e-12, s));
+        else L[i2][j] = s / L[j][j];
+      }
+    }
+    return L;
+  }
+
+  function resample() {
+    var n = TS.length, K = [], i, j;
+    for (i = 0; i < n; i++) {
+      K.push(new Float64Array(n));
+      for (j = 0; j < n; j++) K[i][j] = kfun(TS[i], TS[j]) + (i === j ? 1e-8 : 0);
+    }
+    var L = chol(K, n), M = Math.round(val('gp-s-n'));
+    samples = [];
+    for (var m = 0; m < M; m++) {
+      var z = new Float64Array(n), f = new Float64Array(n);
+      for (i = 0; i < n; i++) z[i] = gauss();
+      for (i = 0; i < n; i++) {
+        var acc = 0;
+        for (j = 0; j <= i; j++) acc += L[i][j] * z[j];
+        f[i] = acc;
+      }
+      samples.push(f);
+    }
+    draw();
+  }
+
+  function draw() {
+    document.getElementById('gp-v-l').textContent = val('gp-s-l').toFixed(2);
+    document.getElementById('gp-v-a').textContent = val('gp-s-a').toFixed(2);
+    document.getElementById('gp-v-n').textContent = Math.round(val('gp-s-n'));
+    document.getElementById('gp-w-l').style.display = kern === 'rbf' ? '' : 'none';
+    document.querySelectorAll('#w-gp [data-k]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.k === kern);
+    });
+    if (samples.length !== Math.round(val('gp-s-n'))) { resample(); return; }
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 44, padR = 18, padT = 18, padB = 32;
+    // 범위 — 표집한 함수와 ±2σ 포락선을 모두 포함 (3_Pitfalls.md C2)
+    var ylim = 0.5;
+    for (var m = 0; m < samples.length; m++)
+      for (var i = 0; i < N; i++) ylim = Math.max(ylim, Math.abs(samples[m][i]));
+    for (var i2 = 0; i2 < N; i2++) ylim = Math.max(ylim, 2 * Math.sqrt(kfun(TS[i2], TS[i2])));
+    ylim *= 1.1;
+
+    function PX(t) { return padL + (W - padL - padR) * t; }
+    function PY(y) { return padT + (H - padT - padB) * (1 - (y + ylim) / (2 * ylim)); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    for (var g = -2; g <= 2; g++) {
+      var yv = ylim * g / 2;
+      ctx.beginPath(); ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+      ctx.fillText(yv.toFixed(1), padL - 6, PY(yv) + 4);
+    }
+    ctx.textAlign = 'center';
+    for (var q = 0; q <= 5; q++) ctx.fillText((q / 5).toFixed(1), PX(q / 5), H - padB + 15);
+
+    // ±2√k(t,t)
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    [1, -1].forEach(function (sg) {
+      ctx.beginPath();
+      for (var i3 = 0; i3 < N; i3++) {
+        var y = sg * 2 * Math.sqrt(kfun(TS[i3], TS[i3]));
+        i3 ? ctx.lineTo(PX(TS[i3]), PY(y)) : ctx.moveTo(PX(TS[i3]), PY(y));
+      }
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // 표집 함수
+    ctx.lineWidth = 1.5;
+    for (var m2 = 0; m2 < samples.length; m2++) {
+      ctx.strokeStyle = css('--predict');
+      ctx.globalAlpha = 0.3 + 0.5 / Math.sqrt(samples.length);
+      ctx.beginPath();
+      for (var i4 = 0; i4 < N; i4++) {
+        var px = PX(TS[i4]), py = PY(samples[m2][i4]);
+        i4 ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 평균함수
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(padL, PY(0)); ctx.lineTo(W - padR, PY(0)); ctx.stroke();
+
+    // 표본 평균·분산 (t=0.5, 그리고 τ 의존성 확인)
+    var it = Math.round(0.5 * (N - 1)), mm = 0, vv = 0;
+    for (var m3 = 0; m3 < samples.length; m3++) mm += samples[m3][it];
+    mm /= samples.length;
+    for (var m4 = 0; m4 < samples.length; m4++) vv += Math.pow(samples[m4][it] - mm, 2);
+    vv /= samples.length;
+
+    var kname = { rbf: 'k(t,s) = σf²·exp(−(t−s)²/2ℓ²)', toy: 'k(t,s) = σf²·t·s', brown: 'k(t,s) = σf²·min(t,s)' }[kern];
+    var wss = kern === 'rbf'
+      ? 'k가 <b>t−s만의 함수</b>이므로 이 GP는 <b>WSS</b>다 (식 120)'
+      : 'k가 t−s만의 함수가 아니라 t와 s에 따로 의존하므로 <b>WSS가 아니다</b> — §10.1 마지막 문단과 같은 결론';
+    out.innerHTML =
+      '커널: <b>' + kname + '</b> &nbsp;·&nbsp; 평균함수 m(t) = 0 (식 126)<br>' +
+      't = 0.5 에서 표집값 ' + samples.length + '개의 평균 <b>' + mm.toFixed(3) +
+      '</b>, 분산 <b>' + vv.toFixed(3) + '</b> &nbsp;(이론 k(0.5,0.5) = ' + kfun(0.5, 0.5).toFixed(3) +
+      '; 표집 수를 늘릴수록 가까워진다)<br>' +
+      '→ ' + wss;
+  }
+
+  document.querySelectorAll('#w-gp [data-k]').forEach(function (b) {
+    b.addEventListener('click', function () { kern = b.dataset.k; resample(); });
+  });
+  document.querySelectorAll('#w-gp [data-act]').forEach(function (b) { b.addEventListener('click', resample); });
+  ['gp-s-l', 'gp-s-a', 'gp-s-n'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', resample);
+  });
+  window.addEventListener('resize', draw);
+  resample();
+})();
+</script>

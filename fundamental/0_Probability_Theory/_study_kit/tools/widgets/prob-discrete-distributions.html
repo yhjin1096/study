@@ -1,0 +1,206 @@
+<!--
+  위젯 3 — 이산 확률분포 탐색기  (원문 §6.1, 식 (18)~(33) 보조)
+
+  Bernoulli · Binomial · Geometric · Negative binomial · Poisson 의 pmf 를 그리고,
+  readout 에 원문의 E(x)·var(x) 공식값과 pmf 를 직접 합해 구한 수치값을 나란히 찍는다.
+  둘이 일치하는지가 곧 검산이다 (3_Pitfalls.md B1).
+-->
+<div class="lab" id="w-disc">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">이산 확률분포 탐색기 — pmf와 모멘트</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §6.1 식 (18)~(33) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>§6.1의 다섯 분포를 같은 축 위에서 비교한다. readout에는 원문에 적힌 <b>공식값</b>과
+       pmf를 직접 합해 구한 <b>수치값</b>을 나란히 찍어 두었다 — 두 값이 같아야 원문 식이 맞는 것이다.
+       (Geometric·Negative binomial·Poisson은 지지집합이 무한하므로 꼬리를 잘라 합하며, 잘린 확률량을
+       함께 표시한다.)</p>
+
+    <div class="btnrow">
+      <button data-dist="ber">Bernoulli (18)~(21)</button>
+      <button data-dist="bin">Binomial (22)~(24)</button>
+      <button data-dist="geom">Geometric (25)~(27)</button>
+      <button data-dist="nb">Negative binomial (28)~(30)</button>
+      <button data-dist="pois">Poisson (31)~(33)</button>
+    </div>
+    <div class="sliders">
+      <div class="slider" id="dc-w-p">
+        <label><span>성공 확률 p</span><b id="dc-v-p">0.50</b></label>
+        <input type="range" id="dc-s-p" min="0.02" max="0.98" step="0.01" value="0.5">
+      </div>
+      <div class="slider" id="dc-w-n">
+        <label><span>시행 횟수 n</span><b id="dc-v-n">10</b></label>
+        <input type="range" id="dc-s-n" min="1" max="60" step="1" value="10">
+      </div>
+      <div class="slider" id="dc-w-r">
+        <label><span>실패 횟수 r</span><b id="dc-v-r">5</b></label>
+        <input type="range" id="dc-s-r" min="1" max="20" step="1" value="5">
+      </div>
+      <div class="slider" id="dc-w-l">
+        <label><span>평균 발생 횟수 λ</span><b id="dc-v-l">10.0</b></label>
+        <input type="range" id="dc-s-l" min="0.2" max="40" step="0.2" value="10">
+      </div>
+    </div>
+
+    <canvas id="dc-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>pmf P(x)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>기대값 E(x)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>E(x) ± σ</span>
+    </div>
+    <div class="readout" id="dc-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('dc-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('dc-readout');
+  var dist = 'bin';
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // Lanczos 근사 log Γ(z) — 조합수를 로그공간에서 계산해 오버플로를 피한다
+  var LG = [676.5203681218851, -1259.1392167224028, 771.32342877765313,
+            -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+            9.9843695780195716e-6, 1.5056327351493116e-7];
+  function lgamma(z) {
+    if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+    z -= 1;
+    var x = 0.99999999999980993;
+    for (var i = 0; i < 8; i++) x += LG[i] / (z + i + 1);
+    var t = z + 7.5;
+    return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+  }
+  function logC(n, k) { return lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1); }
+
+  // 분포별: 지지집합(xs)과 pmf, 그리고 원문에 적힌 공식 모멘트
+  function model() {
+    var p = val('dc-s-p'), n = Math.round(val('dc-s-n')), r = Math.round(val('dc-s-r')), lam = val('dc-s-l');
+    var xs = [], pm = [], mean, vari, name, formula, params;
+    var i, TAIL = 200;
+    if (dist === 'ber') {
+      xs = [0, 1]; pm = [1 - p, p];
+      mean = p; vari = p * (1 - p);
+      name = 'Bernoulli'; params = 'p = ' + p.toFixed(2);
+      formula = 'E(x) = p, var(x) = p(1−p)   ← 식 (21)';
+    } else if (dist === 'bin') {
+      for (i = 0; i <= n; i++) { xs.push(i); pm.push(Math.exp(logC(n, i) + i * Math.log(p) + (n - i) * Math.log(1 - p))); }
+      mean = n * p; vari = n * p * (1 - p);
+      name = 'Binomial'; params = 'n = ' + n + ', p = ' + p.toFixed(2);
+      formula = 'E(x) = np, var(x) = np(1−p)   ← 식 (24)';
+    } else if (dist === 'geom') {
+      for (i = 1; i <= TAIL; i++) { xs.push(i); pm.push(Math.pow(1 - p, i - 1) * p); }
+      mean = 1 / p; vari = (1 - p) / (p * p);
+      name = 'Geometric'; params = 'p = ' + p.toFixed(2);
+      formula = 'E(x) = 1/p, var(x) = (1−p)/p²   ← 식 (27)';
+    } else if (dist === 'nb') {
+      for (i = 0; i <= TAIL; i++) { xs.push(i); pm.push(Math.exp(logC(i + r - 1, i) + r * Math.log(1 - p) + i * Math.log(p))); }
+      mean = p * r / (1 - p); vari = p * r / ((1 - p) * (1 - p));
+      name = 'Negative binomial'; params = 'r = ' + r + ', p = ' + p.toFixed(2);
+      formula = 'E(x) = pr/(1−p), var(x) = pr/(1−p)²   ← 식 (30)';
+    } else {
+      for (i = 0; i <= TAIL; i++) { xs.push(i); pm.push(Math.exp(i * Math.log(lam) - lam - lgamma(i + 1))); }
+      mean = lam; vari = lam;
+      name = 'Poisson'; params = 'λ = ' + lam.toFixed(1);
+      formula = 'E(x) = λ, var(x) = λ   ← 식 (33)';
+    }
+    return { xs: xs, pm: pm, mean: mean, vari: vari, name: name, formula: formula, params: params };
+  }
+
+  function draw() {
+    document.getElementById('dc-v-p').textContent = val('dc-s-p').toFixed(2);
+    document.getElementById('dc-v-n').textContent = Math.round(val('dc-s-n'));
+    document.getElementById('dc-v-r').textContent = Math.round(val('dc-s-r'));
+    document.getElementById('dc-v-l').textContent = val('dc-s-l').toFixed(1);
+    // 분포마다 관련 없는 슬라이더는 숨긴다
+    var use = { ber: ['p'], bin: ['p', 'n'], geom: ['p'], nb: ['p', 'r'], pois: ['l'] }[dist];
+    ['p', 'n', 'r', 'l'].forEach(function (k) {
+      document.getElementById('dc-w-' + k).style.display = use.indexOf(k) >= 0 ? '' : 'none';
+    });
+    document.querySelectorAll('#w-disc [data-dist]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.dist === dist);
+    });
+
+    var m = model();
+    // 수치 검산 — pmf 를 직접 합해 평균/분산을 구한다
+    var s0 = 0, s1 = 0, s2 = 0;
+    for (var i = 0; i < m.xs.length; i++) { s0 += m.pm[i]; s1 += m.xs[i] * m.pm[i]; s2 += m.xs[i] * m.xs[i] * m.pm[i]; }
+    var nMean = s1, nVar = s2 - s1 * s1;
+
+    // 그릴 구간: 확률질량의 99.5% 가 들어오는 곳까지
+    var acc = 0, hi = m.xs.length - 1;
+    for (var j = 0; j < m.xs.length; j++) { acc += m.pm[j]; if (acc > 0.995) { hi = j; break; } }
+    hi = Math.max(hi, 1);
+    var xs = m.xs.slice(0, hi + 1), pm = m.pm.slice(0, hi + 1);
+    var pmax = Math.max.apply(null, pm) || 1;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 52, padR = 18, padT = 20, padB = 34;
+    var x0 = xs[0], x1 = xs[xs.length - 1];
+    function PX(x) { return padL + (W - padL - padR) * (x - x0 + 0.5) / (x1 - x0 + 1); }
+    function PY(y) { return H - padB - (H - padT - padB) * (y / (pmax * 1.12)); }
+
+    // 축
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+      var yv = pmax * 1.12 * g / 4;
+      ctx.fillText(yv.toFixed(2), padL - 7, PY(yv) + 4);
+      if (g) {
+        ctx.strokeStyle = css('--rule-soft'); ctx.beginPath();
+        ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+      }
+    }
+
+    // 막대
+    var bw = (W - padL - padR) / (x1 - x0 + 1);
+    ctx.fillStyle = css('--accent');
+    for (var k = 0; k < xs.length; k++) {
+      var h = H - padB - PY(pm[k]);
+      ctx.fillRect(PX(xs[k]) - bw * 0.38, PY(pm[k]), Math.max(1, bw * 0.76), h);
+    }
+    // x 눈금
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    var step = Math.max(1, Math.ceil((x1 - x0 + 1) / 18));
+    for (var t = x0; t <= x1; t += step) ctx.fillText(t, PX(t), H - padB + 15);
+
+    // 평균과 ±σ
+    var sd = Math.sqrt(Math.max(0, m.vari));
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+    [m.mean - sd, m.mean + sd].forEach(function (v) {
+      if (v >= x0 - 0.5 && v <= x1 + 0.5) {
+        ctx.beginPath(); ctx.moveTo(PX(v), padT); ctx.lineTo(PX(v), H - padB); ctx.stroke();
+      }
+    });
+    ctx.setLineDash([]);
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(PX(m.mean), padT); ctx.lineTo(PX(m.mean), H - padB); ctx.stroke();
+
+    var tail = 1 - s0;
+    out.innerHTML =
+      '<b>' + m.name + '</b> (' + m.params + ')<br>' +
+      '공식값 &nbsp;E(x) = <b>' + m.mean.toFixed(4) + '</b>, var(x) = <b>' + m.vari.toFixed(4) +
+      '</b> &nbsp;<span style="opacity:.75">' + m.formula + '</span><br>' +
+      '수치값 &nbsp;Σ x·P(x) = <b>' + nMean.toFixed(4) + '</b>, Σ x²P(x) − (Σ xP(x))² = <b>' + nVar.toFixed(4) + '</b>' +
+      ' &nbsp;·&nbsp; 차이 ' + Math.abs(nMean - m.mean).toExponential(1) + ' / ' + Math.abs(nVar - m.vari).toExponential(1) + '<br>' +
+      'Σ P(x) = <b>' + s0.toFixed(6) + '</b>' + (tail > 1e-6 ? ' (꼬리 절단분 ' + tail.toExponential(1) + ')' : ' — 정규화 확인');
+  }
+
+  document.querySelectorAll('#w-disc [data-dist]').forEach(function (b) {
+    b.addEventListener('click', function () { dist = b.dataset.dist; draw(); });
+  });
+  ['dc-s-p', 'dc-s-n', 'dc-s-r', 'dc-s-l'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

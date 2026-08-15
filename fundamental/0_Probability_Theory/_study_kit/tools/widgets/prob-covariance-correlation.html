@@ -1,0 +1,192 @@
+<!--
+  위젯 6 — 공분산 · 상관계수 · 직교  (원문 §7.3~7.4, 식 (73)~(77) 보조)
+
+  표본을 뽑아 산점도와 2σ 공분산 타원을 그리고, 표본 공분산·상관계수·E(xy) 를 찍는다.
+  '곡선'·'원' 모드는 상관계수가 0이지만 독립이 아닌 경우로, 식 (75) 를 눈으로 확인시켜 준다.
+
+  ⚠️ 화면 범위는 표본점뿐 아니라 2σ 타원 반경까지 포함해 계산한다 (3_Pitfalls.md C2).
+-->
+<div class="lab" id="w-cov">
+  <div class="lab-head">
+    <span class="lab-tag">실험 6</span>
+    <span class="lab-title">공분산과 상관계수 — uncorrelated ≠ independent</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §7.3~7.4 식 (73)~(77) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>슬라이더로 상관계수 <code>ρ</code>를 바꾸면 산점도와 2σ 공분산 타원이 함께 돈다.
+       <b>곡선</b>·<b>원</b> 버튼을 눌러보라 — 두 경우 모두 <code>cov(x,y) ≈ 0</code>이지만
+       <code>x</code>를 알면 <code>y</code>가 크게 좁혀지므로 <b>독립이 아니다</b>. 이것이 식 (75)가
+       말하는 "uncorrelated ⇏ independence"다. <code>E(xy) ≈ 0</code>이면 식 (77)의 의미에서
+       두 확률변수는 <b>직교(orthogonal)</b>한다.</p>
+
+    <div class="btnrow">
+      <button data-mode="lin">선형 (ρ 조절)</button>
+      <button data-mode="quad">곡선 y = x² − 1</button>
+      <button data-mode="ring">원 (반지름 일정)</button>
+      <button class="ghost" data-act="resample">표본 다시 뽑기</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label><span>상관계수 ρ (선형 모드)</span><b id="cv-v-r">0.70</b></label>
+        <input type="range" id="cv-s-r" min="-0.98" max="0.98" step="0.01" value="0.7">
+      </div>
+      <div class="slider">
+        <label><span>표본 수 N</span><b id="cv-v-n">400</b></label>
+        <input type="range" id="cv-s-n" min="30" max="3000" step="10" value="400">
+      </div>
+      <div class="slider">
+        <label><span>y의 평균 (직교 확인용)</span><b id="cv-v-m">0.00</b></label>
+        <input type="range" id="cv-s-m" min="-2" max="2" step="0.05" value="0">
+      </div>
+    </div>
+
+    <canvas id="cv-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>표본 (x, y)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>2σ 공분산 타원</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>표본 평균</span>
+    </div>
+    <div class="readout" id="cv-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('cv-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cv-readout');
+  var mode = 'lin', pts = [];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function resample() {
+    var n = Math.round(val('cv-s-n')), rho = val('cv-s-r'), my = val('cv-s-m');
+    pts = [];
+    for (var i = 0; i < n; i++) {
+      var x, y;
+      if (mode === 'lin') {
+        x = gauss();
+        y = rho * x + Math.sqrt(Math.max(0, 1 - rho * rho)) * gauss();
+      } else if (mode === 'quad') {
+        x = gauss() * 1.2;
+        y = (x * x - 1.44) * 0.8 + gauss() * 0.25;
+      } else {
+        var th = Math.random() * 2 * Math.PI;
+        x = 1.8 * Math.cos(th) + gauss() * 0.08;
+        y = 1.8 * Math.sin(th) + gauss() * 0.08;
+      }
+      pts.push([x, y + my]);
+    }
+    draw();
+  }
+
+  function draw() {
+    document.getElementById('cv-v-r').textContent = val('cv-s-r').toFixed(2);
+    document.getElementById('cv-v-n').textContent = Math.round(val('cv-s-n'));
+    document.getElementById('cv-v-m').textContent = val('cv-s-m').toFixed(2);
+    document.querySelectorAll('#w-cov [data-mode]').forEach(function (b) {
+      b.classList.toggle('correct', b.dataset.mode === mode);
+    });
+    if (pts.length !== Math.round(val('cv-s-n'))) { resample(); return; }
+
+    var n = pts.length, i;
+    var mx = 0, my = 0;
+    for (i = 0; i < n; i++) { mx += pts[i][0]; my += pts[i][1]; }
+    mx /= n; my /= n;
+    var sxx = 0, syy = 0, sxy = 0, exy = 0;
+    for (i = 0; i < n; i++) {
+      var dx = pts[i][0] - mx, dy = pts[i][1] - my;
+      sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+      exy += pts[i][0] * pts[i][1];
+    }
+    sxx /= n; syy /= n; sxy /= n; exy /= n;
+    var rho = sxy / Math.sqrt(Math.max(1e-12, sxx * syy));          // 식 (76)
+
+    // 2σ 타원 (고유분해)
+    var tr = sxx + syy, det = sxx * syy - sxy * sxy;
+    var disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    var l1 = tr / 2 + disc, l2 = tr / 2 - disc;
+    var ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    var r1 = 2 * Math.sqrt(Math.max(0, l1)), r2 = 2 * Math.sqrt(Math.max(0, l2));
+
+    // 화면 범위 — 표본점 + 타원 반경까지 포함 (C2)
+    var lim = 0;
+    for (i = 0; i < n; i++) lim = Math.max(lim, Math.abs(pts[i][0] - mx), Math.abs(pts[i][1] - my));
+    lim = Math.max(lim, r1, r2) * 1.15 + 0.2;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var pad = 30, size = Math.min(W - 2 * pad, H - 2 * pad);
+    var cx = W / 2, cy = H / 2, sc = size / (2 * lim);
+    function PX(x) { return cx + (x - mx) * sc; }
+    function PY(y) { return cy - (y - my) * sc; }
+
+    // 격자와 축
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var g = -3; g <= 3; g++) {
+      var gv = mx + g * lim / 3;
+      ctx.beginPath(); ctx.moveTo(PX(gv), cy - size / 2); ctx.lineTo(PX(gv), cy + size / 2); ctx.stroke();
+      var gh = my + g * lim / 3;
+      ctx.beginPath(); ctx.moveTo(cx - size / 2, PY(gh)); ctx.lineTo(cx + size / 2, PY(gh)); ctx.stroke();
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+    ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
+
+    // 표본
+    ctx.fillStyle = css('--correct');
+    ctx.globalAlpha = n > 1200 ? 0.28 : (n > 400 ? 0.5 : 0.75);
+    for (i = 0; i < n; i++) {
+      var px = PX(pts[i][0]), py = PY(pts[i][1]);
+      if (px > cx - size / 2 && px < cx + size / 2 && py > cy - size / 2 && py < cy + size / 2) {
+        ctx.beginPath(); ctx.arc(px, py, 2.1, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 2σ 타원
+    ctx.save();
+    ctx.translate(PX(mx), PY(my)); ctx.rotate(-ang);
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 0, r1 * sc, r2 * sc, 0, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+
+    // 평균
+    ctx.fillStyle = css('--predict');
+    ctx.beginPath(); ctx.arc(PX(mx), PY(my), 4, 0, 6.2832); ctx.fill();
+
+    // 공분산 행렬 표기
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11.5px ui-monospace, monospace'; ctx.textAlign = 'left';
+    ctx.fillText('cov = [ ' + sxx.toFixed(3) + '  ' + sxy.toFixed(3) + ' ]', 12, 20);
+    ctx.fillText('      [ ' + sxy.toFixed(3) + '  ' + syy.toFixed(3) + ' ]', 12, 35);
+
+    var indepNote = (mode === 'lin')
+      ? (Math.abs(rho) < 0.05 ? '선형 가우시안에서는 ρ≈0 이면 실제로 독립이다' : 'x와 y는 선형 상관을 갖는다')
+      : '<b>ρ≈0 인데도 독립이 아니다</b> — x를 알면 y의 범위가 크게 좁혀진다 (식 75)';
+    out.innerHTML =
+      '표본 공분산 cov(x,y) = E(xy) − E(x)E(y) = <b>' + sxy.toFixed(4) + '</b> &nbsp;(식 73·74)<br>' +
+      '상관계수 ρ = cov/(σx σy) = ' + sxy.toFixed(4) + ' / (' + Math.sqrt(sxx).toFixed(3) + '·' +
+      Math.sqrt(syy).toFixed(3) + ') = <b>' + rho.toFixed(4) + '</b> &nbsp;(식 76, −1 ≤ ρ ≤ 1)<br>' +
+      'E(xy) = <b>' + exy.toFixed(4) + '</b> → ' +
+      (Math.abs(exy) < 0.05 ? '<b>직교(orthogonal)</b>에 해당 (식 77)' : '직교하지 않음 (식 77)') +
+      '<br>→ ' + indepNote;
+  }
+
+  document.querySelectorAll('#w-cov [data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () { mode = b.dataset.mode; resample(); });
+  });
+  document.querySelectorAll('#w-cov [data-act]').forEach(function (b) {
+    b.addEventListener('click', resample);
+  });
+  ['cv-s-r', 'cv-s-n', 'cv-s-m'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', resample);
+  });
+  window.addEventListener('resize', draw);
+  resample();
+})();
+</script>
