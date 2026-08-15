@@ -1,0 +1,143 @@
+<!--
+  위젯 9 — 두 가우시안의 곱  (원문 §8.2, 식 (123)~(135) 보조)
+
+  bel(x) = η · p(z|x) · bel_bar(x) 는 결국 두 가우시안의 곱이다.
+  H = 1 로 두면 유도 결과 (131)(135) 는 다음과 같이 간단해진다.
+      1/σ² = 1/σ_prior² + 1/σ_lik²      (식 128 의 정보행렬 합)
+      μ    = μ_prior + K(μ_lik − μ_prior),  K = σ_prior²/(σ_prior² + σ_lik²)
+  격자에서 두 곡선을 직접 곱해 정규화한 것과 위 공식이 같은지 대조한다.
+-->
+<div class="lab" id="w-gprod">
+  <div class="lab-head">
+    <span class="lab-tag">실험 9</span>
+    <span class="lab-title">두 가우시안의 곱 — 정보(=역분산)는 더해진다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §8.2 식 (123)~(135) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>§8.2의 유도는 결국 <b>prior × likelihood</b>를 계산하는 일이다(식 123). <code>H = 1</code>인
+       1차원에서 두 가우시안을 곱해 정규화하면 언제나 <b>가우시안</b>이 되고, 그 평균과 분산이 식
+       (131)·(135)와 정확히 일치한다. 핵심은 <b>역분산(정보)이 더해진다</b>는 것 —
+       <code>1/σ² = 1/σ<sub>prior</sub>² + 1/σ<sub>lik</sub>²</code>(식 128) — 이라서 posterior는
+       <b>항상 두 입력보다 뾰족해진다.</b></p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>prior 평균 x̂⁻</span><b id="gp-v-m1">3.00</b></label>
+        <input type="range" id="gp-s-m1" min="-2" max="10" step="0.05" value="3">
+      </div>
+      <div class="slider">
+        <label><span>prior 표준편차 √P</span><b id="gp-v-s1">1.20</b></label>
+        <input type="range" id="gp-s-s1" min="0.1" max="3" step="0.05" value="1.2">
+      </div>
+      <div class="slider">
+        <label><span>관측 z</span><b id="gp-v-m2">6.00</b></label>
+        <input type="range" id="gp-s-m2" min="-2" max="10" step="0.05" value="6">
+      </div>
+      <div class="slider">
+        <label><span>관측 표준편차 √Q</span><b id="gp-v-s2">0.80</b></label>
+        <input type="range" id="gp-s-s2" min="0.1" max="3" step="0.05" value="0.8">
+      </div>
+    </div>
+
+    <canvas id="gp-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>prior bel&#773;(x)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>likelihood p(z|x)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>posterior bel(x)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>격자에서 직접 곱한 값</span>
+    </div>
+    <div class="readout" id="gp-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('gp-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('gp-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function g(x, m, s) { return Math.exp(-0.5 * (x - m) * (x - m) / (s * s)) / (s * Math.sqrt(2 * Math.PI)); }
+
+  function draw() {
+    var m1 = val('gp-s-m1'), s1 = val('gp-s-s1'), m2 = val('gp-s-m2'), s2 = val('gp-s-s2');
+    document.getElementById('gp-v-m1').textContent = m1.toFixed(2);
+    document.getElementById('gp-v-s1').textContent = s1.toFixed(2);
+    document.getElementById('gp-v-m2').textContent = m2.toFixed(2);
+    document.getElementById('gp-v-s2').textContent = s2.toFixed(2);
+
+    var P = s1 * s1, Q = s2 * s2;
+    var K = P / (P + Q);                     // 식 (135) 에서 H = 1 인 경우
+    var mu = m1 + K * (m2 - m1);
+    var vr = (1 - K) * P;                    // = (P⁻¹ + Q⁻¹)⁻¹, 식 (131)(132)
+    var vr2 = 1 / (1 / P + 1 / Q);
+    var sd = Math.sqrt(vr);
+
+    // 격자에서 직접 곱해 정규화 — 수치 검산
+    var X0 = Math.min(m1 - 4 * s1, m2 - 4 * s2) - 0.5, X1 = Math.max(m1 + 4 * s1, m2 + 4 * s2) + 0.5;
+    var N = 4000, dx = (X1 - X0) / N, s0 = 0, n1 = 0, n2 = 0, i, x, v;
+    for (i = 0; i <= N; i++) {
+      x = X0 + i * dx; v = g(x, m1, s1) * g(x, m2, s2) * dx;
+      s0 += v; n1 += x * v; n2 += x * x * v;
+    }
+    var nmu = n1 / s0, nvar = n2 / s0 - nmu * nmu;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 16, padT = 18, padB = 30;
+    var ymax = Math.max(g(m1, m1, s1), g(m2, m2, s2), g(mu, mu, sd)) * 1.12;
+    function PX(xx) { return padL + (W - padL - padR) * (xx - X0) / (X1 - X0); }
+    function PY(y) { return H - padB - (H - padT - padB) * Math.min(y / ymax, 1); }
+    function curve(m, s, color, wid, fill) {
+      ctx.strokeStyle = css(color); ctx.lineWidth = wid; ctx.beginPath();
+      for (var k = 0; k <= 300; k++) {
+        var xx = X0 + (X1 - X0) * k / 300;
+        k ? ctx.lineTo(PX(xx), PY(g(xx, m, s))) : ctx.moveTo(PX(xx), PY(g(xx, m, s)));
+      }
+      ctx.stroke();
+      if (fill) {
+        ctx.lineTo(PX(X1), H - padB); ctx.lineTo(PX(X0), H - padB); ctx.closePath();
+        ctx.fillStyle = css(color); ctx.globalAlpha = 0.14; ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 6; t++) {
+      var xv = X0 + (X1 - X0) * t / 6;
+      ctx.fillText(xv.toFixed(1), PX(xv), H - padB + 15);
+    }
+
+    curve(m1, s1, '--accent', 2);
+    curve(m2, s2, '--predict', 2);
+    curve(mu, sd, '--correct', 2.8, true);
+    // 격자 곱을 점선으로 겹쳐 그린다 (공식과 겹치면 안 보인다 = 일치)
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 3; ctx.setLineDash([2, 6]); ctx.beginPath();
+    for (i = 0; i <= 300; i++) {
+      var xg = X0 + (X1 - X0) * i / 300;
+      var pv = g(xg, m1, s1) * g(xg, m2, s2) / s0;
+      i ? ctx.lineTo(PX(xg), PY(pv)) : ctx.moveTo(PX(xg), PY(pv));
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    out.innerHTML =
+      'K = P/(P+Q) = <b>' + K.toFixed(4) + '</b> &nbsp;·&nbsp; 공식 (135): 평균 <b>' + mu.toFixed(4) +
+      '</b>, 분산 <b>' + vr.toFixed(4) + '</b><br>' +
+      '정보 합 (P⁻¹+Q⁻¹)⁻¹ = <b>' + vr2.toFixed(4) + '</b> (차이 ' + Math.abs(vr - vr2).toExponential(1) +
+      ') &nbsp;·&nbsp; 격자에서 직접 곱한 값: 평균 <b>' + nmu.toFixed(4) + '</b>, 분산 <b>' +
+      nvar.toFixed(4) + '</b> (차이 ' + Math.abs(nmu - mu).toExponential(1) + ' / ' +
+      Math.abs(nvar - vr).toExponential(1) + ')<br>' +
+      'posterior 표준편차 <b>' + sd.toFixed(4) + '</b> < min(√P, √Q) = <b>' + Math.min(s1, s2).toFixed(4) +
+      '</b> → <b>곱하면 언제나 더 뾰족해진다.</b> 이것이 correction 이 불확실성을 줄이는 이유다';
+  }
+
+  ['gp-s-m1', 'gp-s-s1', 'gp-s-m2', 'gp-s-s2'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

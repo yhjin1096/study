@@ -1,0 +1,183 @@
+<!--
+  위젯 2 — 1D 칼만 필터  (원문 §3.3, 식 (25)(26) 보조. §3.4.1 의 p.13 그림 재현)
+
+  prediction : μ̄ = μ + u,  σ̄² = σ² + σ_motion²                       ← 식 (25)
+  correction : K = σ̄²/(σ̄²+σ_obs²),  μ = μ̄ + K(μ_obs − μ̄),
+               σ² = (1−K)σ̄²                                          ← 식 (26)
+  readout 에는 위 공식값과, 두 가우시안을 격자에서 직접 곱해 정규화한 수치값을 나란히 찍는다.
+-->
+<div class="lab" id="w-kf1d">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">1D 칼만 필터 — prior · likelihood · posterior</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §3.3 식 (25)(26) · §3.4.1 그림 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>§3.4.1의 그림을 그대로 움직여 본다. 회색 점선이 직전 상태 <code>bel(x<sub>t-1</sub>)</code>,
+       빨강이 예측 <code>bel&#773;(x<sub>t</sub>)</code>, 파랑이 관측 <code>p(z<sub>t</sub>|x<sub>t</sub>)</code>,
+       검정이 보정된 <code>bel(x<sub>t</sub>)</code>다. <b>예측은 봉우리를 옮기고 폭을 넓히며(식 25),
+       보정은 두 봉우리 사이로 끌어당기고 폭을 좁힌다(식 26).</b> 칼만 게인
+       <code>K<sub>t</sub></code>가 정확히 얼마나 끌어당기는지 readout에서 확인하라.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>이전 평균 μ<sub>t-1</sub></span><b id="k1-v-mu">2.00</b></label>
+        <input type="range" id="k1-s-mu" min="0" max="12" step="0.1" value="2">
+      </div>
+      <div class="slider">
+        <label><span>이전 표준편차 σ<sub>t-1</sub></span><b id="k1-v-sd">0.60</b></label>
+        <input type="range" id="k1-s-sd" min="0.1" max="3" step="0.05" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>제어입력 u<sub>t</sub></span><b id="k1-v-u">3.00</b></label>
+        <input type="range" id="k1-s-u" min="-2" max="6" step="0.1" value="3">
+      </div>
+      <div class="slider">
+        <label><span>σ<sub>motion</sub></span><b id="k1-v-sm">0.50</b></label>
+        <input type="range" id="k1-s-sm" min="0.05" max="3" step="0.05" value="0.5">
+      </div>
+      <div class="slider">
+        <label><span>관측 μ<sub>obs</sub></span><b id="k1-v-z">7.00</b></label>
+        <input type="range" id="k1-s-z" min="0" max="14" step="0.1" value="7">
+      </div>
+      <div class="slider">
+        <label><span>σ<sub>obs</sub></span><b id="k1-v-so">1.00</b></label>
+        <input type="range" id="k1-s-so" min="0.05" max="4" step="0.05" value="1">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="fig">원문 p.13 그림 설정</button>
+      <button class="ghost" data-act="trust-z">센서만 믿기 (σ<sub>obs</sub> → 0)</button>
+      <button class="ghost" data-act="trust-x">모델만 믿기 (σ<sub>motion</sub> → 0)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="k1-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>bel(x<sub>t-1</sub>)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>prior bel&#773;(x<sub>t</sub>)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>likelihood p(z<sub>t</sub>|x<sub>t</sub>)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>posterior bel(x<sub>t</sub>)</span>
+    </div>
+    <div class="readout" id="k1-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('k1-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('k1-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+  function g(x, m, s) { return Math.exp(-0.5 * (x - m) * (x - m) / (s * s)) / (s * Math.sqrt(2 * Math.PI)); }
+
+  function draw() {
+    var mu = val('k1-s-mu'), sd = val('k1-s-sd'), u = val('k1-s-u');
+    var sm = val('k1-s-sm'), z = val('k1-s-z'), so = val('k1-s-so');
+    document.getElementById('k1-v-mu').textContent = mu.toFixed(2);
+    document.getElementById('k1-v-sd').textContent = sd.toFixed(2);
+    document.getElementById('k1-v-u').textContent = u.toFixed(2);
+    document.getElementById('k1-v-sm').textContent = sm.toFixed(2);
+    document.getElementById('k1-v-z').textContent = z.toFixed(2);
+    document.getElementById('k1-v-so').textContent = so.toFixed(2);
+
+    // 식 (25) prediction
+    var mub = mu + u, varb = sd * sd + sm * sm, sdb = Math.sqrt(varb);
+    // 식 (26) correction
+    var K = varb / (varb + so * so);
+    var mun = mub + K * (z - mub);
+    var varn = (1 - K) * varb, sdn = Math.sqrt(varn);
+    // 같은 값을 두 번째 표현으로도 계산 (식 26의 오른쪽 항)
+    var mun2 = (z * varb + mub * so * so) / (varb + so * so);
+    var varn2 = varb * so * so / (varb + so * so);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 16, padT = 18, padB = 30;
+    var X0 = Math.min(mu - 4 * sd, mub - 4 * sdb, z - 4 * so) - 0.5;
+    var X1 = Math.max(mu + 4 * sd, mub + 4 * sdb, z + 4 * so) + 0.5;
+    var ymax = Math.max(g(mu, mu, sd), g(mub, mub, sdb), g(z, z, so), g(mun, mun, sdn)) * 1.12;
+    function PX(x) { return padL + (W - padL - padR) * (x - X0) / (X1 - X0); }
+    function PY(y) { return H - padB - (H - padT - padB) * Math.min(y / ymax, 1); }
+    function curve(m, s, color, wid, dash, fill) {
+      ctx.setLineDash(dash || []);
+      ctx.strokeStyle = css(color); ctx.lineWidth = wid; ctx.beginPath();
+      for (var i = 0; i <= 300; i++) {
+        var x = X0 + (X1 - X0) * i / 300, py = PY(g(x, m, s));
+        i ? ctx.lineTo(PX(x), py) : ctx.moveTo(PX(x), py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (fill) {
+        ctx.lineTo(PX(X1), H - padB); ctx.lineTo(PX(X0), H - padB); ctx.closePath();
+        ctx.fillStyle = css(color); ctx.globalAlpha = 0.13; ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 8; t++) {
+      var xv = X0 + (X1 - X0) * t / 8;
+      ctx.fillText(xv.toFixed(1), PX(xv), H - padB + 15);
+    }
+    ctx.textAlign = 'left'; ctx.fillText('x', W - padR - 8, H - padB + 15);
+    ctx.fillText('pdf', 8, padT + 4);
+
+    curve(mu, sd, '--ink-faint', 1.5, [4, 3]);
+    curve(z, so, '--predict', 1.8);
+    curve(mub, sdb, '--accent', 2.2);
+    curve(mun, sdn, '--correct', 2.6, null, true);
+
+    // 평균 위치 눈금
+    [[mu, '--ink-faint'], [mub, '--accent'], [z, '--predict'], [mun, '--correct']].forEach(function (p) {
+      ctx.strokeStyle = css(p[1]); ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(PX(p[0]), H - padB); ctx.lineTo(PX(p[0]), H - padB - 10); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    // PREDICT / CORRECT 화살표
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.4;
+    function arrow(x0, x1, y, label) {
+      ctx.beginPath(); ctx.moveTo(PX(x0), y); ctx.lineTo(PX(x1), y); ctx.stroke();
+      var d = PX(x1) > PX(x0) ? -5 : 5;
+      ctx.beginPath(); ctx.moveTo(PX(x1) + d, y - 4); ctx.lineTo(PX(x1), y); ctx.lineTo(PX(x1) + d, y + 4); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.font = '10.5px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, (PX(x0) + PX(x1)) / 2, y - 7);
+    }
+    arrow(mu, mub, padT + 16, 'PREDICT');
+    arrow(mub, mun, padT + 44, 'CORRECT');
+
+    out.innerHTML =
+      '식 (25) &nbsp;μ&#772;<sub>t</sub> = μ<sub>t-1</sub> + u<sub>t</sub> = <b>' + mub.toFixed(4) +
+      '</b>, &nbsp;σ&#772;<sub>t</sub>² = σ<sub>t-1</sub>² + σ<sub>motion</sub>² = <b>' + varb.toFixed(4) + '</b><br>' +
+      '식 (26) &nbsp;K<sub>t</sub> = σ&#772;²/(σ&#772;²+σ<sub>obs</sub>²) = <b>' + K.toFixed(4) +
+      '</b> &nbsp;·&nbsp; μ<sub>t</sub> = <b>' + mun.toFixed(4) + '</b> &nbsp;·&nbsp; σ<sub>t</sub>² = <b>' +
+      varn.toFixed(4) + '</b><br>' +
+      '식 (26) 오른쪽 표현으로 다시 계산: μ<sub>t</sub> = <b>' + mun2.toFixed(4) + '</b>, σ<sub>t</sub>² = <b>' +
+      varn2.toFixed(4) + '</b> (차이 ' + Math.abs(mun - mun2).toExponential(1) + ' / ' +
+      Math.abs(varn - varn2).toExponential(1) + ')<br>' +
+      'K = ' + K.toFixed(3) + ' → 관측값을 <b>' + (K * 100).toFixed(1) + '%</b>, 예측값을 <b>' +
+      ((1 - K) * 100).toFixed(1) + '%</b> 반영한다 &nbsp;·&nbsp; 분산이 σ&#772;² 대비 <b>' +
+      ((1 - varn / varb) * 100).toFixed(1) + '%</b> 줄었다';
+  }
+
+  document.querySelectorAll('#w-kf1d [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'fig') { set('k1-s-mu', 2); set('k1-s-sd', 0.45); set('k1-s-u', 3); set('k1-s-sm', 0.5); set('k1-s-z', 7); set('k1-s-so', 1.2); }
+      else if (a === 'trust-z') set('k1-s-so', 0.05);
+      else if (a === 'trust-x') { set('k1-s-sm', 0.05); set('k1-s-sd', 0.1); }
+      else { set('k1-s-mu', 2); set('k1-s-sd', 0.6); set('k1-s-u', 3); set('k1-s-sm', 0.5); set('k1-s-z', 7); set('k1-s-so', 1); }
+      draw();
+    });
+  });
+  ['k1-s-mu', 'k1-s-sd', 'k1-s-u', 'k1-s-sm', 'k1-s-z', 'k1-s-so'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

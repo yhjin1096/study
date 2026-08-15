@@ -1,0 +1,212 @@
+<!--
+  위젯 4 — 2D 등속도 추적  (원문 §3.1·3.2·3.5, 식 (21)(22)(29) 보조)
+
+  상태 x = [px, py, vx, vy]ᵀ, 관측 z = [px, py]ᵀ 인 선형 모델에서 식 (29) 의사코드를 그대로 돈다.
+      prediction : x̂⁻ = Fx̂,            P⁻ = FPFᵀ + Q          ← 식 (21)
+      correction : K = P⁻Hᵀ(HP⁻Hᵀ+R)⁻¹, x̂ = x̂⁻ + K(z−Hx̂⁻),
+                   P = (I−KH)P⁻                                ← 식 (22)
+-->
+<div class="lab" id="w-kf2d">
+  <div class="lab-head">
+    <span class="lab-tag">실험 4</span>
+    <span class="lab-title">2D 등속도 추적 — 식 (29) 의사코드를 그대로 돌린다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §3.1~3.5 식 (21)(22)(29) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>상태 <code>x = [p<sub>x</sub>, p<sub>y</sub>, v<sub>x</sub>, v<sub>y</sub>]ᵀ</code>,
+       관측은 위치만인 등속도 모델이다. 회색이 참 궤적, 점이 노이즈 섞인 관측, 파란 선이 KF 추정,
+       타원이 마지막 시점의 <code>2σ</code> 공분산이다. <b>관측만 쓸 때와 KF를 쓸 때의 RMSE</b>를
+       readout에서 비교해 보라. <code>R</code>을 키우면 추정이 관측을 덜 따라가 매끄러워지지만
+       반응이 느려지고, <code>Q</code>를 키우면 반대가 된다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>시스템 노이즈 q (Q = qI)</span><b id="k2-v-q">0.020</b></label>
+        <input type="range" id="k2-s-q" min="0.001" max="0.3" step="0.001" value="0.02">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 r (R = rI)</span><b id="k2-v-r">1.00</b></label>
+        <input type="range" id="k2-s-r" min="0.05" max="6" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>스텝 수 T</span><b id="k2-v-t">80</b></label>
+        <input type="range" id="k2-s-t" min="20" max="200" step="5" value="80">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="regen">새 궤적 생성</button>
+      <button class="ghost" data-act="meas">관측점 켜기/끄기</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="k2-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>참 궤적</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>관측 z</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>KF 추정</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>2σ 공분산</span>
+    </div>
+    <div class="readout" id="k2-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('k2-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('k2-readout');
+  var showMeas = true, truth = [], meas = [];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  // --- 작은 행렬 유틸 (n×m 배열의 배열) ---
+  function mul(A, B) {
+    var n = A.length, m = B[0].length, k = B.length, C = [], i, j, q, s;
+    for (i = 0; i < n; i++) { C.push(new Array(m).fill(0)); }
+    for (i = 0; i < n; i++) for (j = 0; j < m; j++) { s = 0; for (q = 0; q < k; q++) s += A[i][q] * B[q][j]; C[i][j] = s; }
+    return C;
+  }
+  function T(A) {
+    var C = [], i, j;
+    for (j = 0; j < A[0].length; j++) { C.push([]); for (i = 0; i < A.length; i++) C[j].push(A[i][j]); }
+    return C;
+  }
+  function add(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+  function sub(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v - B[i][j]; }); }); }
+  function eye(n) { var C = []; for (var i = 0; i < n; i++) { C.push(new Array(n).fill(0)); C[i][i] = 1; } return C; }
+  function inv2(A) {
+    var d = A[0][0] * A[1][1] - A[0][1] * A[1][0];
+    if (Math.abs(d) < 1e-12) d = 1e-12;
+    return [[A[1][1] / d, -A[0][1] / d], [-A[1][0] / d, A[0][0] / d]];
+  }
+
+  function regen() {
+    var Tn = Math.round(val('k2-s-t')), r = val('k2-s-r');
+    truth = []; meas = [];
+    var dt = 1, s = [0, 0, 1.1, 0.7];
+    for (var t = 0; t < Tn; t++) {
+      s = [s[0] + s[2] * dt, s[1] + s[3] * dt, s[2] + 0.08 * gauss(), s[3] + 0.08 * gauss()];
+      truth.push(s.slice());
+      meas.push([s[0] + Math.sqrt(r) * gauss(), s[1] + Math.sqrt(r) * gauss()]);
+    }
+    draw();
+  }
+
+  function runKF() {
+    var q = val('k2-s-q'), r = val('k2-s-r'), dt = 1;
+    var F = [[1, 0, dt, 0], [0, 1, 0, dt], [0, 0, 1, 0], [0, 0, 0, 1]];
+    var H = [[1, 0, 0, 0], [0, 1, 0, 0]];
+    var Q = eye(4).map(function (row) { return row.map(function (v) { return v * q; }); });
+    var R = [[r, 0], [0, r]];
+    var x = [[meas.length ? meas[0][0] : 0], [meas.length ? meas[0][1] : 0], [0], [0]];
+    var P = eye(4).map(function (row) { return row.map(function (v) { return v * 10; }); });
+    var est = [], Plast = P;
+    for (var t = 0; t < meas.length; t++) {
+      // prediction — 식 (21)
+      x = mul(F, x);
+      P = add(mul(mul(F, P), T(F)), Q);
+      // correction — 식 (22)
+      var S = add(mul(mul(H, P), T(H)), R);
+      var K = mul(mul(P, T(H)), inv2(S));
+      var y = [[meas[t][0] - x[0][0]], [meas[t][1] - x[1][0]]];
+      x = add(x, mul(K, y));
+      P = mul(sub(eye(4), mul(K, H)), P);
+      est.push([x[0][0], x[1][0]]);
+      Plast = P;
+    }
+    return { est: est, P: Plast };
+  }
+
+  function draw() {
+    document.getElementById('k2-v-q').textContent = val('k2-s-q').toFixed(3);
+    document.getElementById('k2-v-r').textContent = val('k2-s-r').toFixed(2);
+    document.getElementById('k2-v-t').textContent = Math.round(val('k2-s-t'));
+    if (truth.length !== Math.round(val('k2-s-t'))) { regen(); return; }
+    var res = runKF(), est = res.est;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var pad = 26, i;
+    var xs = [], ys = [];
+    truth.forEach(function (p) { xs.push(p[0]); ys.push(p[1]); });
+    meas.forEach(function (p) { xs.push(p[0]); ys.push(p[1]); });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var mx = (x1 - x0) * 0.06 + 1, my = (y1 - y0) * 0.06 + 1;
+    x0 -= mx; x1 += mx; y0 -= my; y1 += my;
+    var sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0));
+    var ox = pad + ((W - 2 * pad) - (x1 - x0) * sc) / 2, oy = pad + ((H - 2 * pad) - (y1 - y0) * sc) / 2;
+    function PX(x) { return ox + (x - x0) * sc; }
+    function PY(y) { return H - oy - (y - y0) * sc; }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(pad * 0.6, pad * 0.4, W - pad * 1.2, H - pad * 0.9);
+
+    // 참 궤적
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 2; ctx.beginPath();
+    truth.forEach(function (p, k) { k ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1])); });
+    ctx.stroke();
+    // 관측
+    if (showMeas) {
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.55;
+      meas.forEach(function (p) { ctx.beginPath(); ctx.arc(PX(p[0]), PY(p[1]), 2.2, 0, 6.2832); ctx.fill(); });
+      ctx.globalAlpha = 1;
+    }
+    // 추정
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.4; ctx.beginPath();
+    est.forEach(function (p, k) { k ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1])); });
+    ctx.stroke();
+    // 마지막 2σ 타원 (위치 블록만)
+    var P = res.P, a = P[0][0], b = P[0][1], c = P[1][1];
+    var tr = a + c, det = a * c - b * b, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    var l1 = tr / 2 + disc, l2 = tr / 2 - disc, ang = 0.5 * Math.atan2(2 * b, a - c);
+    if (est.length) {
+      var last = est[est.length - 1];
+      ctx.save(); ctx.translate(PX(last[0]), PY(last[1])); ctx.rotate(-ang);
+      ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.ellipse(0, 0, 2 * Math.sqrt(Math.max(0, l1)) * sc, 2 * Math.sqrt(Math.max(0, l2)) * sc, 0, 0, 6.2832);
+      ctx.stroke(); ctx.restore();
+    }
+
+    // RMSE
+    var eKF = 0, eZ = 0;
+    for (i = 0; i < truth.length; i++) {
+      eKF += Math.pow(est[i][0] - truth[i][0], 2) + Math.pow(est[i][1] - truth[i][1], 2);
+      eZ += Math.pow(meas[i][0] - truth[i][0], 2) + Math.pow(meas[i][1] - truth[i][1], 2);
+    }
+    eKF = Math.sqrt(eKF / truth.length); eZ = Math.sqrt(eZ / truth.length);
+
+    out.innerHTML =
+      'T = ' + truth.length + ' 스텝 &nbsp;·&nbsp; Q = ' + val('k2-s-q').toFixed(3) + '·I₄, R = ' +
+      val('k2-s-r').toFixed(2) + '·I₂<br>' +
+      'RMSE — 관측만 사용: <b>' + eZ.toFixed(3) + '</b> &nbsp;→&nbsp; 칼만 필터: <b>' + eKF.toFixed(3) +
+      '</b> &nbsp;(' + (eKF < eZ ? (100 * (1 - eKF / eZ)).toFixed(1) + '% 개선' : '개선 없음') + ')<br>' +
+      '마지막 스텝 위치 공분산 P<sub>t|t</sub> = [[' + P[0][0].toFixed(3) + ', ' + P[0][1].toFixed(3) +
+      '], [' + P[1][0].toFixed(3) + ', ' + P[1][1].toFixed(3) + ']] &nbsp;·&nbsp; 2σ 반경 <b>' +
+      (2 * Math.sqrt(Math.max(0, l1))).toFixed(3) + '</b> × <b>' + (2 * Math.sqrt(Math.max(0, l2))).toFixed(3) + '</b>';
+  }
+
+  document.querySelectorAll('#w-kf2d [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'meas') { showMeas = !showMeas; draw(); }
+      else if (a === 'reset') {
+        document.getElementById('k2-s-q').value = 0.02;
+        document.getElementById('k2-s-r').value = 1;
+        document.getElementById('k2-s-t').value = 80;
+        regen();
+      } else regen();
+    });
+  });
+  document.getElementById('k2-s-q').addEventListener('input', draw);
+  // r 은 '실제 센서 노이즈'이므로 값이 바뀌면 관측값도 다시 만든다 (필터의 R 과 항상 일치)
+  ['k2-s-r', 'k2-s-t'].forEach(function (id) { document.getElementById(id).addEventListener('input', regen); });
+  window.addEventListener('resize', draw);
+  regen();
+})();
+</script>

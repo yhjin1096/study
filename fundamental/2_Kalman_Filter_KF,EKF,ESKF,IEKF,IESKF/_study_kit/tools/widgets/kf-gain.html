@@ -1,0 +1,170 @@
+<!--
+  위젯 3 — 칼만 게인  (원문 §3.4.2, 식 (27)(28) 보조)
+
+  스칼라(F=H=1) 정상상태에서 P⁻ = P + Q, K = P⁻/(P⁻+R), P = (1−K)P⁻ 를 수렴할 때까지 돌린다.
+  R 를 x축으로 K 곡선을 그리고, 원문이 말한 두 규칙
+      R(↑) ⇒ K(↓)      Q(↑) ⇒ P⁻(↑) ⇒ K(↑)
+  이 실제로 성립하는지 수치로 확인한다.
+-->
+<div class="lab" id="w-gain">
+  <div class="lab-head">
+    <span class="lab-tag">실험 3</span>
+    <span class="lab-title">칼만 게인 — 예측과 관측 사이의 저울</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §3.4.2 식 (27)(28) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>식 (27)은 <code>x̂<sub>t|t</sub> = x̂<sub>t|t-1</sub> + K<sub>t</sub>·innovation</code>이므로
+       <b>K는 관측값에 주는 가중치</b>다. 스칼라 필터를 정상상태까지 돌려 <code>K</code>가
+       <code>R</code>·<code>Q</code>에 따라 어떻게 변하는지 그린다. 슬라이더를 움직이며 식 (28) 아래의
+       두 규칙 — <code>R↑ ⇒ K↓</code>, <code>Q↑ ⇒ P<sub>t|t-1</sub>↑ ⇒ K↑</code> — 이 실제로 맞는지
+       확인하라. <code>K→0</code>이면 관측을 버리고, <code>K→1</code>이면 예측을 버린다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>시스템 노이즈 Q</span><b id="kg-v-q">0.100</b></label>
+        <input type="range" id="kg-s-q" min="0.001" max="2" step="0.001" value="0.1">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 R</span><b id="kg-v-r">1.000</b></label>
+        <input type="range" id="kg-s-r" min="0.01" max="20" step="0.01" value="1">
+      </div>
+      <div class="slider">
+        <label><span>innovation z − Hx̂</span><b id="kg-v-in">2.00</b></label>
+        <input type="range" id="kg-s-in" min="-5" max="5" step="0.1" value="2">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="k0">K → 0 (센서 불신)</button>
+      <button class="ghost" data-act="k1">K → 1 (센서 신뢰)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="kg-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>K(R) 곡선</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>현재 K</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>Q 를 10배 했을 때</span>
+    </div>
+    <div class="readout" id="kg-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('kg-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('kg-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  // 스칼라 정상상태: P⁻ = P + Q, K = P⁻/(P⁻+R), P = (1−K)P⁻
+  function steady(Q, R) {
+    var P = 1.0, Pm, K;
+    for (var i = 0; i < 400; i++) {
+      Pm = P + Q;
+      K = Pm / (Pm + R);
+      P = (1 - K) * Pm;
+    }
+    return { K: K, Pm: Pm, P: P };
+  }
+
+  function draw() {
+    var Q = val('kg-s-q'), R = val('kg-s-r'), inn = val('kg-s-in');
+    document.getElementById('kg-v-q').textContent = Q.toFixed(3);
+    document.getElementById('kg-v-r').textContent = R.toFixed(3);
+    document.getElementById('kg-v-in').textContent = inn.toFixed(2);
+    var cur = steady(Q, R);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 210, padT = 20, padB = 34;
+    var lo = Math.log10(0.01), hi = Math.log10(20);
+    function PX(r) { return padL + (W - padL - padR) * (Math.log10(r) - lo) / (hi - lo); }
+    function PY(k) { return H - padB - (H - padT - padB) * k; }
+
+    // 격자
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    for (var g = 0; g <= 4; g++) {
+      var kv = g / 4;
+      ctx.beginPath(); ctx.moveTo(padL, PY(kv)); ctx.lineTo(W - padR, PY(kv)); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.fillText(kv.toFixed(2), padL - 6, PY(kv) + 4);
+    }
+    ctx.textAlign = 'center';
+    [0.01, 0.1, 1, 10].forEach(function (r) { ctx.fillText(r, PX(r), H - padB + 15); });
+    ctx.textAlign = 'left';
+    ctx.fillText('센서 노이즈 R (로그 축)', padL, H - 6);
+    ctx.fillText('칼만 게인 K', 6, padT - 6);
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+
+    // K(R) 곡선 — 현재 Q, 그리고 Q×10
+    [[Q, '--accent', 2.4], [Q * 10, '--predict', 1.6]].forEach(function (p) {
+      ctx.strokeStyle = css(p[1]); ctx.lineWidth = p[2]; ctx.beginPath();
+      for (var i = 0; i <= 160; i++) {
+        var r = Math.pow(10, lo + (hi - lo) * i / 160);
+        var k = steady(p[0], r).K;
+        i ? ctx.lineTo(PX(r), PY(k)) : ctx.moveTo(PX(r), PY(k));
+      }
+      ctx.stroke();
+    });
+    // 현재 점
+    ctx.fillStyle = css('--correct');
+    ctx.beginPath(); ctx.arc(PX(R), PY(cur.K), 5, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(padL, PY(cur.K)); ctx.lineTo(PX(R), PY(cur.K)); ctx.lineTo(PX(R), H - padB);
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // 오른쪽: 식 (27) 의 가중치 막대
+    var rx = W - padR + 20, rw = padR - 40;
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('식 (27) 보정량', rx, padT + 6);
+    var by = padT + 24, bh = 22;
+    ctx.fillStyle = css('--rule-soft'); ctx.fillRect(rx, by, rw, bh);
+    ctx.fillStyle = css('--accent'); ctx.fillRect(rx, by, rw * (1 - cur.K), bh);
+    ctx.fillStyle = css('--ink'); ctx.font = '10.5px system-ui, sans-serif';
+    ctx.fillText('예측 ' + ((1 - cur.K) * 100).toFixed(0) + '%', rx + 4, by + 15);
+    ctx.textAlign = 'right';
+    ctx.fillText('관측 ' + (cur.K * 100).toFixed(0) + '%', rx + rw - 4, by + 15);
+    ctx.textAlign = 'left';
+    ctx.font = '11px ui-monospace, monospace'; ctx.fillStyle = css('--ink-soft');
+    ctx.fillText('K·innovation', rx, by + bh + 22);
+    ctx.fillStyle = css('--correct'); ctx.font = '15px ui-monospace, monospace';
+    ctx.fillText('= ' + (cur.K * inn).toFixed(3), rx, by + bh + 44);
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText('P⁻ = ' + cur.Pm.toFixed(4), rx, by + bh + 72);
+    ctx.fillText('P  = ' + cur.P.toFixed(4), rx, by + bh + 90);
+
+    // 두 규칙을 수치로 검증
+    var Rup = steady(Q, Math.min(20, R * 2)).K, Qup = steady(Math.min(2, Q * 2), R);
+    out.innerHTML =
+      '정상상태 &nbsp;P<sub>t|t-1</sub> = <b>' + cur.Pm.toFixed(4) + '</b>, K = P⁻/(P⁻+R) = <b>' +
+      cur.K.toFixed(4) + '</b>, P<sub>t|t</sub> = <b>' + cur.P.toFixed(4) + '</b><br>' +
+      'R을 2배(' + R.toFixed(2) + ' → ' + Math.min(20, R * 2).toFixed(2) + ') → K = <b>' + Rup.toFixed(4) +
+      '</b> ' + (Rup < cur.K ? '<b>감소</b> ✓ 식 (28) 첫 규칙' : '증가 ✗') + '<br>' +
+      'Q를 2배(' + Q.toFixed(3) + ' → ' + Math.min(2, Q * 2).toFixed(3) + ') → P⁻ = <b>' + Qup.Pm.toFixed(4) +
+      '</b>, K = <b>' + Qup.K.toFixed(4) + '</b> ' +
+      (Qup.K > cur.K ? '<b>증가</b> ✓ 식 (28) 둘째 규칙' : '감소 ✗') + '<br>' +
+      (cur.K < 0.05 ? '→ K ≈ 0 : 센서 관측값을 거의 반영하지 않는다'
+        : (cur.K > 0.95 ? '→ K ≈ 1 : 예측값을 거의 반영하지 않는다' : '→ 예측과 관측을 섞어 쓰고 있다'));
+  }
+
+  document.querySelectorAll('#w-gain [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'k0') { set('kg-s-q', 0.001); set('kg-s-r', 20); }
+      else if (a === 'k1') { set('kg-s-q', 2); set('kg-s-r', 0.01); }
+      else { set('kg-s-q', 0.1); set('kg-s-r', 1); set('kg-s-in', 2); }
+      draw();
+    });
+  });
+  ['kg-s-q', 'kg-s-r', 'kg-s-in'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

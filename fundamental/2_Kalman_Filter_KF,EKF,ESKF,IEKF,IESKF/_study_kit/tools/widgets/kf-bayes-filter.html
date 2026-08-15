@@ -1,0 +1,200 @@
+<!--
+  위젯 1 — Recursive bayes filter  (원문 §2.1, 식 (6)(7) 보조)
+
+  1차원 격자 위의 belief 를 직접 들고 다니며
+    prediction : bel_bar(x) = Σ p(x|x',u) bel(x')      ← 모션 모델과의 합성곱
+    correction : bel(x) = η p(z|x) bel_bar(x)          ← likelihood 를 곱하고 정규화
+  를 그대로 수행한다. 가우시안이 아닌 다봉 belief 로도 돌아가는 것이 핵심 —
+  칼만 필터는 이 필터를 belief 가 가우시안인 경우로 특수화한 것이다(§2.2).
+-->
+<div class="lab" id="w-bayes">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Recursive bayes filter — 예측은 합성곱, 보정은 곱셈</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §2.1 식 (6)(7) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p><b>PREDICT</b>를 누르면 belief가 제어입력 <code>u</code>만큼 밀리면서 모션 노이즈와
+       <b>합성곱</b>되어 퍼진다(식 6의 적분). <b>CORRECT</b>를 누르면 관측 likelihood를 곱하고
+       <code>η</code>로 정규화해 다시 확률분포로 만든다. <b>다봉 belief</b> 버튼으로 시작하면
+       가우시안이 아닌 belief에서도 그대로 돌아가는 것을 볼 수 있다 — 칼만 필터는 이 필터에
+       "belief가 가우시안"이라는 가정을 추가한 특수한 경우다(§2.2).</p>
+
+    <div class="btnrow">
+      <button class="predict" data-act="predict">PREDICT (식 6 아랫줄)</button>
+      <button class="correct" data-act="correct">CORRECT (식 6 윗줄)</button>
+      <button class="ghost" data-act="uniform">균일 belief로 초기화</button>
+      <button class="ghost" data-act="multi">다봉 belief로 초기화</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label><span>제어입력 u</span><b id="bf-v-u">1.50</b></label>
+        <input type="range" id="bf-s-u" min="-3" max="3" step="0.1" value="1.5">
+      </div>
+      <div class="slider">
+        <label><span>모션 노이즈 σ<sub>motion</sub></span><b id="bf-v-sm">0.60</b></label>
+        <input type="range" id="bf-s-sm" min="0.1" max="2" step="0.05" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>관측값 z</span><b id="bf-v-z">6.00</b></label>
+        <input type="range" id="bf-s-z" min="0" max="12" step="0.1" value="6">
+      </div>
+      <div class="slider">
+        <label><span>관측 노이즈 σ<sub>obs</sub></span><b id="bf-v-so">0.70</b></label>
+        <input type="range" id="bf-s-so" min="0.1" max="3" step="0.05" value="0.7">
+      </div>
+    </div>
+
+    <canvas id="bf-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>belief bel(x)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>직전 belief</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>likelihood p(z|x)</span>
+    </div>
+    <div class="readout" id="bf-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('bf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('bf-readout');
+  var N = 240, X0 = 0, X1 = 12, dx = (X1 - X0) / N;
+  var bel = new Float64Array(N), prev = new Float64Array(N);
+  var lastOp = '초기화', step = 0;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gx(i) { return X0 + (i + 0.5) * dx; }
+  function normalize(a) {
+    var s = 0, i;
+    for (i = 0; i < N; i++) s += a[i] * dx;
+    if (s > 0) for (i = 0; i < N; i++) a[i] /= s;
+    return s;
+  }
+
+  function initUniform() {
+    for (var i = 0; i < N; i++) bel[i] = (gx(i) > 1.5 && gx(i) < 3.5) ? 1 : 1e-6;
+    normalize(bel); prev.set(bel); lastOp = '균일(구간) belief로 초기화'; step = 0; draw();
+  }
+  function initMulti() {
+    for (var i = 0; i < N; i++) {
+      var x = gx(i);
+      bel[i] = Math.exp(-0.5 * Math.pow((x - 2.0) / 0.5, 2)) + 0.8 * Math.exp(-0.5 * Math.pow((x - 4.5) / 0.4, 2))
+             + 0.6 * Math.exp(-0.5 * Math.pow((x - 8.0) / 0.6, 2)) + 1e-6;
+    }
+    normalize(bel); prev.set(bel); lastOp = '다봉(multi-modal) belief로 초기화'; step = 0; draw();
+  }
+
+  // prediction: bel_bar(x) = Σ_{x'} p(x|x',u) bel(x') dx'   ← 식 (6) 아랫줄
+  function predict() {
+    var u = val('bf-s-u'), sm = val('bf-s-sm');
+    var nb = new Float64Array(N), i, j;
+    var half = Math.ceil(4 * sm / dx);
+    for (j = 0; j < N; j++) {
+      if (bel[j] < 1e-12) continue;
+      var mu = gx(j) + u;
+      var c = Math.round((mu - X0) / dx - 0.5);
+      for (i = Math.max(0, c - half); i < Math.min(N, c + half + 1); i++) {
+        nb[i] += bel[j] * Math.exp(-0.5 * Math.pow((gx(i) - mu) / sm, 2)) / (sm * Math.sqrt(2 * Math.PI)) * dx;
+      }
+    }
+    prev.set(bel); bel.set(nb); normalize(bel);
+    lastOp = 'PREDICT — 모션 모델과 합성곱'; step++; draw();
+  }
+
+  // correction: bel(x) = η p(z|x) bel_bar(x)   ← 식 (6) 윗줄
+  function correct() {
+    var z = val('bf-s-z'), so = val('bf-s-so');
+    prev.set(bel);
+    for (var i = 0; i < N; i++) {
+      bel[i] *= Math.exp(-0.5 * Math.pow((gx(i) - z) / so, 2)) / (so * Math.sqrt(2 * Math.PI));
+    }
+    var pre = normalize(bel);
+    lastOp = 'CORRECT — likelihood 곱 후 η = 1/' + pre.toFixed(4) + ' 로 정규화'; step++; draw();
+  }
+
+  function draw() {
+    document.getElementById('bf-v-u').textContent = val('bf-s-u').toFixed(2);
+    document.getElementById('bf-v-sm').textContent = val('bf-s-sm').toFixed(2);
+    document.getElementById('bf-v-z').textContent = val('bf-s-z').toFixed(2);
+    document.getElementById('bf-v-so').textContent = val('bf-s-so').toFixed(2);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 16, padT = 16, padB = 30, i;
+    var z = val('bf-s-z'), so = val('bf-s-so');
+    var lik = new Float64Array(N);
+    for (i = 0; i < N; i++) lik[i] = Math.exp(-0.5 * Math.pow((gx(i) - z) / so, 2)) / (so * Math.sqrt(2 * Math.PI));
+    var ymax = 0;
+    for (i = 0; i < N; i++) ymax = Math.max(ymax, bel[i], prev[i], lik[i]);
+    ymax = ymax > 0 ? ymax * 1.15 : 1;
+
+    function PX(x) { return padL + (W - padL - padR) * (x - X0) / (X1 - X0); }
+    function PY(y) { return H - padB - (H - padT - padB) * Math.min(y / ymax, 1); }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 12; t += 2) ctx.fillText(t, PX(t), H - padB + 15);
+    ctx.textAlign = 'left'; ctx.fillText('x', W - padR - 8, H - padB + 15);
+
+    // 직전 belief
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]); ctx.beginPath();
+    for (i = 0; i < N; i++) { var px = PX(gx(i)), py = PY(prev[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.stroke(); ctx.setLineDash([]);
+    // likelihood
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1.6; ctx.beginPath();
+    for (i = 0; i < N; i++) { var qx = PX(gx(i)), qy = PY(lik[i]); i ? ctx.lineTo(qx, qy) : ctx.moveTo(qx, qy); }
+    ctx.stroke();
+    // 현재 belief (채움)
+    ctx.beginPath(); ctx.moveTo(PX(X0), H - padB);
+    for (i = 0; i < N; i++) ctx.lineTo(PX(gx(i)), PY(bel[i]));
+    ctx.lineTo(PX(X1), H - padB); ctx.closePath();
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.22; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (i = 0; i < N; i++) { var rx = PX(gx(i)), ry = PY(bel[i]); i ? ctx.lineTo(rx, ry) : ctx.moveTo(rx, ry); }
+    ctx.stroke();
+    // 관측값 위치
+    ctx.strokeStyle = css('--correct'); ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(PX(z), padT); ctx.lineTo(PX(z), H - padB); ctx.stroke(); ctx.setLineDash([]);
+
+    var s0 = 0, m1 = 0, m2 = 0;
+    for (i = 0; i < N; i++) { s0 += bel[i] * dx; m1 += gx(i) * bel[i] * dx; }
+    for (i = 0; i < N; i++) m2 += Math.pow(gx(i) - m1, 2) * bel[i] * dx;
+    // 봉우리 개수 — 반경 8 격자 안에서 최대인 점만 센다 (평평한 꼭대기의 중복 계수 방지)
+    var peaks = 0, RAD = 8;
+    for (i = RAD; i < N - RAD; i++) {
+      if (bel[i] < 0.08 * ymax) continue;
+      var isMax = true;
+      for (var d = -RAD; d <= RAD; d++) if (d !== 0 && bel[i + d] > bel[i]) { isMax = false; break; }
+      if (isMax) { peaks++; i += RAD; }
+    }
+
+    out.innerHTML =
+      '스텝 ' + step + ' · 마지막 연산: <b>' + lastOp + '</b><br>' +
+      '∫bel(x)dx = <b>' + s0.toFixed(6) + '</b> (정규화 확인) · 평균 <b>' + m1.toFixed(3) +
+      '</b> · 분산 <b>' + m2.toFixed(3) + '</b> · 봉우리 <b>' + peaks + '</b>개<br>' +
+      (peaks > 1
+        ? '봉우리가 여러 개다 — 가우시안으로 표현할 수 없는 belief이지만 bayes filter는 그대로 동작한다'
+        : 'belief가 단봉이다 — 이 경우가 칼만 필터가 가정하는 상황이다 (식 15)');
+  }
+
+  document.querySelectorAll('#w-bayes [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'predict') predict();
+      else if (a === 'correct') correct();
+      else if (a === 'uniform') initUniform();
+      else initMulti();
+    });
+  });
+  ['bf-s-u', 'bf-s-sm', 'bf-s-z', 'bf-s-so'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  initMulti();
+})();
+</script>

@@ -1,0 +1,213 @@
+<!--
+  위젯 6 — ESKF 의 nominal + error 분해와 reset  (원문 §5, 식 (43)(57)(58)(59)(60) 보조)
+
+  1차원 비선형 시스템에서 ESKF 를 그대로 돌린다.
+    prediction : δx̂⁻ = F·δx̂ = 0 (항상 0),  x̂⁻ = f(x̂,0,u,0),  P⁻ = FPFᵀ + Q     ← 식 (57)
+    correction : K = P⁻/(P⁻+R),  δx̂ = K(z − h(x̂⁻)),  x̂ = x̂⁻ + δx̂,
+                 P = (1−K)P⁻,  그리고 reset: δx̂ ← 0, P ← GPGᵀ                    ← 식 (58)(60)
+  아래 패널이 δx̂ 의 궤적 — 보정에서 잠깐 값이 생겼다가 reset 으로 0 으로 돌아가고,
+  언제나 원점 근처의 작은 값에 머문다는 것이 ESKF 의 핵심 주장이다(§5 도입부).
+-->
+<div class="lab" id="w-eskf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 6</span>
+    <span class="lab-title">ESKF — 에러 상태는 늘 원점 근처에 있다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §5 식 (43)(57)(58)(60) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>위 패널은 nominal 상태 <code>x̂</code>(파랑), 참값(회색), 관측(점)이다. <b>아래 패널이 에러 상태
+       <code>δx̂</code></b>로, prediction에서는 항상 0이고(식 57의 "Always 0") correction에서만 값이
+       생겼다가 <b>reset으로 즉시 0으로 돌아간다</b>(식 60). 비선형성을 키워도 nominal은 크게 휘지만
+       <code>δx̂</code>는 계속 작은 값에 머무는 것 — 이것이 "에러 상태는 항상 원점 근처라 선형화가
+       쉽다"는 §5 도입부의 주장이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>비선형성 a (f = x + u + a·sin x)</span><b id="es-v-a">1.20</b></label>
+        <input type="range" id="es-s-a" min="0" max="3" step="0.05" value="1.2">
+      </div>
+      <div class="slider">
+        <label><span>시스템 노이즈 Q</span><b id="es-v-q">0.050</b></label>
+        <input type="range" id="es-s-q" min="0.001" max="0.5" step="0.001" value="0.05">
+      </div>
+      <div class="slider">
+        <label><span>센서 노이즈 R</span><b id="es-v-r">0.400</b></label>
+        <input type="range" id="es-s-r" min="0.01" max="3" step="0.01" value="0.4">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="regen">새 시나리오</button>
+      <button class="ghost" data-act="noreset">reset 없이 돌려보기</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="es-canvas" width="880" height="380"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>참값 x<sub>true</sub></span>
+      <span><i class="swatch" style="background:var(--correct)"></i>관측 z</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>nominal x̂</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>error state δx̂</span>
+    </div>
+    <div class="readout" id="es-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('es-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('es-readout');
+  var T = 60, truth = [], meas = [], doReset = true;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function f(x, u, a) { return x + u + a * Math.sin(x); }
+  function F(x, a) { return 1 + a * Math.cos(x); }        // 에러 상태에 대한 자코비안 (식 46)
+
+  function regen() {
+    var a = val('es-s-a'), q = val('es-s-q'), r = val('es-s-r');
+    truth = []; meas = [];
+    var x = 0.3;
+    for (var t = 0; t < T; t++) {
+      x = f(x, 0.25, a) + Math.sqrt(q) * gauss();
+      truth.push(x);
+      meas.push(x + Math.sqrt(r) * gauss());
+    }
+    draw();
+  }
+
+  function run() {
+    var a = val('es-s-a'), q = val('es-s-q'), r = val('es-s-r');
+    // 초기 nominal 은 첫 관측으로 잡는다 (초기 과도 구간이 그림을 지배하지 않도록)
+    var xn = meas.length ? meas[0] : 0.3, P = r, acc = 0;
+    var nom = [], dxs = [], Ps = [];
+    for (var t = 0; t < T; t++) {
+      // prediction — 식 (57).  δx̂⁻ = F·0 = 0
+      var Ft = F(xn, a);
+      xn = f(xn, 0.25, a);
+      P = Ft * P * Ft + q;
+      // correction — 식 (58). H = 1
+      var K = P / (P + r);
+      var dx = K * (meas[t] - (xn + acc));   // δx̂_{t|t}
+      P = (1 - K) * P;
+      if (doReset) {
+        xn = xn + dx;                        // nominal 에 주입한 뒤
+        dxs.push(dx);                        // reset 직전 값을 기록하고
+        // reset: δx̂ ← 0 (식 60). 다음 스텝의 prediction 은 다시 0 에서 시작한다
+      } else {
+        acc += dx;                           // reset 을 하지 않으면 에러 상태에 계속 쌓인다
+        dxs.push(acc);
+      }
+      nom.push(xn + acc); Ps.push(P);
+    }
+    return { nom: nom, dxs: dxs, Ps: Ps };
+  }
+
+  function draw() {
+    document.getElementById('es-v-a').textContent = val('es-s-a').toFixed(2);
+    document.getElementById('es-v-q').textContent = val('es-s-q').toFixed(3);
+    document.getElementById('es-v-r').textContent = val('es-s-r').toFixed(3);
+    if (!truth.length) { regen(); return; }
+    var res = run();
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 380;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 52, padR = 16, i;
+    var topT = 18, topH = 190, botT = topT + topH + 46, botH = 96;
+    var all = truth.concat(meas, res.nom);
+    var y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
+    var m = (y1 - y0) * 0.08 + 0.3; y0 -= m; y1 += m;
+    function PX(t) { return padL + (W - padL - padR) * t / (T - 1); }
+    function PY(y) { return topT + topH * (1 - (y - y0) / (y1 - y0)); }
+
+    // 위 패널
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(padL, topT, W - padL - padR, topH);
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+      var yv = y0 + (y1 - y0) * g / 4;
+      ctx.fillText(yv.toFixed(1), padL - 6, PY(yv) + 4);
+    }
+    ctx.textAlign = 'left'; ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif';
+    ctx.fillText('nominal 상태 x̂ 와 참값', padL + 4, topT - 5);
+
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 2; ctx.beginPath();
+    truth.forEach(function (v, t) { t ? ctx.lineTo(PX(t), PY(v)) : ctx.moveTo(PX(t), PY(v)); });
+    ctx.stroke();
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.6;
+    meas.forEach(function (v, t) { ctx.beginPath(); ctx.arc(PX(t), PY(v), 2.2, 0, 6.2832); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2; ctx.beginPath();
+    res.nom.forEach(function (v, t) { t ? ctx.lineTo(PX(t), PY(v)) : ctx.moveTo(PX(t), PY(v)); });
+    ctx.stroke();
+
+    // 아래 패널 — δx̂
+    var dmax = Math.max(0.05, Math.max.apply(null, res.dxs.slice(1).map(Math.abs))) * 1.25;
+    function PY2(v) { return botT + botH / 2 - (botH / 2) * (v / dmax); }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(padL, botT, W - padL - padR, botH);
+    ctx.strokeStyle = css('--rule-soft');
+    ctx.beginPath(); ctx.moveTo(padL, PY2(0)); ctx.lineTo(W - padR, PY2(0)); ctx.stroke();
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('error state δx̂ — correction 에서 생겼다가 reset 으로 0 (식 60)', padL + 4, botT - 5);
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('+' + dmax.toFixed(2), padL - 6, PY2(dmax) + 10);
+    ctx.fillText('0', padL - 6, PY2(0) + 4);
+    ctx.fillText('−' + dmax.toFixed(2), padL - 6, PY2(-dmax));
+
+    var bw = (W - padL - padR) / T;
+    res.dxs.forEach(function (v, t) {
+      ctx.fillStyle = css('--predict');
+      ctx.fillRect(PX(t) - bw * 0.28, Math.min(PY2(0), PY2(v)), Math.max(1.5, bw * 0.56), Math.abs(PY2(v) - PY2(0)));
+      if (doReset) {   // reset 표시 — 막대 끝에서 0 으로 되돌아가는 점
+        ctx.fillStyle = css('--ink-faint');
+        ctx.beginPath(); ctx.arc(PX(t), PY2(0), 1.6, 0, 6.2832); ctx.fill();
+      }
+    });
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var s = 0; s <= 6; s++) ctx.fillText(Math.round((T - 1) * s / 6), PX((T - 1) * s / 6), botT + botH + 14);
+
+    var rmse = 0, maxNom = 0, maxDx = 0;
+    for (i = 0; i < T; i++) {
+      rmse += Math.pow(res.nom[i] - truth[i], 2);
+      maxNom = Math.max(maxNom, Math.abs(res.nom[i]));
+      if (i >= 1) maxDx = Math.max(maxDx, Math.abs(res.dxs[i]));   // 첫 스텝의 초기 과도는 제외
+    }
+    rmse = Math.sqrt(rmse / T);
+
+    out.innerHTML =
+      'RMSE(x̂ vs 참값) = <b>' + rmse.toFixed(4) + '</b> &nbsp;·&nbsp; 마지막 P<sub>t|t</sub> = <b>' +
+      res.Ps[T - 1].toFixed(4) + '</b><br>' +
+      'nominal 상태의 최대 크기 <b>' + maxNom.toFixed(2) + '</b> vs 에러 상태 δx̂ 의 최대 크기 <b>' +
+      maxDx.toFixed(3) + '</b> &nbsp;(비 <b>' + (maxNom / Math.max(1e-9, maxDx)).toFixed(0) + ' : 1</b>)<br>' +
+      (doReset
+        ? '→ 큰 비선형 값은 nominal 이 감당하고, 필터가 선형화해 다루는 δx 는 언제나 0 근처의 작은 값이다. '
+          + 'prediction 에서 δx̂ 는 <b>항상 0</b>이라 막대가 correction 에서만 생긴다 (식 57)'
+        : '→ <b>reset 을 끈 상태다.</b> δx̂ 가 계속 쌓여 더 이상 "원점 근처의 작은 값"이 아니게 되고, '
+          + '그만큼 선형화 지점에서 멀어진다. 식 (59)(60) 의 reset 이 필요한 이유다');
+  }
+
+  document.querySelectorAll('#w-eskf [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'noreset') { doReset = !doReset; draw(); }
+      else if (a === 'reset') {
+        document.getElementById('es-s-a').value = 1.2;
+        document.getElementById('es-s-q').value = 0.05;
+        document.getElementById('es-s-r').value = 0.4;
+        regen();
+      } else regen();
+    });
+  });
+  ['es-s-a', 'es-s-q', 'es-s-r'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', regen);
+  });
+  window.addEventListener('resize', draw);
+  regen();
+})();
+</script>

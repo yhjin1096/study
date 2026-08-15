@@ -1,0 +1,193 @@
+<!--
+  위젯 7 — IEKF 의 반복 보정  (원문 §6.3, 식 (69)(71) 보조)
+
+  1차원 비선형 관측 h(x) = sin(λx)/λ 에 대해 IEKF 의 반복 보정을 돌린다.
+      K_j  = P H_j (H_j P H_j + R)⁻¹
+      δx_j = K_j ( z − h(x̂_j) − H_j (x̂⁻ − x̂_j) )        ← 식 (69) 의 IEKF innovation
+      x̂_{j+1} = x̂_j + δx_j
+  j = 0 은 x̂_0 = x̂⁻ 이므로 정확히 EKF 의 한 스텝과 같다. 그 뒤 반복이 무엇을 더 하는지 보여준다.
+-->
+<div class="lab" id="w-iekf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 7</span>
+    <span class="lab-title">IEKF — 재선형화를 반복하면 어디로 가는가</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §6.3 식 (69)(71) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>검은 곡선이 MAP 비용 <code>C(x) = (z−h(x))²/R + (x−x̂⁻)²/P</code>이고, 점들이 반복이 만드는
+       <code>x̂<sub>t|t,j</sub></code>다. <b>첫 점(j=0)이 EKF의 결과</b>이고(식 69에서
+       <code>x̂<sub>t|t,0</sub> = x̂⁻</code>이라 소거항이 사라진다), 이후 반복이 비용의 최솟값 쪽으로
+       더 내려간다. 비선형성 <code>λ</code>를 키울수록 EKF의 한 걸음과 수렴점의 거리가 벌어진다.
+       반복은 원문 §9의 <b>식 (158)</b> 형태로 돌렸다 — 식 (71)을 문자 그대로 돌렸을 때 어디로 가는지는
+       회색 점선으로 함께 표시했다(readout의 ※ 참조).</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>비선형성 λ</span><b id="ik-v-l">0.90</b></label>
+        <input type="range" id="ik-s-l" min="0.05" max="1.6" step="0.01" value="0.9">
+      </div>
+      <div class="slider">
+        <label><span>예측 x̂⁻</span><b id="ik-v-xp">0.60</b></label>
+        <input type="range" id="ik-s-xp" min="-3" max="3" step="0.05" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>관측 z</span><b id="ik-v-z">0.95</b></label>
+        <input type="range" id="ik-s-z" min="-1.5" max="1.5" step="0.01" value="0.95">
+      </div>
+      <div class="slider">
+        <label><span>반복 횟수 j</span><b id="ik-v-n">6</b></label>
+        <input type="range" id="ik-s-n" min="1" max="12" step="1" value="6">
+      </div>
+      <div class="slider">
+        <label><span>예측 분산 P</span><b id="ik-v-p">1.00</b></label>
+        <input type="range" id="ik-s-p" min="0.05" max="4" step="0.05" value="1">
+      </div>
+      <div class="slider">
+        <label><span>센서 분산 R</span><b id="ik-v-r">0.10</b></label>
+        <input type="range" id="ik-s-r" min="0.01" max="2" step="0.01" value="0.1">
+      </div>
+    </div>
+
+    <canvas id="ik-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>MAP 비용 C(x)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>x̂⁻ (예측)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>j = 0 (= EKF)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>이후 반복 (식 158)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>식 (71) 문자 그대로</span>
+    </div>
+    <div class="readout" id="ik-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('ik-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('ik-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function h(x, l) { return Math.sin(l * x) / l; }
+  function dh(x, l) { return Math.cos(l * x); }
+
+  // (71) 을 문자 그대로:  x̂_{j+1} = x̂_j + K(z − h(x̂_j) − H(x̂⁻ − x̂_j))
+  function iterate71() {
+    var l = val('ik-s-l'), xp = val('ik-s-xp'), z = val('ik-s-z');
+    var n = Math.round(val('ik-s-n')), P = val('ik-s-p'), R = val('ik-s-r');
+    var xs = [xp], x = xp;
+    for (var j = 0; j < n; j++) {
+      var H = dh(x, l);
+      var K = P * H / (H * P * H + R);
+      x = x + K * (z - h(x, l) - H * (xp - x));      // 식 (69) 의 IEKF innovation
+      xs.push(x);
+    }
+    return xs;
+  }
+  // (158) 의 Gauss-Newton 형태: x̂_{j+1} = x̂⁻ + K(z − h(x̂_j) − H(x̂⁻ − x̂_j))
+  function iterate158() {
+    var l = val('ik-s-l'), xp = val('ik-s-xp'), z = val('ik-s-z');
+    var n = Math.round(val('ik-s-n')), P = val('ik-s-p'), R = val('ik-s-r');
+    var xs = [xp], x = xp;
+    for (var j = 0; j < n; j++) {
+      var H = dh(x, l);
+      var K = P * H / (H * P * H + R);
+      x = xp + K * (z - h(x, l) - H * (xp - x));
+      xs.push(x);
+    }
+    return xs;
+  }
+
+  function draw() {
+    var l = val('ik-s-l'), xp = val('ik-s-xp'), z = val('ik-s-z');
+    var P = val('ik-s-p'), R = val('ik-s-r');
+    document.getElementById('ik-v-l').textContent = l.toFixed(2);
+    document.getElementById('ik-v-xp').textContent = xp.toFixed(2);
+    document.getElementById('ik-v-z').textContent = z.toFixed(2);
+    document.getElementById('ik-v-n').textContent = Math.round(val('ik-s-n'));
+    document.getElementById('ik-v-p').textContent = P.toFixed(2);
+    document.getElementById('ik-v-r').textContent = R.toFixed(2);
+
+    function C(x) { return Math.pow(z - h(x, l), 2) / R + Math.pow(x - xp, 2) / P; }
+    var xs = iterate158(), xs71 = iterate71();
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 50, padR = 18, padT = 18, padB = 32, i;
+    var X0 = -4, X1 = 4, N = 400;
+    var cmin = Infinity, cmax = -Infinity, cs = [];
+    for (i = 0; i <= N; i++) {
+      var c = C(X0 + (X1 - X0) * i / N);
+      cs.push(c); cmin = Math.min(cmin, c); cmax = Math.max(cmax, c);
+    }
+    cmax = Math.min(cmax, cmin + 60);
+    function PX(x) { return padL + (W - padL - padR) * (x - X0) / (X1 - X0); }
+    function PY(c) { return H - padB - (H - padT - padB) * Math.min((c - cmin) / (cmax - cmin || 1), 1); }
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var t = -4; t <= 4; t++) ctx.fillText(t, PX(t), H - padB + 15);
+    ctx.textAlign = 'left'; ctx.fillText('x', W - padR - 8, H - padB + 15);
+    ctx.fillText('MAP 비용 C(x)', 6, padT + 2);
+
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (i = 0; i <= N; i++) {
+      var xx = X0 + (X1 - X0) * i / N;
+      i ? ctx.lineTo(PX(xx), PY(cs[i])) : ctx.moveTo(PX(xx), PY(cs[i]));
+    }
+    ctx.stroke();
+
+    // 반복점 — (158) 형태
+    xs.forEach(function (x, j) {
+      var col = j === 0 ? '--predict' : (j === 1 ? '--accent' : '--correct');
+      ctx.strokeStyle = css(col); ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(PX(x), PY(C(x))); ctx.lineTo(PX(x), H - padB); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = css(col);
+      ctx.beginPath(); ctx.arc(PX(x), PY(C(x)), j <= 1 ? 5 : 3.4, 0, 6.2832); ctx.fill();
+      if (j <= 1) {
+        ctx.fillStyle = css('--ink-faint'); ctx.font = '10.5px system-ui, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(j === 0 ? 'x̂⁻' : 'j=0 (EKF)', PX(x), PY(C(x)) - 10);
+      }
+    });
+    // (71) 을 문자 그대로 돌린 마지막 점 — 비교용
+    var f71 = xs71[xs71.length - 1];
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(PX(f71), padT); ctx.lineTo(PX(f71), H - padB); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10.5px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('(71) 문자 그대로', PX(f71), padT + 12);
+
+    var ekf = xs[1], fin = xs[xs.length - 1];
+    // 수치적 최솟값 (격자 탐색 + 이분 정밀화)
+    var bi = 0; for (i = 1; i <= N; i++) if (cs[i] < cs[bi]) bi = i;
+    var xopt = X0 + (X1 - X0) * bi / N;
+    for (var k = 0; k < 60; k++) {
+      var step = (X1 - X0) / N / Math.pow(2, k / 6 + 1);
+      if (C(xopt - step) < C(xopt)) xopt -= step; else if (C(xopt + step) < C(xopt)) xopt += step;
+    }
+
+    out.innerHTML =
+      'x̂⁻ = ' + xp.toFixed(4) + ' → <b>j=0 (EKF): ' + ekf.toFixed(4) + '</b> → j=' + (xs.length - 2) +
+      ': <b>' + fin.toFixed(4) + '</b> &nbsp;·&nbsp; 비용 C(x)의 수치 최적점 <b>' + xopt.toFixed(4) + '</b><br>' +
+      '비용 &nbsp;C(x̂⁻) = ' + C(xp).toFixed(4) + ' → C(EKF) = <b>' + C(ekf).toFixed(4) +
+      '</b> → C(최종) = <b>' + C(fin).toFixed(4) + '</b> &nbsp;·&nbsp; 최적점과의 거리: EKF <b>' +
+      Math.abs(ekf - xopt).toFixed(4) + '</b> → 반복 후 <b>' + Math.abs(fin - xopt).toFixed(4) + '</b><br>' +
+      (Math.abs(ekf - fin) < 1e-3
+        ? '→ 거의 선형이라 한 번의 보정으로 충분하다. IEKF가 EKF와 같아지는 상황이다'
+        : '→ <b>반복이 실제로 이득을 준다.</b> EKF는 x̂⁻ 에서 한 번 선형화한 결과에 머무르고, 반복은 새 지점에서 다시 선형화해 최적점으로 내려간다') +
+      '<br><span style="opacity:.8">※ 위 반복은 원문 §9의 <b>식 (158)</b> 형태 ' +
+      '<code>x̂<sub>j+1</sub> = x̂⁻ + K(z − h(x̂<sub>j</sub>) − H(x̂⁻ − x̂<sub>j</sub>))</code> 로 돌린 것이다. ' +
+      '식 (71)을 문자 그대로 (<code>x̂<sub>j+1</sub> = x̂<sub>j</sub> + K(…)</code>) 돌리면 <b>' +
+      f71.toFixed(4) + '</b> 로 가서 비용 <b>' + C(f71).toFixed(4) + '</b>, 최적점과 <b>' +
+      Math.abs(f71 - xopt).toFixed(4) + '</b> 떨어진 곳에 수렴한다 — 자세한 내용은 문서 맨 아래 ' +
+      '"원문 그대로 둔 것" 참조</span>';
+  }
+
+  ['ik-s-l', 'ik-s-xp', 'ik-s-z', 'ik-s-n', 'ik-s-p', 'ik-s-r'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

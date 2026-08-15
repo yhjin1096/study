@@ -1,0 +1,184 @@
+<!--
+  위젯 8 — IESKF 와 IEKF 를 나란히  (원문 §7.1·7.3, 식 (71) vs (94) 보조)
+
+  같은 1차원 문제를 세 가지 식으로 동시에 돌린다.
+    IESKF (식 94)  : S = H J⁻¹ P J⁻ᵀ Hᵀ + R,  K = J⁻¹ P J⁻ᵀ Hᵀ S⁻¹,
+                     δx = K( z − h(x̂_j) + H J⁻¹(x̂_j − x̂⁻) ) − J⁻¹(x̂_j − x̂⁻),  x̂_{j+1} = x̂_j ⊞ δx
+    GN    (식 158) : x̂_{j+1} = x̂⁻ + K(z − h(x̂_j) − H(x̂⁻ − x̂_j))
+    IEKF  (식 71)  : x̂_{j+1} = x̂_j + K(z − h(x̂_j) − H(x̂⁻ − x̂_j))
+  J = 1 이면 (94) 와 (158) 은 항등적으로 같다. (71) 은 −J⁻¹(x̂_j − x̂⁻) 항이 없어 다른 점으로 간다 —
+  노트 맨 아래 "원문 그대로 둔 것" 참조.
+-->
+<div class="lab" id="w-ieskf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 8</span>
+    <span class="lab-title">IESKF vs IEKF — J = 1 이면 같은 식이다</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §7.1·7.3 식 (71)(94) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>같은 문제를 <b>IESKF(식 94)</b>, <b>§9의 Gauss-Newton 형태(식 158)</b>, <b>IEKF(식 71)</b>
+       세 가지로 반복해 푼다. <code>J = 1</code>(평평한 공간)로 두면 <b>(94)와 (158)이 완전히
+       포개진다</b> — IESKF는 "true 상태 대신 에러 상태를 반복 추정할 뿐"이라는 §7.1의 주장이 수치로
+       확인되는 지점이다. <code>J</code>를 1에서 벗어나게 하면(식 88의 manifold 자코비안) 둘이
+       갈라진다. 한편 (71)을 문자 그대로 돌리면 셋 중 혼자 다른 곳으로 가는데, 그 이유는 노트 맨 아래
+       <b>"원문 그대로 둔 것"</b>에 적어 두었다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>비선형성 λ</span><b id="is-v-l">0.90</b></label>
+        <input type="range" id="is-s-l" min="0.05" max="1.6" step="0.01" value="0.9">
+      </div>
+      <div class="slider">
+        <label><span>예측 x̂⁻</span><b id="is-v-xp">0.60</b></label>
+        <input type="range" id="is-s-xp" min="-3" max="3" step="0.05" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>관측 z</span><b id="is-v-z">0.95</b></label>
+        <input type="range" id="is-s-z" min="-1.5" max="1.5" step="0.01" value="0.95">
+      </div>
+      <div class="slider">
+        <label><span>J (평평한 공간이면 1)</span><b id="is-v-j">1.00</b></label>
+        <input type="range" id="is-s-j" min="0.5" max="2" step="0.01" value="1">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="j1">J = 1 로 (두 식이 같아진다)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="is-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>식 (158) GN</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>식 (94) IESKF</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>식 (71) IEKF</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>x̂⁻</span>
+    </div>
+    <div class="readout" id="is-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('is-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('is-readout');
+  var P = 1.0, R = 0.1, NIT = 8;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+  function h(x, l) { return Math.sin(l * x) / l; }
+  function dh(x, l) { return Math.cos(l * x); }
+
+  function runIEKF71(l, xp, z) {        // 식 (71) 을 문자 그대로
+    var x = xp, xs = [x];
+    for (var j = 0; j < NIT; j++) {
+      var H = dh(x, l);
+      var K = P * H / (H * P * H + R);
+      x = x + K * (z - h(x, l) - H * (xp - x));
+      xs.push(x);
+    }
+    return xs;
+  }
+  function runGN158(l, xp, z) {         // 식 (158) 의 Gauss-Newton 형태
+    var x = xp, xs = [x];
+    for (var j = 0; j < NIT; j++) {
+      var H = dh(x, l);
+      var K = P * H / (H * P * H + R);
+      x = xp + K * (z - h(x, l) - H * (xp - x));
+      xs.push(x);
+    }
+    return xs;
+  }
+  function runIESKF(l, xp, z, J) {      // 식 (94)
+    var x = xp, xs = [x];
+    for (var j = 0; j < NIT; j++) {
+      var H = dh(x, l);
+      var Pb = (1 / J) * P * (1 / J);                  // J⁻¹ P J⁻ᵀ
+      var S = H * Pb * H + R;
+      var K = Pb * H / S;
+      var c = (x - xp);                                // x̂_{t|t,j} − x̂⁻
+      var dx = K * (z - h(x, l) + H * (1 / J) * c) - (1 / J) * c;
+      x = x + dx;                                      // 평평한 공간에서 ⊞ 는 +
+      xs.push(x);
+    }
+    return xs;
+  }
+
+  function draw() {
+    var l = val('is-s-l'), xp = val('is-s-xp'), z = val('is-s-z'), J = val('is-s-j');
+    document.getElementById('is-v-l').textContent = l.toFixed(2);
+    document.getElementById('is-v-xp').textContent = xp.toFixed(2);
+    document.getElementById('is-v-z').textContent = z.toFixed(2);
+    document.getElementById('is-v-j').textContent = J.toFixed(2);
+
+    var A = runGN158(l, xp, z), B = runIESKF(l, xp, z, J), C71 = runIEKF71(l, xp, z);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 52, padR = 18, padT = 20, padB = 34, i;
+    var all = A.concat(B, C71), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
+    var m = Math.max(0.05, (y1 - y0) * 0.15); y0 -= m; y1 += m;
+    function PX(j) { return padL + (W - padL - padR) * j / NIT; }
+    function PY(v) { return H - padB - (H - padT - padB) * (v - y0) / (y1 - y0); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+      var yv = y0 + (y1 - y0) * g / 4;
+      ctx.beginPath(); ctx.moveTo(padL, PY(yv)); ctx.lineTo(W - padR, PY(yv)); ctx.stroke();
+      ctx.fillText(yv.toFixed(3), padL - 6, PY(yv) + 4);
+    }
+    ctx.textAlign = 'center';
+    for (i = 0; i <= NIT; i++) ctx.fillText(i, PX(i), H - padB + 15);
+    ctx.textAlign = 'left'; ctx.fillText('반복 j', padL, H - 6);
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+
+    // x̂⁻ 기준선
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(padL, PY(xp)); ctx.lineTo(W - padR, PY(xp)); ctx.stroke(); ctx.setLineDash([]);
+
+    function trace(arr, color, wid, rad) {
+      ctx.strokeStyle = css(color); ctx.lineWidth = wid; ctx.beginPath();
+      arr.forEach(function (v, j) { j ? ctx.lineTo(PX(j), PY(v)) : ctx.moveTo(PX(j), PY(v)); });
+      ctx.stroke();
+      ctx.fillStyle = css(color);
+      arr.forEach(function (v, j) { ctx.beginPath(); ctx.arc(PX(j), PY(v), rad, 0, 6.2832); ctx.fill(); });
+    }
+    trace(C71, '--ink-faint', 1.4, 2.2);
+    trace(A, '--accent', 3.2, 5);
+    trace(B, '--correct', 1.8, 2.6);
+
+    var diff = 0;
+    for (i = 0; i <= NIT; i++) diff = Math.max(diff, Math.abs(A[i] - B[i]));
+
+    var rows = '';
+    for (i = 0; i <= Math.min(4, NIT); i++) {
+      rows += 'j=' + i + ' &nbsp; (158) <b>' + A[i].toFixed(6) + '</b> &nbsp; (94) <b>' + B[i].toFixed(6) +
+        '</b> &nbsp; 차이 ' + Math.abs(A[i] - B[i]).toExponential(1) +
+        ' &nbsp;·&nbsp; (71) ' + C71[i].toFixed(6) + '<br>';
+    }
+    out.innerHTML = rows +
+      '(94) 와 (158) 의 전 구간 최대 차이 = <b>' + diff.toExponential(2) + '</b> → ' +
+      (diff < 1e-9
+        ? '<b>두 식이 완전히 동일하다.</b> J = 1 인 평평한 공간에서 식 (94) 는 식 (158) 로 환원된다 (§7.1)'
+        : 'J = ' + J.toFixed(2) + ' 이므로 manifold 보정 J⁻¹ 이 붙어 두 결과가 갈라진다') +
+      '<br>식 (71) 과의 최종 차이 = <b>' + Math.abs(A[NIT] - C71[NIT]).toExponential(2) + '</b>';
+  }
+
+  document.querySelectorAll('#w-ieskf [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.act === 'j1') set('is-s-j', 1);
+      else { set('is-s-l', 0.9); set('is-s-xp', 0.6); set('is-s-z', 0.95); set('is-s-j', 1); }
+      draw();
+    });
+  });
+  ['is-s-l', 'is-s-xp', 'is-s-z', 'is-s-j'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

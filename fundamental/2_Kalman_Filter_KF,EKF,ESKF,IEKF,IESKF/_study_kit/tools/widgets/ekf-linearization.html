@@ -1,0 +1,189 @@
+<!--
+  위젯 5 — EKF 의 1차 테일러 근사  (원문 §4, 식 (31)(32)(33) 보조)
+
+  비선형 관측 함수 h(x) = sin(λx)/λ 를 x̂ 에서 1차 선형화한다 (λ→0 이면 h(x)=x 로 선형).
+      H = ∂h/∂x|_{x̂} = cos(λx̂)                                    ← 식 (33)
+  EKF 는 z 의 분포를 N(h(x̂), H²σ²) 로 근사하는데, 실제 분포(몬테카를로)와 얼마나 벌어지는지
+  나란히 그려 EKF 의 한계를 눈으로 보여준다.
+-->
+<div class="lab" id="w-ekf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 5</span>
+    <span class="lab-title">EKF의 선형화 — 근사가 언제 깨지는가</span>
+    <span class="lab-note">원문에 없는 추가 요소 · §4 식 (31)~(33) 보조</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽은 비선형 관측 함수 <code>h(x)</code>와 <code>x̂</code>에서의 접선(1차 테일러 근사, 식 31)이다.
+       아래 가로로 누운 종 모양이 상태의 prior <code>𝒩(x̂, σ²)</code>이고, 오른쪽 세로 곡선이 그것이
+       <code>h</code>를 통과한 뒤의 분포다. <b>주황 히스토그램이 실제 분포, 파란 곡선이 EKF가 가정하는
+       𝒩(h(x̂), H²σ²)</b>다. 비선형성 <code>λ</code>나 <code>σ</code>를 키우면 둘이 벌어지기 시작하는데,
+       이것이 EKF의 선형화 오차이고 IEKF·ESKF가 줄이려는 대상이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>비선형성 λ (0이면 선형)</span><b id="el-v-l">0.60</b></label>
+        <input type="range" id="el-s-l" min="0.01" max="1.6" step="0.01" value="0.6">
+      </div>
+      <div class="slider">
+        <label><span>선형화 지점 x̂</span><b id="el-v-x">1.20</b></label>
+        <input type="range" id="el-s-x" min="-3" max="3" step="0.05" value="1.2">
+      </div>
+      <div class="slider">
+        <label><span>prior 표준편차 σ</span><b id="el-v-s">0.80</b></label>
+        <input type="range" id="el-s-s" min="0.05" max="2" step="0.05" value="0.8">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="linear">거의 선형으로 (λ → 0)</button>
+      <button class="ghost" data-act="bad">근사가 깨지는 설정</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="el-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>h(x)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>1차 근사 (기울기 H)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>실제 z 분포</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>prior 𝒩(x̂, σ²)</span>
+    </div>
+    <div class="readout" id="el-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('el-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('el-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+  function gauss() {
+    var u = 1 - Math.random(), v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function h(x, l) { return Math.sin(l * x) / l; }        // λ→0 이면 x
+  function dh(x, l) { return Math.cos(l * x); }           // 식 (33) 의 H
+
+  function draw() {
+    var l = val('el-s-l'), xh = val('el-s-x'), s = val('el-s-s');
+    document.getElementById('el-v-l').textContent = l.toFixed(2);
+    document.getElementById('el-v-x').textContent = xh.toFixed(2);
+    document.getElementById('el-v-s').textContent = s.toFixed(2);
+
+    var H = dh(xh, l), hx = h(xh, l);
+
+    // 실제 분포 — 몬테카를로
+    var M = 8000, zs = [], i;
+    for (i = 0; i < M; i++) zs.push(h(xh + s * gauss(), l));
+    var mz = 0; for (i = 0; i < M; i++) mz += zs[i]; mz /= M;
+    var vz = 0; for (i = 0; i < M; i++) vz += (zs[i] - mz) * (zs[i] - mz); vz /= M;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, Hc = 360;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Hc * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, Hc);
+
+    var padL = 46, padT = 18, padB = 74, rightW = Math.min(200, W * 0.24);
+    var plotW = W - padL - rightW - 26;
+    var X0 = -3.6, X1 = 3.6;
+    var Y0 = -1 / Math.max(l, 0.2) - 0.4, Y1 = 1 / Math.max(l, 0.2) + 0.4;
+    Y0 = Math.max(Y0, -6); Y1 = Math.min(Y1, 6);
+    function PX(x) { return padL + plotW * (x - X0) / (X1 - X0); }
+    function PY(y) { return padT + (Hc - padT - padB) * (1 - (y - Y0) / (Y1 - Y0)); }
+
+    // 축
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, Hc - padB); ctx.lineTo(padL + plotW, Hc - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (var t = -3; t <= 3; t++) ctx.fillText(t, PX(t), Hc - padB + 14);
+    ctx.textAlign = 'left'; ctx.fillText('x (상태)', padL + plotW - 52, Hc - padB + 14);
+    ctx.fillText('z = h(x)', 6, padT + 4);
+
+    // h(x)
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.4; ctx.beginPath();
+    for (i = 0; i <= 400; i++) {
+      var x = X0 + (X1 - X0) * i / 400;
+      i ? ctx.lineTo(PX(x), PY(h(x, l))) : ctx.moveTo(PX(x), PY(h(x, l)));
+    }
+    ctx.stroke();
+    // 1차 근사
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(PX(X0), PY(hx + H * (X0 - xh)));
+    ctx.lineTo(PX(X1), PY(hx + H * (X1 - xh)));
+    ctx.stroke(); ctx.setLineDash([]);
+    // 선형화 지점
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(xh), PY(hx), 4.5, 0, 6.2832); ctx.fill();
+
+    // 아래쪽: prior 분포 (가로)
+    var by = Hc - padB + 22, bh = 40;
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.8; ctx.beginPath();
+    for (i = 0; i <= 200; i++) {
+      var xx = X0 + (X1 - X0) * i / 200;
+      var v = Math.exp(-0.5 * (xx - xh) * (xx - xh) / (s * s));
+      var yy = by + bh - bh * v;
+      i ? ctx.lineTo(PX(xx), yy) : ctx.moveTo(PX(xx), yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '10.5px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('prior 𝒩(x̂, σ²)', padL + 2, by + bh + 12);
+
+    // 오른쪽: z 분포 (세로) — 실제 히스토그램 vs EKF 가정
+    var rx = padL + plotW + 20, rw = rightW;
+    var NB = 44, hist = new Array(NB).fill(0);
+    for (i = 0; i < M; i++) {
+      var b = Math.floor((zs[i] - Y0) / (Y1 - Y0) * NB);
+      if (b >= 0 && b < NB) hist[b]++;
+    }
+    var bw = (Y1 - Y0) / NB;
+    var dens = hist.map(function (c) { return c / (M * bw); });
+    var sdl = Math.abs(H) * s;
+    var gmax = sdl > 1e-6 ? 1 / (sdl * Math.sqrt(2 * Math.PI)) : 1;
+    var dmax = Math.max(Math.max.apply(null, dens), gmax) * 1.1;
+    ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.5;
+    for (i = 0; i < NB; i++) {
+      var y0p = PY(Y0 + i * bw), y1p = PY(Y0 + (i + 1) * bw);
+      ctx.fillRect(rx, y1p, rw * (dens[i] / dmax), y0p - y1p - 0.5);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (i = 0; i <= 200; i++) {
+      var zz = Y0 + (Y1 - Y0) * i / 200;
+      var gv = sdl > 1e-6 ? Math.exp(-0.5 * (zz - hx) * (zz - hx) / (sdl * sdl)) / (sdl * Math.sqrt(2 * Math.PI)) : 0;
+      i ? ctx.lineTo(rx + rw * (gv / dmax), PY(zz)) : ctx.moveTo(rx + rw * (gv / dmax), PY(zz));
+    }
+    ctx.stroke();
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, padT); ctx.lineTo(rx, Hc - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-soft'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('z 의 분포', rx + 4, padT + 10);
+
+    var dm = Math.abs(mz - hx), dv = Math.abs(vz - sdl * sdl);
+    out.innerHTML =
+      '식 (33) &nbsp;H = ∂h/∂x|<sub>x̂</sub> = cos(λx̂) = <b>' + H.toFixed(4) + '</b> &nbsp;·&nbsp; h(x̂) = <b>' +
+      hx.toFixed(4) + '</b><br>' +
+      'EKF 가정 &nbsp;평균 <b>' + hx.toFixed(4) + '</b>, 분산 H²σ² = <b>' + (sdl * sdl).toFixed(4) + '</b><br>' +
+      '실제(표본 ' + M + '개) &nbsp;평균 <b>' + mz.toFixed(4) + '</b>, 분산 <b>' + vz.toFixed(4) + '</b>' +
+      ' &nbsp;·&nbsp; 차이 <b>' + dm.toFixed(4) + '</b> / <b>' + dv.toFixed(4) + '</b><br>' +
+      (dm < 0.02 && dv < 0.05
+        ? '→ 선형화 오차가 거의 없다. 이 영역에서는 EKF가 KF만큼 잘 동작한다'
+        : '→ <b>선형화 오차가 눈에 띈다.</b> σ가 크거나 h가 굽을수록 커지며, EKF의 추정이 이만큼 치우친다');
+  }
+
+  document.querySelectorAll('#w-ekf [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'linear') { set('el-s-l', 0.05); set('el-s-s', 0.8); }
+      else if (a === 'bad') { set('el-s-l', 1.4); set('el-s-x', 1.1); set('el-s-s', 1.6); }
+      else { set('el-s-l', 0.6); set('el-s-x', 1.2); set('el-s-s', 0.8); }
+      draw();
+    });
+  });
+  ['el-s-l', 'el-s-x', 'el-s-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
