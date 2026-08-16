@@ -110,7 +110,8 @@ def _label(m):
 def toc_sections():
     """0_Contents.md 에서 절 번호를 수집."""
     txt = open(os.path.join(KIT, "0_Contents.md"), encoding="utf-8").read()
-    secs = set(re.findall(r"^\s*-?\s*(\d+\.\d+(?:\.\d+)?)\s", txt, re.M))
+    # 목록 항목("- 2.1 …")과 표 행("| 2.1 | …") 두 형식을 모두 읽는다
+    secs = set(re.findall(r"^\s*[-|]?\s*(\d+\.\d+(?:\.\d+)?)\s*[\s|]", txt, re.M))
     secs |= set(re.findall(r"###\s*(\d+)장", txt))
     return secs
 

@@ -12216,12 +12216,23 @@ window.MathJax = {
       box.style.fontSize = '';
       var eq = box.querySelector('mjx-container');
       if (!eq) return;
-      var avail = box.clientWidth - 2;
-      var need = eq.getBoundingClientRect().width;
-      if (need > avail && need > 0) {
-        // 0.99 로는 몇 픽셀씩 넘치는 수식이 있었다 (창 폭에 따라 1% 남짓). 0.97 로 여유를 준다.
-        var ratio = Math.max(MIN, (avail / need) * 0.97);
+      // 넘침 판정은 컨테이너가 아니라 박스 자신의 scrollWidth 로 한다.
+      // mjx-container 의 bounding rect 는 실제로 넘치는 폭과 다를 수 있다.
+      if (box.scrollWidth > box.clientWidth + 1) {
+        var avail = box.clientWidth - 2;
+        var need = eq.getBoundingClientRect().width;
+        var ratio = need > 0 ? Math.max(MIN, (avail / need) * 0.97) : 1;
         box.style.fontSize = (ratio * 100).toFixed(1) + '%';
+        // 폰트 크기와 렌더 폭이 정확히 비례하지 않는다 (MathJax SVG 의 반올림·최소폭).
+        // 한 번만 계산하면 창 폭에 따라 몇 픽셀씩 넘치는 수식이 남는다 —
+        // 그래서 재보고 다시 줄이기를 몇 번 반복한다. (3_Pitfalls C7)
+        for (var pass = 0; pass < 6 && ratio > MIN; pass++) {
+          var over = box.scrollWidth - box.clientWidth;
+          if (over <= 1) break;
+          var w = box.clientWidth - 2;
+          ratio = Math.max(MIN, ratio * (w / (w + over)) * 0.99);
+          box.style.fontSize = (ratio * 100).toFixed(1) + '%';
+        }
         box.dataset.fitted = ratio.toFixed(2);
       } else {
         delete box.dataset.fitted;
