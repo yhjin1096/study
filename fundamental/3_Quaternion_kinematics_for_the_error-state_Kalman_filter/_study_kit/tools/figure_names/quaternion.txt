@@ -1,0 +1,23 @@
+# Notes on Quaternion kinematics — 그림 파일명 매핑
+# 형식:  Figure N = 파일명(확장자 제외)
+# 원문 캡션이 flat 형식(Figure 1: 설명)이라 장 번호가 없다. 쪽번호를 파일명에 넣어 식별한다.
+
+Figure 1  = fig01_p10_3d_vector_rotation
+Figure 2  = fig02_p13_so3_trajectory
+Figure 3  = fig03_p15_exp_log_map
+Figure 4  = fig04_p17_unit_quaternion_manifold_S3
+Figure 5  = fig05_p18_S3_tangent_space
+Figure 6  = fig06_p20_double_cover
+Figure 7  = fig07_p22_quaternion_composition
+Figure 8  = fig08_p23_slerp_linear_interpolation
+Figure 9  = fig09_p24_slerp_q_perp
+Figure 10 = fig10_p25_slerp_negative_q1
+Figure 11 = fig11_p26_rotation_in_R2_R3
+Figure 12 = fig12_p26_isoclinic_two_planes
+Figure 13 = fig13_p27_q_x_q_rotation
+Figure 14 = fig14_p28_q_x_qconj_rotation
+Figure 15 = fig15_p34_right_jacobian
+Figure 16 = fig16_p39_zeroth_first_order_integration
+Figure 17 = fig17_p39_forward_midward_backward_integration
+Figure 18 = fig18_p43_state_variable_table
+Figure 19 = fig19_p57_global_error_state_table

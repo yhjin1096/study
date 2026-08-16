@@ -1,0 +1,262 @@
+<!--
+  실험 9 — 지역 섭동 vs 전역 섭동
+  대응: 4.4.1 Local perturbations, 4.4.2 Global perturbations
+-->
+<div class="lab" id="w-local-vs-global-perturbation">
+  <div class="lab-head">
+    <span class="lab-tag">실험 9</span>
+    <span class="lab-title">지역 섭동과 전역 섭동 &mdash; 같은 δθ, 다른 결과</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p>같은 크기의 각 에러 <code>δθ</code>라도 <b>어느 쪽에서 곱하느냐</b>에 따라 다른 자세가 된다.
+       <code>q ⊗ Exp(δθ)</code>는 <b>물체 좌표계</b>에서 δθ만큼 돌리는 것이고(4.4.1절),
+       <code>Exp(δθ) ⊗ q</code>는 <b>월드 좌표계</b>에서 돌리는 것이다(4.4.2절).
+       두 관점은 <code>δθ<sub>global</sub> = R·δθ<sub>local</sub></code>로 이어지며,
+       readout에서 이 관계가 정확히 성립하는지 검산한다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>기준 자세 각 θ</span><b id="lp-v-th">70°</b></label>
+        <input type="range" id="lp-s-th" min="0" max="180" step="1" value="70"></div>
+      <div class="slider"><label><span>기준 축 방위각</span><b id="lp-v-az">25°</b></label>
+        <input type="range" id="lp-s-az" min="-180" max="180" step="1" value="25"></div>
+      <div class="slider"><label><span>기준 축 고도각</span><b id="lp-v-el">60°</b></label>
+        <input type="range" id="lp-s-el" min="-90" max="90" step="1" value="60"></div>
+      <div class="slider"><label><span>δθ 크기</span><b id="lp-v-dm">35°</b></label>
+        <input type="range" id="lp-s-dm" min="0" max="90" step="1" value="35"></div>
+      <div class="slider"><label><span>δθ 방향 (x/y/z 혼합)</span><b id="lp-v-dd">30°</b></label>
+        <input type="range" id="lp-s-dd" min="-180" max="180" step="1" value="30"></div>
+      <div class="slider"><label><span>시점 회전</span><b id="lp-v-yaw">-40°</b></label>
+        <input type="range" id="lp-s-yaw" min="-180" max="180" step="1" value="-40"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="tiny">δθ 를 아주 작게 (1°)</button>
+      <button class="ghost" data-act="id">기준 자세를 항등으로 (둘이 같아짐)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="lp-canvas" width="880" height="380"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--rule)"></i>기준 자세 q</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>q ⊗ Exp(δθ) &nbsp;지역</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>Exp(δθ) ⊗ q &nbsp;전역</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>δθ 방향</span>
+    </div>
+    <div class="readout" id="lp-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── 쿼터니언·3D 공용 헬퍼 (위젯마다 같은 블록을 넣는다. 두 번째부터는 재사용) ──
+  if (!window.QK) window.QK = (function () {
+    function mul(a, b) {                                   // 해밀턴 곱 — 식 (12)
+      return [a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+              a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+              a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+              a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]];
+    }
+    function conj(q) { return [q[0], -q[1], -q[2], -q[3]]; }          // 식 (25)
+    function nrm(q) { var s = 0; for (var i = 0; i < q.length; i++) s += q[i]*q[i]; return Math.sqrt(s); }
+    function unit(q) { var n = nrm(q) || 1; return q.map(function (v) { return v / n; }); }
+    function expq(v) {                                     // Exp(θu) — 식 (101)(105)
+      var t = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      if (t < 1e-12) return [1, v[0]/2, v[1]/2, v[2]/2];
+      var s = Math.sin(t/2) / t;
+      return [Math.cos(t/2), v[0]*s, v[1]*s, v[2]*s];
+    }
+    function logq(q) {                                     // Log(q) = uθ — 식 (110)
+      q = unit(q);
+      if (q[0] < 0) q = q.map(function (v) { return -v; });            // 최단 경로 (이중 덮개)
+      var n = Math.sqrt(q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+      if (n < 1e-12) return [0, 0, 0];
+      var t = 2 * Math.atan2(n, q[0]);
+      return [q[1]/n*t, q[2]/n*t, q[3]/n*t];
+    }
+    function toR(q) {                                      // R{q} — 식 (86)
+      var w = q[0], x = q[1], y = q[2], z = q[3];
+      return [[w*w+x*x-y*y-z*z, 2*(x*y-w*z),     2*(x*z+w*y)],
+              [2*(x*y+w*z),     w*w-x*x+y*y-z*z, 2*(y*z-w*x)],
+              [2*(x*z-w*y),     2*(y*z+w*x),     w*w-x*x-y*y+z*z]];
+    }
+    function rot(q, v) {                                   // q ⊗ v ⊗ q*
+      var r = mul(mul(q, [0, v[0], v[1], v[2]]), conj(q));
+      return [r[1], r[2], r[3]];
+    }
+    function mv(R, v) {
+      return [R[0][0]*v[0] + R[0][1]*v[1] + R[0][2]*v[2],
+              R[1][0]*v[0] + R[1][1]*v[1] + R[1][2]*v[2],
+              R[2][0]*v[0] + R[2][1]*v[1] + R[2][2]*v[2]];
+    }
+    function skew(v) { return [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]]; }
+    function mm(A, B) {
+      var C = [[0,0,0],[0,0,0],[0,0,0]];
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++)
+        for (var k = 0; k < 3; k++) C[i][j] += A[i][k]*B[k][j];
+      return C;
+    }
+    function axis(azDeg, elDeg) {                          // 방위각·고도각 → 단위축
+      var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+      return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+    }
+    function fromAA(u, th) { return expq([u[0]*th, u[1]*th, u[2]*th]); }
+    function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+    function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+    function sc(a, k) { return a.map(function (v) { return v * k; }); }
+
+    // ── 정사영 3D 장면 ──────────────────────────────────────────
+    function scene(ctx, cx, cy, s, yaw, pitch) {
+      var cy_ = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      function P(p) {                                      // 월드 → 화면
+        var X = p[0]*cy_ - p[1]*sy, Y = p[0]*sy + p[1]*cy_;
+        return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+      }
+      function head(A, B, col) {
+        var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+        ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+        ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      return {
+        P: P,
+        line: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore();
+        },
+        arrow: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore(); head(A, B, col);
+        },
+        poly: function (pts, col, w, dash) {
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) {
+            var A = P(pts[i]);
+            i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]);
+          }
+          ctx.stroke(); ctx.restore();
+        },
+        dot: function (p, col, r) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+        },
+        label: function (p, txt, col, dx, dy) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+          ctx.restore();
+        }
+      };
+    }
+    function circle3(n, r, N) {                            // n을 법선으로 하는 반지름 r 원
+      var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+      var e1 = unit([n[1]*a[2]-n[2]*a[1], n[2]*a[0]-n[0]*a[2], n[0]*a[1]-n[1]*a[0]]);
+      var e2 = [n[1]*e1[2]-n[2]*e1[1], n[2]*e1[0]-n[0]*e1[2], n[0]*e1[1]-n[1]*e1[0]];
+      var pts = [];
+      for (var i = 0; i <= (N || 64); i++) {
+        var t = i / (N || 64) * 2 * Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+        pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+      }
+      return pts;
+    }
+    function frame(S, R, len, cols, tag) {                 // 좌표축 세 개를 그린다
+      for (var i = 0; i < 3; i++) {
+        var e = [R[0][i]*len, R[1][i]*len, R[2][i]*len];
+        S.arrow([0,0,0], e, cols[i], 2);
+        if (tag) S.label(e, tag[i], cols[i]);
+      }
+    }
+    return { mul: mul, conj: conj, nrm: nrm, unit: unit, exp: expq, log: logq, toR: toR,
+             rot: rot, mv: mv, mm: mm, skew: skew, axis: axis, fromAA: fromAA,
+             add: add, sub: sub, sc: sc, scene: scene, circle3: circle3, frame: frame };
+  })();
+  var QK = window.QK;
+  var cv = document.getElementById('lp-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lp-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function f(x) { return (x >= 0 ? ' ' : '') + x.toFixed(4); }
+  function vs(v) { return '[' + f(v[0]) + ', ' + f(v[1]) + ', ' + f(v[2]) + ']'; }
+
+  function draw() {
+    var thD = val('lp-s-th'), az = val('lp-s-az'), el = val('lp-s-el');
+    var dm = val('lp-s-dm'), dd = val('lp-s-dd'), yawD = val('lp-s-yaw');
+    ['th','az','el','dm','dd','yaw'].forEach(function (k) {
+      document.getElementById('lp-v-' + k).textContent = val('lp-s-' + k) + '°';
+    });
+
+    var q = QK.fromAA(QK.axis(az, el), thD*Math.PI/180), R = QK.toR(q);
+    var dhat = QK.axis(dd, 20);                              // δθ 방향
+    var dL = QK.sc(dhat, dm*Math.PI/180);                    // 지역 좌표계에서 본 δθ
+    var dG = QK.mv(R, dL);                                   // 전역 좌표계에서 본 같은 섭동
+
+    var qLocal  = QK.mul(q, QK.exp(dL));                     // q ⊗ Exp(δθ_L)
+    var qGlobal = QK.mul(QK.exp(dL), q);                     // Exp(δθ_L) ⊗ q  ← 같은 숫자를 왼쪽에
+    var qCheck  = QK.mul(QK.exp(dG), q);                     // Exp(R δθ_L) ⊗ q  = q ⊗ Exp(δθ_L)
+    var same = QK.nrm(QK.log(QK.mul(QK.conj(qLocal), qCheck)));
+    var apart = QK.nrm(QK.log(QK.mul(QK.conj(qLocal), qGlobal)));
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 380;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    var s = Math.min(W*0.28, H*0.36);
+    var S = QK.scene(ctx, W/2, H/2 + 14, s, yawD*Math.PI/180, 0.38);
+
+    [[1,0,0],[0,1,0],[0,0,1]].forEach(function (n) { S.poly(QK.circle3(n, 1, 72), rule, 1); });
+    QK.frame(S, [[1,0,0],[0,1,0],[0,0,1]], 0.9, [soft, soft, soft], ['','','']);
+    QK.frame(S, R, 1.05, [rule, rule, rule], ['x','y','z']);
+    QK.frame(S, QK.toR(qLocal), 1.3, [css('--correct'), css('--correct'), css('--correct')], ['','','']);
+    QK.frame(S, QK.toR(qGlobal), 1.3, [css('--predict'), css('--predict'), css('--predict')], ['','','']);
+
+    // δθ 를 두 좌표계에서 각각 그린다
+    S.arrow([0,0,0], QK.sc(QK.unit(dG), 1.45), css('--accent'), 2.2);
+    S.label(QK.sc(QK.unit(dG), 1.45), 'δθ (물체계에서 본 것)', css('--accent'));
+    S.arrow([0,0,0], QK.sc(dhat, 1.45), css('--accent'), 1.6, [5,4]);
+    S.label(QK.sc(dhat, 1.45), 'δθ (월드계 성분 그대로)', css('--accent'), 7, 14);
+
+    ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = css('--correct'); ctx.fillText('q ⊗ Exp(δθ)  — 지역', 10, 20);
+    ctx.fillStyle = css('--predict'); ctx.fillText('Exp(δθ) ⊗ q  — 전역', 10, 38);
+    ctx.fillStyle = faint; ctx.fillText('두 자세가 벌어진 각 ' + (apart*180/Math.PI).toFixed(2) + '°', 10, 56);
+
+    out.innerHTML =
+      'q = Exp(' + thD + '° · 축) &nbsp;·&nbsp; δθ 성분 = <b>' + vs(dL) + '</b> (크기 ' +
+      QK.nrm(dL).toFixed(4) + ' rad)<br>' +
+      '같은 숫자를 왼쪽에 곱하면 두 자세가 <b>' + (apart*180/Math.PI).toFixed(3) + '°</b> 벌어진다 ' +
+      '&nbsp;— 물체계 δθ 와 월드계 δθ 는 다른 것이다.<br>' +
+      'R·δθ<sub>local</sub> = <b>' + vs(dG) + '</b> 를 왼쪽에 곱하면 지역 섭동과 <b>같아진다</b>: ' +
+      '차이 <b>' + same.toExponential(2) + ' rad</b><br>' +
+      '즉 &nbsp; q ⊗ Exp(δθ<sub>L</sub>) = Exp(R·δθ<sub>L</sub>) ⊗ q &nbsp; ' +
+      '(4.4절의 지역 ↔ 전역 관계) &nbsp;·&nbsp; ' +
+      (thD < 1 ? '<b>기준 자세가 항등이라 R = I, 둘이 같다.</b>' :
+        '기준 자세가 항등에서 멀수록 두 결과가 크게 벌어진다.');
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-local-vs-global-perturbation [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'tiny') set('lp-s-dm', 1);
+      else if (a === 'id') set('lp-s-th', 0);
+      else { set('lp-s-th', 70); set('lp-s-az', 25); set('lp-s-el', 60); set('lp-s-dm', 35); set('lp-s-dd', 30); }
+      draw();
+    });
+  });
+  ['lp-s-th','lp-s-az','lp-s-el','lp-s-dm','lp-s-dd','lp-s-yaw'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

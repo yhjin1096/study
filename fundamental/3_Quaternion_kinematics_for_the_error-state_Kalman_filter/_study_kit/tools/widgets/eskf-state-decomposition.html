@@ -1,0 +1,253 @@
+<!--
+  실험 11 — true = nominal ⊕ error
+  대응: 5.2~5.4 (식 240·242·243·262·263·264·268), 6.1~6.3 (식 272·280·282)
+-->
+<div class="lab" id="w-eskf-state-decomposition">
+  <div class="lab-head">
+    <span class="lab-tag">실험 11</span>
+    <span class="lab-title">세 가지 상태 &mdash; nominal 은 흘러가고, error 가 그것을 붙잡는다</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p>한 축(yaw)만 있는 IMU로 <b>식 (262)</b>의 nominal 적분과 <b>식 (263)·(268)</b>의 error 상태
+       전파를 그대로 돌린다. 상태는 <code>(θ, b)</code>, 에러는 <code>(δθ, δb)</code>,
+       <code>F<sub>x</sub> = [[1, −Δt], [0, 1]]</code>, <code>Q<sub>i</sub> = diag(σ<sub>ω</sub>²Δt², σ<sub>bw</sub>²Δt)</code>다.
+       가끔 들어오는 절대 방위 관측으로 <b>(272)</b> 보정 → <b>(280)</b> 주입 → <b>(282)</b> 리셋을 수행한다.
+       <b>nominal 만 쌓으면(점선) bias 때문에 계속 흘러가지만</b>, error 상태를 주입한 추정치는
+       참값을 따라간다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>자이로 노이즈 σ<sub>ω</sub></span><b id="es-v-sw">0.030</b></label>
+        <input type="range" id="es-s-sw" min="0" max="0.2" step="0.002" value="0.03"></div>
+      <div class="slider"><label><span>실제 bias b<sub>t</sub></span><b id="es-v-b">0.060</b></label>
+        <input type="range" id="es-s-b" min="-0.2" max="0.2" step="0.005" value="0.06"></div>
+      <div class="slider"><label><span>bias 랜덤워크 σ<sub>bw</sub></span><b id="es-v-bw">0.004</b></label>
+        <input type="range" id="es-s-bw" min="0" max="0.03" step="0.001" value="0.004"></div>
+      <div class="slider"><label><span>관측 주기</span><b id="es-v-iv">1.5 s</b></label>
+        <input type="range" id="es-s-iv" min="0.2" max="6" step="0.1" value="1.5"></div>
+      <div class="slider"><label><span>관측 노이즈 σ<sub>c</sub></span><b id="es-v-sc">0.050</b></label>
+        <input type="range" id="es-s-sc" min="0.005" max="0.3" step="0.005" value="0.05"></div>
+      <div class="slider"><label><span>길이 T</span><b id="es-v-T">20 s</b></label>
+        <input type="range" id="es-s-T" min="5" max="60" step="1" value="20"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="run">다시 실행 (새 노이즈)</button>
+      <button class="ghost" data-act="nocorr">보정 끄기 / 켜기</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="es-canvas" width="880" height="380"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>true θ<sub>t</sub></span>
+      <span><i class="swatch" style="background:var(--predict)"></i>nominal θ (보정 없이)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>추정 θ ⊕ δθ̂</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>±3σ 와 관측</span>
+    </div>
+    <div class="readout" id="es-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('es-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('es-readout');
+  var seed = 12345, useCorr = true;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  function rng(s) { var x = s; return function () { x = (x*1664525 + 1013904223) % 4294967296; return x/4294967296; }; }
+  function gaussMaker(r) {
+    return function () {
+      var u = 1 - r(), v = r();
+      return Math.sqrt(-2*Math.log(u + 1e-12))*Math.cos(2*Math.PI*v);
+    };
+  }
+
+  function simulate() {
+    var sw = val('es-s-sw'), bTrue0 = val('es-s-b'), sbw = val('es-s-bw');
+    var iv = val('es-s-iv'), sc = val('es-s-sc'), T = val('es-s-T');
+    var dt = 0.02, N = Math.round(T/dt);
+    var g = gaussMaker(rng(seed));
+
+    var thT = 0, bT = bTrue0;                       // true 상태
+    var th = 0, b = 0;                              // nominal 상태 (식 262)
+    var thDR = 0;                                   // 보정 없는 nominal (dead reckoning)
+    var P = [[0.01, 0], [0, 0.01]];                 // 에러 공분산
+    var rec = [], meas = [], nextM = iv;
+
+    for (var n = 0; n <= N; n++) {
+      var t = n*dt;
+      var wt = 0.6*Math.sin(0.5*t) + 0.25;          // 실제 각속도
+      // 자이로 측정 (식 238 1축판). 노이즈 표준편차를 σω 로 두어 식 (264) 의 Θi = σω²Δt² 와 맞춘다
+      var wm = wt + bT + sw*g();
+
+      rec.push({ t: t, thT: thT, th: th, thDR: thDR, P: P[0][0], b: b, bT: bT });
+
+      // ── prediction (식 262 nominal, 식 267·268 error) ──────────
+      th   += (wm - b)*dt;
+      thDR += (wm - 0)*dt;                          // bias 를 모른 채 그냥 쌓는 경우
+      // Fx = [[1, −Δt],[0,1]],  P ← Fx P Fxᵀ + Qi
+      var F00 = 1, F01 = -dt, F11 = 1;
+      var p00 = P[0][0], p01 = P[0][1], p11 = P[1][1];
+      var n00 = F00*p00*F00 + 2*F00*p01*F01 + F01*p11*F01 + sw*sw*dt*dt;   // Θi = σω²Δt²
+      var n01 = F00*p01*F11 + F01*p11*F11;
+      var n11 = F11*p11*F11 + sbw*sbw*dt;                                   // Ωi = σbw²Δt
+      P = [[n00, n01], [n01, n11]];
+
+      // 참값 전파
+      thT += wt*dt;
+      bT  += sbw*g()*Math.sqrt(dt);
+
+      // ── correction / injection / reset ─────────────────────────
+      if (useCorr && t >= nextM) {
+        nextM += iv;
+        var y = thT + sc*g();
+        meas.push([t, y]);
+        var S = P[0][0] + sc*sc;
+        var K0 = P[0][0]/S, K1 = P[0][1]/S;         // K = PHᵀ(HPHᵀ+V)⁻¹, H = [1 0]  (식 272)
+        var innov = y - th;
+        var dth = K0*innov, db = K1*innov;
+        var q00 = (1 - K0)*P[0][0], q01 = (1 - K0)*P[0][1];
+        var q11 = P[1][1] - K1*P[0][1];
+        P = [[q00, q01], [q01, q11]];
+        th += dth; b += db;                          // 주입 (식 280)
+        // 리셋 (식 282). 1축에서는 [½δθ]× = 0 이라 G = I 이고 P 는 변하지 않는다
+      }
+    }
+    return { rec: rec, meas: meas, dt: dt };
+  }
+
+  function draw() {
+    document.getElementById('es-v-sw').textContent = val('es-s-sw').toFixed(3);
+    document.getElementById('es-v-b').textContent = val('es-s-b').toFixed(3);
+    document.getElementById('es-v-bw').textContent = val('es-s-bw').toFixed(3);
+    document.getElementById('es-v-iv').textContent = val('es-s-iv').toFixed(1) + ' s';
+    document.getElementById('es-v-sc').textContent = val('es-s-sc').toFixed(3);
+    document.getElementById('es-v-T').textContent = val('es-s-T').toFixed(0) + ' s';
+
+    var sim = simulate(), rec = sim.rec, T = val('es-s-T');
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 380;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    ctx.font = '11px system-ui, sans-serif';
+
+    var padL = 54, padR = 14, gapY = 26;
+    var h1 = (H - gapY - 44)*0.62, h2 = (H - gapY - 44)*0.38;
+    var y1 = 22, y2 = y1 + h1 + gapY;
+    var aw = W - padL - padR;
+    function PX(t) { return padL + aw*t/T; }
+
+    // ── 위: 각도 ────────────────────────────────────────────────
+    (function () {
+      var lo = Infinity, hi = -Infinity;
+      rec.forEach(function (r) {
+        var s = 3*Math.sqrt(Math.max(r.P, 0));
+        lo = Math.min(lo, r.thT, r.th - s, r.thDR); hi = Math.max(hi, r.thT, r.th + s, r.thDR);
+      });
+      var pad = (hi - lo)*0.08 + 1e-6; lo -= pad; hi += pad;
+      function PY(v) { return y1 + h1 - h1*(v - lo)/(hi - lo); }
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('방위각 θ (rad)', 6, 14); ctx.font = '11px system-ui, sans-serif';
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, y1); ctx.lineTo(padL, y1 + h1); ctx.lineTo(W - padR, y1 + h1); ctx.stroke();
+      ctx.fillStyle = faint; ctx.textAlign = 'right';
+      for (var g = 0; g <= 3; g++) {
+        var vv = lo + (hi - lo)*g/3;
+        ctx.strokeStyle = soft; ctx.beginPath(); ctx.moveTo(padL, PY(vv)); ctx.lineTo(W - padR, PY(vv)); ctx.stroke();
+        ctx.fillStyle = faint; ctx.fillText(vv.toFixed(2), padL - 5, PY(vv) + 3);
+      }
+      // ±3σ 띠
+      ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.16; ctx.beginPath();
+      rec.forEach(function (r, i) {
+        var s = 3*Math.sqrt(Math.max(r.P, 0));
+        i ? ctx.lineTo(PX(r.t), PY(r.th + s)) : ctx.moveTo(PX(r.t), PY(r.th + s));
+      });
+      for (var i = rec.length - 1; i >= 0; i--) {
+        var s2 = 3*Math.sqrt(Math.max(rec[i].P, 0));
+        ctx.lineTo(PX(rec[i].t), PY(rec[i].th - s2));
+      }
+      ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+
+      function line(get, col, w, dash) {
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash);
+        ctx.beginPath();
+        rec.forEach(function (r, i) { i ? ctx.lineTo(PX(r.t), PY(get(r))) : ctx.moveTo(PX(r.t), PY(get(r))); });
+        ctx.stroke(); ctx.restore();
+      }
+      line(function (r) { return r.thDR; }, css('--predict'), 1.8, [6,4]);
+      line(function (r) { return r.thT; }, css('--ink'), 2);
+      line(function (r) { return r.th; }, css('--correct'), 2.2);
+      ctx.fillStyle = css('--accent');
+      sim.meas.forEach(function (m) {
+        ctx.beginPath(); ctx.arc(PX(m[0]), PY(m[1]), 3, 0, 6.2832); ctx.fill();
+      });
+    })();
+
+    // ── 아래: bias ──────────────────────────────────────────────
+    (function () {
+      var lo = Infinity, hi = -Infinity;
+      rec.forEach(function (r) { lo = Math.min(lo, r.b, r.bT); hi = Math.max(hi, r.b, r.bT); });
+      var pad = (hi - lo)*0.15 + 1e-3; lo -= pad; hi += pad;
+      function PY(v) { return y2 + h2 - h2*(v - lo)/(hi - lo); }
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('자이로 bias — 실선 추정 b, 굵은 선 실제 b_t', 6, y2 - 8);
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.strokeStyle = rule;
+      ctx.beginPath(); ctx.moveTo(padL, y2); ctx.lineTo(padL, y2 + h2); ctx.lineTo(W - padR, y2 + h2); ctx.stroke();
+      ctx.fillStyle = faint; ctx.textAlign = 'right';
+      [lo, (lo + hi)/2, hi].forEach(function (vv) {
+        ctx.strokeStyle = soft; ctx.beginPath(); ctx.moveTo(padL, PY(vv)); ctx.lineTo(W - padR, PY(vv)); ctx.stroke();
+        ctx.fillStyle = faint; ctx.fillText(vv.toFixed(3), padL - 5, PY(vv) + 3);
+      });
+      function line(get, col, w) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
+        rec.forEach(function (r, i) { i ? ctx.lineTo(PX(r.t), PY(get(r))) : ctx.moveTo(PX(r.t), PY(get(r))); });
+        ctx.stroke();
+      }
+      line(function (r) { return r.bT; }, css('--ink'), 2);
+      line(function (r) { return r.b; }, css('--correct'), 2);
+      ctx.fillStyle = faint; ctx.textAlign = 'center';
+      for (var t = 0; t <= T; t += Math.max(1, Math.round(T/8))) ctx.fillText(t + 's', PX(t), y2 + h2 + 14);
+    })();
+
+    var last = rec[rec.length - 1];
+    var errEst = Math.abs(last.th - last.thT), errDR = Math.abs(last.thDR - last.thT);
+    var rmsE = Math.sqrt(rec.reduce(function (s, r) { return s + (r.th - r.thT)*(r.th - r.thT); }, 0)/rec.length);
+    var rmsD = Math.sqrt(rec.reduce(function (s, r) { return s + (r.thDR - r.thT)*(r.thDR - r.thT); }, 0)/rec.length);
+    out.innerHTML =
+      (useCorr ? '' : '<b>보정을 껐다</b> — nominal 만 적분하는 dead-reckoning 이다.<br>') +
+      '마지막 시점 오차 &nbsp; 추정 <b>' + errEst.toFixed(4) + ' rad</b> · ' +
+      '보정 없는 nominal <b>' + errDR.toFixed(4) + ' rad</b> ' +
+      '(' + (errDR/(errEst + 1e-9)).toFixed(1) + '배)<br>' +
+      'RMS 오차 &nbsp; 추정 <b>' + rmsE.toFixed(4) + '</b> · nominal <b>' + rmsD.toFixed(4) + '</b>' +
+      ' &nbsp;·&nbsp; 마지막 3σ = <b>' + (3*Math.sqrt(last.P)).toFixed(4) + ' rad</b><br>' +
+      'bias &nbsp; 실제 <b>' + last.bT.toFixed(4) + '</b> → 추정 <b>' + last.b.toFixed(4) + '</b> ' +
+      '(오차 ' + Math.abs(last.b - last.bT).toFixed(4) + ') — ' +
+      'bias 는 자이로만으로는 관측되지 않고 <b>절대 관측이 들어와야</b> 잡힌다';
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-eskf-state-decomposition [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'run') seed = (seed*7919 + 13) % 2147483647;
+      else if (a === 'nocorr') useCorr = !useCorr;
+      else {
+        set('es-s-sw', 0.03); set('es-s-b', 0.06); set('es-s-bw', 0.004);
+        set('es-s-iv', 1.5); set('es-s-sc', 0.05); set('es-s-T', 20);
+        useCorr = true; seed = 12345;
+      }
+      draw();
+    });
+  });
+  ['es-s-sw','es-s-b','es-s-bw','es-s-iv','es-s-sc','es-s-T'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

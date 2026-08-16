@@ -1,0 +1,319 @@
+<!--
+  실험 2 — 지수·로그 사상
+  대응: 2.4 The exponential map (식 96~110)
+-->
+<div class="lab" id="w-quat-exp-log">
+  <div class="lab-head">
+    <span class="lab-tag">실험 2</span>
+    <span class="lab-title">exp / log &mdash; 3차원 벡터와 단위 쿼터니언을 오가기</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p>회전 벡터 <code>v = θu</code>를 넣으면 <b>식 (101)</b>의 급수가
+       <b>식 (105)</b>의 닫힌 형태 <code>[cos(θ/2), u sin(θ/2)]</code>로 수렴한다.
+       왼쪽은 급수를 <code>N</code>항에서 자른 결과의 오차, 오른쪽은 <code>θ</code>를 0에서 4π까지
+       움직였을 때 네 성분이 그리는 곡선이다 &mdash; <b>θ = 2π에서 q가 −1로 가고
+       4π에서야 되돌아온다</b>(이중 덮개). readout에서 <b>식 (110)</b>의 로그가 <code>v</code>를
+       그대로 되돌리는지 검산한다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>회전각 θ</span><b id="qe-v-th">120°</b></label>
+        <input type="range" id="qe-s-th" min="0" max="720" step="1" value="120"></div>
+      <div class="slider"><label><span>축 방위각</span><b id="qe-v-az">30°</b></label>
+        <input type="range" id="qe-s-az" min="-180" max="180" step="1" value="30"></div>
+      <div class="slider"><label><span>축 고도각</span><b id="qe-v-el">40°</b></label>
+        <input type="range" id="qe-s-el" min="-90" max="90" step="1" value="40"></div>
+      <div class="slider"><label><span>급수 항 수 N</span><b id="qe-v-n">4</b></label>
+        <input type="range" id="qe-s-n" min="0" max="16" step="1" value="4"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="pi">θ = 180°</button>
+      <button class="ghost" data-act="tau">θ = 360° (q = −1)</button>
+      <button class="ghost" data-act="two">θ = 720° (제자리)</button>
+    </div>
+
+    <canvas id="qe-canvas" width="880" height="320"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>실수부 q<sub>w</sub></span>
+      <span><i class="swatch" style="background:var(--accent)"></i>q<sub>x</sub></span>
+      <span><i class="swatch" style="background:var(--predict)"></i>q<sub>y</sub></span>
+      <span><i class="swatch" style="background:var(--correct)"></i>q<sub>z</sub></span>
+    </div>
+    <div class="readout" id="qe-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── 쿼터니언·3D 공용 헬퍼 (위젯마다 같은 블록을 넣는다. 두 번째부터는 재사용) ──
+  if (!window.QK) window.QK = (function () {
+    function mul(a, b) {                                   // 해밀턴 곱 — 식 (12)
+      return [a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+              a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+              a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+              a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]];
+    }
+    function conj(q) { return [q[0], -q[1], -q[2], -q[3]]; }          // 식 (25)
+    function nrm(q) { var s = 0; for (var i = 0; i < q.length; i++) s += q[i]*q[i]; return Math.sqrt(s); }
+    function unit(q) { var n = nrm(q) || 1; return q.map(function (v) { return v / n; }); }
+    function expq(v) {                                     // Exp(θu) — 식 (101)(105)
+      var t = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      if (t < 1e-12) return [1, v[0]/2, v[1]/2, v[2]/2];
+      var s = Math.sin(t/2) / t;
+      return [Math.cos(t/2), v[0]*s, v[1]*s, v[2]*s];
+    }
+    function logq(q) {                                     // Log(q) = uθ — 식 (110)
+      q = unit(q);
+      if (q[0] < 0) q = q.map(function (v) { return -v; });            // 최단 경로 (이중 덮개)
+      var n = Math.sqrt(q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+      if (n < 1e-12) return [0, 0, 0];
+      var t = 2 * Math.atan2(n, q[0]);
+      return [q[1]/n*t, q[2]/n*t, q[3]/n*t];
+    }
+    function toR(q) {                                      // R{q} — 식 (86)
+      var w = q[0], x = q[1], y = q[2], z = q[3];
+      return [[w*w+x*x-y*y-z*z, 2*(x*y-w*z),     2*(x*z+w*y)],
+              [2*(x*y+w*z),     w*w-x*x+y*y-z*z, 2*(y*z-w*x)],
+              [2*(x*z-w*y),     2*(y*z+w*x),     w*w-x*x-y*y+z*z]];
+    }
+    function rot(q, v) {                                   // q ⊗ v ⊗ q*
+      var r = mul(mul(q, [0, v[0], v[1], v[2]]), conj(q));
+      return [r[1], r[2], r[3]];
+    }
+    function mv(R, v) {
+      return [R[0][0]*v[0] + R[0][1]*v[1] + R[0][2]*v[2],
+              R[1][0]*v[0] + R[1][1]*v[1] + R[1][2]*v[2],
+              R[2][0]*v[0] + R[2][1]*v[1] + R[2][2]*v[2]];
+    }
+    function skew(v) { return [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]]; }
+    function mm(A, B) {
+      var C = [[0,0,0],[0,0,0],[0,0,0]];
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++)
+        for (var k = 0; k < 3; k++) C[i][j] += A[i][k]*B[k][j];
+      return C;
+    }
+    function axis(azDeg, elDeg) {                          // 방위각·고도각 → 단위축
+      var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+      return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+    }
+    function fromAA(u, th) { return expq([u[0]*th, u[1]*th, u[2]*th]); }
+    function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+    function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+    function sc(a, k) { return a.map(function (v) { return v * k; }); }
+
+    // ── 정사영 3D 장면 ──────────────────────────────────────────
+    function scene(ctx, cx, cy, s, yaw, pitch) {
+      var cy_ = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      function P(p) {                                      // 월드 → 화면
+        var X = p[0]*cy_ - p[1]*sy, Y = p[0]*sy + p[1]*cy_;
+        return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+      }
+      function head(A, B, col) {
+        var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+        ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+        ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      return {
+        P: P,
+        line: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore();
+        },
+        arrow: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore(); head(A, B, col);
+        },
+        poly: function (pts, col, w, dash) {
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) {
+            var A = P(pts[i]);
+            i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]);
+          }
+          ctx.stroke(); ctx.restore();
+        },
+        dot: function (p, col, r) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+        },
+        label: function (p, txt, col, dx, dy) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+          ctx.restore();
+        }
+      };
+    }
+    function circle3(n, r, N) {                            // n을 법선으로 하는 반지름 r 원
+      var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+      var e1 = unit([n[1]*a[2]-n[2]*a[1], n[2]*a[0]-n[0]*a[2], n[0]*a[1]-n[1]*a[0]]);
+      var e2 = [n[1]*e1[2]-n[2]*e1[1], n[2]*e1[0]-n[0]*e1[2], n[0]*e1[1]-n[1]*e1[0]];
+      var pts = [];
+      for (var i = 0; i <= (N || 64); i++) {
+        var t = i / (N || 64) * 2 * Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+        pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+      }
+      return pts;
+    }
+    function frame(S, R, len, cols, tag) {                 // 좌표축 세 개를 그린다
+      for (var i = 0; i < 3; i++) {
+        var e = [R[0][i]*len, R[1][i]*len, R[2][i]*len];
+        S.arrow([0,0,0], e, cols[i], 2);
+        if (tag) S.label(e, tag[i], cols[i]);
+      }
+    }
+    return { mul: mul, conj: conj, nrm: nrm, unit: unit, exp: expq, log: logq, toR: toR,
+             rot: rot, mv: mv, mm: mm, skew: skew, axis: axis, fromAA: fromAA,
+             add: add, sub: sub, sc: sc, scene: scene, circle3: circle3, frame: frame };
+  })();
+  var QK = window.QK;
+  var cv = document.getElementById('qe-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('qe-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function f(x) { return (x >= 0 ? ' ' : '') + x.toFixed(4); }
+  function qs(q) { return '[' + f(q[0]) + ', ' + f(q[1]) + ', ' + f(q[2]) + ', ' + f(q[3]) + ']'; }
+
+  // 식 (99)~(101): v = θu 에 대해 v^2 = −θ², v^3 = −θ²v, … 를 이용한 급수의 부분합
+  // e^{v/2} = Σ_{k} (1/k!) (v/2)^k,  실수부는 짝수 k, 벡터부는 홀수 k에서 나온다
+  function expSeries(v, N) {
+    var th = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    var u = th < 1e-12 ? [0,0,0] : [v[0]/th, v[1]/th, v[2]/th];
+    var h = th/2, w = 0, s = 0, term = 1;                 // term = h^k / k!
+    for (var k = 0; k <= N; k++) {
+      var sign = Math.pow(-1, Math.floor(k/2));
+      if (k % 2 === 0) w += sign*term; else s += sign*term;
+      term *= h/(k+1);
+    }
+    return [w, u[0]*s, u[1]*s, u[2]*s];
+  }
+
+  function draw() {
+    var thDeg = val('qe-s-th'), az = val('qe-s-az'), el = val('qe-s-el'), N = Math.round(val('qe-s-n'));
+    document.getElementById('qe-v-th').textContent = thDeg + '°';
+    document.getElementById('qe-v-az').textContent = az + '°';
+    document.getElementById('qe-v-el').textContent = el + '°';
+    document.getElementById('qe-v-n').textContent = N;
+
+    var th = thDeg*Math.PI/180, u = QK.axis(az, el);
+    var v = [u[0]*th, u[1]*th, u[2]*th];
+    var q = QK.exp(v), qN = expSeries(v, N), lv = QK.log(q);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 320;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var gap = 26, LW = (W - gap)*0.40, RW = W - gap - LW;
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 왼쪽: 항 수 N 에 따른 급수 오차 (로그 눈금) ──────────────
+    (function () {
+      var padL = 44, padT = 26, padB = 30, x0 = 4;
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left'; ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('급수를 N항에서 자른 오차  ‖q_N − q‖', x0, 16);
+      ctx.font = '11px system-ui, sans-serif';
+      var ax = x0 + padL, ay = padT, aw = LW - padL - 10, ah = H - padT - padB;
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay + ah); ctx.lineTo(ax + aw, ay + ah); ctx.stroke();
+      var lo = -16, hi = 1;                                // log10 범위
+      function PY(e) { return ay + ah - ah*(Math.max(lo, Math.min(hi, Math.log10(e + 1e-18))) - lo)/(hi - lo); }
+      ctx.textAlign = 'right'; ctx.fillStyle = faint;
+      for (var d = 0; d >= -15; d -= 5) {
+        var yy = PY(Math.pow(10, d));
+        ctx.strokeStyle = soft; ctx.beginPath(); ctx.moveTo(ax, yy); ctx.lineTo(ax + aw, yy); ctx.stroke();
+        ctx.fillText('1e' + d, ax - 5, yy + 3);
+      }
+      var maxN = 16;
+      ctx.textAlign = 'center';
+      for (var n = 0; n <= maxN; n++) {
+        var e = QK.nrm(QK.sub(expSeries(v, n), q));
+        var bx = ax + aw*(n + 0.5)/(maxN + 1), bw = aw/(maxN + 1)*0.62;
+        ctx.fillStyle = (n === N) ? css('--accent') : css('--predict');
+        ctx.globalAlpha = (n === N) ? 1 : 0.45;
+        ctx.fillRect(bx - bw/2, PY(e), bw, ay + ah - PY(e));
+        ctx.globalAlpha = 1;
+        if (n % 4 === 0) { ctx.fillStyle = faint; ctx.fillText(n, bx, ay + ah + 13); }
+      }
+      ctx.fillStyle = faint; ctx.fillText('N', ax + aw/2, ay + ah + 26);
+    })();
+
+    // ── 오른쪽: θ 에 따른 네 성분 (이중 덮개) ────────────────────
+    (function () {
+      var ox = LW + gap, padL = 34, padT = 26, padB = 30;
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left'; ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('θ 를 0 → 720° 로 돌렸을 때 q 의 네 성분', ox, 16);
+      ctx.font = '11px system-ui, sans-serif';
+      var ax = ox + padL, ay = padT, aw = RW - padL - 12, ah = H - padT - padB;
+      function PX(t) { return ax + aw*t/720; }
+      function PY(y) { return ay + ah/2 - (ah/2 - 4)*y; }
+      ctx.strokeStyle = soft; ctx.lineWidth = 1;
+      [-1, -0.5, 0.5, 1].forEach(function (y) {
+        ctx.beginPath(); ctx.moveTo(ax, PY(y)); ctx.lineTo(ax + aw, PY(y)); ctx.stroke();
+      });
+      ctx.strokeStyle = rule;
+      ctx.beginPath(); ctx.moveTo(ax, PY(0)); ctx.lineTo(ax + aw, PY(0)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay + ah); ctx.stroke();
+      ctx.fillStyle = faint; ctx.textAlign = 'center';
+      [0, 180, 360, 540, 720].forEach(function (t) {
+        ctx.fillText(t + '°', PX(t), ay + ah + 14);
+        if (t === 360) {
+          ctx.save(); ctx.strokeStyle = css('--accent'); ctx.setLineDash([3,3]);
+          ctx.beginPath(); ctx.moveTo(PX(t), ay); ctx.lineTo(PX(t), ay + ah); ctx.stroke(); ctx.restore();
+        }
+      });
+      var cols = [css('--ink'), css('--accent'), css('--predict'), css('--correct')];
+      for (var c = 0; c < 4; c++) {
+        ctx.strokeStyle = cols[c]; ctx.lineWidth = 1.9; ctx.beginPath();
+        for (var i = 0; i <= 240; i++) {
+          var t = 720*i/240, qq = QK.exp([u[0]*t*Math.PI/180, u[1]*t*Math.PI/180, u[2]*t*Math.PI/180]);
+          i ? ctx.lineTo(PX(t), PY(qq[c])) : ctx.moveTo(PX(t), PY(qq[c]));
+        }
+        ctx.stroke();
+      }
+      ctx.save(); ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.2; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(PX(thDeg), ay); ctx.lineTo(PX(thDeg), ay + ah); ctx.stroke(); ctx.restore();
+      for (var c2 = 0; c2 < 4; c2++) {
+        ctx.fillStyle = cols[c2];
+        ctx.beginPath(); ctx.arc(PX(thDeg), PY(q[c2]), 3.2, 0, 6.2832); ctx.fill();
+      }
+    })();
+
+    var back = QK.nrm(QK.sub(lv, v));
+    var wrapped = thDeg > 180 && thDeg < 540;
+    out.innerHTML =
+      'v = θu = <b>[' + f(v[0]) + ', ' + f(v[1]) + ', ' + f(v[2]) + ']</b> &nbsp; (θ = ' +
+      th.toFixed(4) + ' rad)<br>' +
+      'Exp(v) 닫힌 형태 = <b>' + qs(q) + '</b> &nbsp; &#8214;q&#8214; = <b>' + QK.nrm(q).toFixed(6) + '</b><br>' +
+      'N=' + N + ' 급수 부분합 = <b>' + qs(qN) + '</b> &nbsp; 오차 <b>' +
+      QK.nrm(QK.sub(qN, q)).toExponential(2) + '</b><br>' +
+      'Log(Exp(v)) = <b>[' + f(lv[0]) + ', ' + f(lv[1]) + ', ' + f(lv[2]) + ']</b> &nbsp; ' +
+      '되돌린 오차 <b>' + back.toExponential(2) + '</b>' +
+      (wrapped ? ' &nbsp;— θ가 (−π, π] 밖이라 <b>로그는 최단 경로로 되돌려 준다</b>. 회전은 같다.' : '');
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-quat-exp-log [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      set('qe-s-th', a === 'pi' ? 180 : a === 'tau' ? 360 : 720); draw();
+    });
+  });
+  ['qe-s-th','qe-s-az','qe-s-el','qe-s-n'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

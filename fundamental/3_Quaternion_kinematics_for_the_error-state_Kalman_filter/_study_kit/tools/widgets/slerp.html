@@ -1,0 +1,337 @@
+<!--
+  실험 6 — 구면 선형보간 (SLERP)
+  대응: 2.7 Spherical linear interpolation, Figure 8·9·10 (p.23~25)
+-->
+<div class="lab" id="w-slerp">
+  <div class="lab-head">
+    <span class="lab-tag">실험 6</span>
+    <span class="lab-title">SLERP &mdash; 등속으로 도는 보간, 그리고 −q₁ 문제</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p><code>q(t) = q₀ sin((1−t)Δθ)/sin Δθ + q₁ sin(tΔθ)/sin Δθ</code> (Davis 공식)는
+       <b>매 구간의 회전량이 같다</b>. 반면 그냥 성분을 직선보간한 뒤 정규화하는
+       <b>NLERP</b>는 같은 <code>t</code> 간격에서도 회전량이 들쭉날쭉하다 &mdash;
+       오른쪽 그래프의 두 곡선이 그 차이다.
+       <code>Δθ &gt; 90°</code>일 때 <b>q₁ 부호 뒤집기</b>를 누르면 먼 길 대신 짧은 길로
+       도는 것을 볼 수 있다 (Figure 10).</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>보간 파라미터 t</span><b id="sl-v-t">0.35</b></label>
+        <input type="range" id="sl-s-t" min="0" max="1" step="0.005" value="0.35"></div>
+      <div class="slider"><label><span>q₁ 회전각</span><b id="sl-v-th">150°</b></label>
+        <input type="range" id="sl-s-th" min="0" max="350" step="1" value="150"></div>
+      <div class="slider"><label><span>q₁ 축 방위각</span><b id="sl-v-az">55°</b></label>
+        <input type="range" id="sl-s-az" min="-180" max="180" step="1" value="55"></div>
+      <div class="slider"><label><span>q₁ 축 고도각</span><b id="sl-v-el">35°</b></label>
+        <input type="range" id="sl-s-el" min="-90" max="90" step="1" value="35"></div>
+      <div class="slider"><label><span>구간 수 N</span><b id="sl-v-n">12</b></label>
+        <input type="range" id="sl-s-n" min="4" max="40" step="1" value="12"></div>
+      <div class="slider"><label><span>시점 회전</span><b id="sl-v-yaw">-35°</b></label>
+        <input type="range" id="sl-s-yaw" min="-180" max="180" step="1" value="-35"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="flip">q₁ 부호 뒤집기 (−q₁)</button>
+      <button class="ghost" data-act="far">Δθ &gt; 90° 로 만들기</button>
+      <button class="ghost" data-act="anim">t 애니메이션</button>
+    </div>
+
+    <canvas id="sl-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--rule)"></i>q₀ (시작)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>q₁ (끝)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>SLERP</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>NLERP</span>
+    </div>
+    <div class="readout" id="sl-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── 쿼터니언·3D 공용 헬퍼 (위젯마다 같은 블록을 넣는다. 두 번째부터는 재사용) ──
+  if (!window.QK) window.QK = (function () {
+    function mul(a, b) {                                   // 해밀턴 곱 — 식 (12)
+      return [a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+              a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+              a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+              a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]];
+    }
+    function conj(q) { return [q[0], -q[1], -q[2], -q[3]]; }          // 식 (25)
+    function nrm(q) { var s = 0; for (var i = 0; i < q.length; i++) s += q[i]*q[i]; return Math.sqrt(s); }
+    function unit(q) { var n = nrm(q) || 1; return q.map(function (v) { return v / n; }); }
+    function expq(v) {                                     // Exp(θu) — 식 (101)(105)
+      var t = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      if (t < 1e-12) return [1, v[0]/2, v[1]/2, v[2]/2];
+      var s = Math.sin(t/2) / t;
+      return [Math.cos(t/2), v[0]*s, v[1]*s, v[2]*s];
+    }
+    function logq(q) {                                     // Log(q) = uθ — 식 (110)
+      q = unit(q);
+      if (q[0] < 0) q = q.map(function (v) { return -v; });            // 최단 경로 (이중 덮개)
+      var n = Math.sqrt(q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+      if (n < 1e-12) return [0, 0, 0];
+      var t = 2 * Math.atan2(n, q[0]);
+      return [q[1]/n*t, q[2]/n*t, q[3]/n*t];
+    }
+    function toR(q) {                                      // R{q} — 식 (86)
+      var w = q[0], x = q[1], y = q[2], z = q[3];
+      return [[w*w+x*x-y*y-z*z, 2*(x*y-w*z),     2*(x*z+w*y)],
+              [2*(x*y+w*z),     w*w-x*x+y*y-z*z, 2*(y*z-w*x)],
+              [2*(x*z-w*y),     2*(y*z+w*x),     w*w-x*x-y*y+z*z]];
+    }
+    function rot(q, v) {                                   // q ⊗ v ⊗ q*
+      var r = mul(mul(q, [0, v[0], v[1], v[2]]), conj(q));
+      return [r[1], r[2], r[3]];
+    }
+    function mv(R, v) {
+      return [R[0][0]*v[0] + R[0][1]*v[1] + R[0][2]*v[2],
+              R[1][0]*v[0] + R[1][1]*v[1] + R[1][2]*v[2],
+              R[2][0]*v[0] + R[2][1]*v[1] + R[2][2]*v[2]];
+    }
+    function skew(v) { return [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]]; }
+    function mm(A, B) {
+      var C = [[0,0,0],[0,0,0],[0,0,0]];
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++)
+        for (var k = 0; k < 3; k++) C[i][j] += A[i][k]*B[k][j];
+      return C;
+    }
+    function axis(azDeg, elDeg) {                          // 방위각·고도각 → 단위축
+      var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+      return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+    }
+    function fromAA(u, th) { return expq([u[0]*th, u[1]*th, u[2]*th]); }
+    function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+    function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+    function sc(a, k) { return a.map(function (v) { return v * k; }); }
+
+    // ── 정사영 3D 장면 ──────────────────────────────────────────
+    function scene(ctx, cx, cy, s, yaw, pitch) {
+      var cy_ = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      function P(p) {                                      // 월드 → 화면
+        var X = p[0]*cy_ - p[1]*sy, Y = p[0]*sy + p[1]*cy_;
+        return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+      }
+      function head(A, B, col) {
+        var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+        ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+        ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      return {
+        P: P,
+        line: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore();
+        },
+        arrow: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          ctx.restore(); head(A, B, col);
+        },
+        poly: function (pts, col, w, dash) {
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) {
+            var A = P(pts[i]);
+            i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]);
+          }
+          ctx.stroke(); ctx.restore();
+        },
+        dot: function (p, col, r) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+        },
+        label: function (p, txt, col, dx, dy) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+          ctx.restore();
+        }
+      };
+    }
+    function circle3(n, r, N) {                            // n을 법선으로 하는 반지름 r 원
+      var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+      var e1 = unit([n[1]*a[2]-n[2]*a[1], n[2]*a[0]-n[0]*a[2], n[0]*a[1]-n[1]*a[0]]);
+      var e2 = [n[1]*e1[2]-n[2]*e1[1], n[2]*e1[0]-n[0]*e1[2], n[0]*e1[1]-n[1]*e1[0]];
+      var pts = [];
+      for (var i = 0; i <= (N || 64); i++) {
+        var t = i / (N || 64) * 2 * Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+        pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+      }
+      return pts;
+    }
+    function frame(S, R, len, cols, tag) {                 // 좌표축 세 개를 그린다
+      for (var i = 0; i < 3; i++) {
+        var e = [R[0][i]*len, R[1][i]*len, R[2][i]*len];
+        S.arrow([0,0,0], e, cols[i], 2);
+        if (tag) S.label(e, tag[i], cols[i]);
+      }
+    }
+    return { mul: mul, conj: conj, nrm: nrm, unit: unit, exp: expq, log: logq, toR: toR,
+             rot: rot, mv: mv, mm: mm, skew: skew, axis: axis, fromAA: fromAA,
+             add: add, sub: sub, sc: sc, scene: scene, circle3: circle3, frame: frame };
+  })();
+  var QK = window.QK;
+  var cv = document.getElementById('sl-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('sl-readout');
+  var flipped = false, animating = false, raf = null, dir = 1;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function f(x) { return (x >= 0 ? ' ' : '') + x.toFixed(4); }
+  function dot4(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]; }
+
+  function slerp(q0, q1, t, dth) {                          // 식 (141) Davis 공식
+    if (dth < 1e-6) return QK.unit(q0.map(function (v, i) { return v*(1-t) + q1[i]*t; }));
+    var s = Math.sin(dth), a = Math.sin((1-t)*dth)/s, b = Math.sin(t*dth)/s;
+    return q0.map(function (v, i) { return v*a + q1[i]*b; });
+  }
+  function nlerp(q0, q1, t) {
+    return QK.unit(q0.map(function (v, i) { return v*(1-t) + q1[i]*t; }));
+  }
+  function angBetween(a, b) {
+    var d = Math.abs(dot4(QK.unit(a), QK.unit(b)));
+    return 2*Math.acos(Math.max(-1, Math.min(1, d)));       // 두 자세 사이의 회전각
+  }
+
+  function draw() {
+    var t = val('sl-s-t'), thD = val('sl-s-th'), az = val('sl-s-az'), el = val('sl-s-el');
+    var N = Math.round(val('sl-s-n')), yawD = val('sl-s-yaw');
+    document.getElementById('sl-v-t').textContent = t.toFixed(3);
+    document.getElementById('sl-v-th').textContent = thD + '°';
+    document.getElementById('sl-v-az').textContent = az + '°';
+    document.getElementById('sl-v-el').textContent = el + '°';
+    document.getElementById('sl-v-n').textContent = N;
+    document.getElementById('sl-v-yaw').textContent = yawD + '°';
+
+    var q0 = [1, 0, 0, 0];
+    var q1 = QK.fromAA(QK.axis(az, el), thD*Math.PI/180);
+    if (flipped) q1 = q1.map(function (v) { return -v; });
+    var c = dot4(q0, q1), dth = Math.acos(Math.max(-1, Math.min(1, c)));   // 식 (137)
+
+    var qs = slerp(q0, q1, t, dth), qn = nlerp(q0, q1, t);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    ctx.font = '12px system-ui, sans-serif';
+
+    // ── 왼쪽: 3D 좌표축 보간 ────────────────────────────────────
+    var LW = W*0.50;
+    (function () {
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.fillText('보간되는 자세 (굵은 축 = 현재 t)', 6, 16);
+      var s = Math.min(LW*0.26, H*0.30);
+      var S = QK.scene(ctx, LW/2, H/2 + 16, s, yawD*Math.PI/180, 0.38);
+      [[1,0,0],[0,1,0],[0,0,1]].forEach(function (n) { S.poly(QK.circle3(n, 1, 64), rule, 1); });
+      // 중간 자세들의 x축 자취
+      var tr = [];
+      for (var i = 0; i <= 60; i++) tr.push(QK.rot(slerp(q0, q1, i/60, dth), [1,0,0]));
+      S.poly(tr, css('--correct'), 1.6);
+      var tr2 = [];
+      for (var j = 0; j <= 60; j++) tr2.push(QK.rot(nlerp(q0, q1, j/60), [1,0,0]));
+      S.poly(tr2, css('--accent'), 1.4, [4,3]);
+      // N 등분점 — SLERP 는 간격이 고르고 NLERP 는 그렇지 않다
+      for (var k = 0; k <= N; k++) {
+        S.dot(QK.rot(slerp(q0, q1, k/N, dth), [1,0,0]), css('--correct'), 2.8);
+        S.dot(QK.sc(QK.rot(nlerp(q0, q1, k/N), [1,0,0]), 0.88), css('--accent'), 2.4);
+      }
+      QK.frame(S, QK.toR(q0), 1.0, [rule, rule, rule], ['','','']);
+      QK.frame(S, QK.toR(q1), 1.0, [css('--predict'), css('--predict'), css('--predict')], ['','','']);
+      QK.frame(S, QK.toR(qs), 1.2, [css('--correct'), css('--correct'), css('--correct')], ["x","y","z"]);
+    })();
+
+    // ── 오른쪽: 구간별 회전량 ───────────────────────────────────
+    (function () {
+      var ox = LW, RWv = W - LW, padL = 46, padT = 28, padB = 32;
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.fillText('구간 하나를 지날 때의 회전량 (°)', ox + 6, 16);
+      var ax = ox + padL, ay = padT, aw = RWv - padL - 14, ah = H - padT - padB;
+      var sl = [], nl = [], mx = 0;
+      for (var i = 0; i < N; i++) {
+        var a1 = angBetween(slerp(q0, q1, i/N, dth), slerp(q0, q1, (i+1)/N, dth))*180/Math.PI;
+        var a2 = angBetween(nlerp(q0, q1, i/N), nlerp(q0, q1, (i+1)/N))*180/Math.PI;
+        sl.push(a1); nl.push(a2); mx = Math.max(mx, a1, a2);
+      }
+      mx = Math.max(mx, 1e-6)*1.25;
+      function PX(i) { return ax + aw*(i + 0.5)/N; }
+      function PY(v) { return ay + ah - ah*v/mx; }
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay + ah); ctx.lineTo(ax + aw, ay + ah); ctx.stroke();
+      ctx.fillStyle = faint; ctx.textAlign = 'right'; ctx.font = '11px system-ui, sans-serif';
+      for (var g = 0; g <= 4; g++) {
+        var vv = mx*g/4, yy = PY(vv);
+        ctx.strokeStyle = soft; ctx.beginPath(); ctx.moveTo(ax, yy); ctx.lineTo(ax + aw, yy); ctx.stroke();
+        ctx.fillText(vv.toFixed(1), ax - 5, yy + 3);
+      }
+      function series(arr, col, dash) {
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; if (dash) ctx.setLineDash(dash);
+        ctx.beginPath();
+        arr.forEach(function (v, i) { i ? ctx.lineTo(PX(i), PY(v)) : ctx.moveTo(PX(i), PY(v)); });
+        ctx.stroke(); ctx.restore();
+        ctx.fillStyle = col;
+        arr.forEach(function (v, i) { ctx.beginPath(); ctx.arc(PX(i), PY(v), 2.6, 0, 6.2832); ctx.fill(); });
+      }
+      series(nl, css('--accent'), [5,3]);
+      series(sl, css('--correct'));
+      ctx.fillStyle = faint; ctx.textAlign = 'center';
+      ctx.fillText('구간 번호', ax + aw/2, ay + ah + 22);
+      ctx.font = '12px system-ui, sans-serif';
+    })();
+
+    var sMin = Infinity, sMax = 0, nMin = Infinity, nMax = 0;
+    for (var i = 0; i < N; i++) {
+      var a1 = angBetween(slerp(q0, q1, i/N, dth), slerp(q0, q1, (i+1)/N, dth))*180/Math.PI;
+      var a2 = angBetween(nlerp(q0, q1, i/N), nlerp(q0, q1, (i+1)/N))*180/Math.PI;
+      sMin = Math.min(sMin, a1); sMax = Math.max(sMax, a1);
+      nMin = Math.min(nMin, a2); nMax = Math.max(nMax, a2);
+    }
+    var far = dth > Math.PI/2;
+    out.innerHTML =
+      'q₁ = <b>[' + f(q1[0]) + ', ' + f(q1[1]) + ', ' + f(q1[2]) + ', ' + f(q1[3]) + ']</b>' +
+      (flipped ? ' <b>(부호 뒤집음)</b>' : '') + '<br>' +
+      'q₀·q₁ = <b>' + c.toFixed(4) + '</b> → Δθ = <b>' + (dth*180/Math.PI).toFixed(2) + '°</b>, ' +
+      '실제 자세 사이의 회전각 = <b>' + (angBetween(q0, q1)*180/Math.PI).toFixed(2) + '°</b>' +
+      (far ? ' &nbsp;— <b>Δθ &gt; 90° 라 먼 길로 돈다.</b> q₁ 부호를 뒤집으면 짧은 길이 된다.' : '') + '<br>' +
+      'q(t=' + t.toFixed(3) + ') SLERP = <b>[' + f(qs[0]) + ', ' + f(qs[1]) + ', ' + f(qs[2]) + ', ' + f(qs[3]) + ']</b>' +
+      ' &nbsp;·&nbsp; NLERP 와의 각 차이 <b>' + (angBetween(qs, qn)*180/Math.PI).toFixed(3) + '°</b><br>' +
+      '구간별 회전량 &nbsp; SLERP <b>' + sMin.toFixed(3) + ' ~ ' + sMax.toFixed(3) + '°</b> (편차 ' +
+      (sMax - sMin).toExponential(1) + ') &nbsp;·&nbsp; NLERP <b>' + nMin.toFixed(3) + ' ~ ' +
+      nMax.toFixed(3) + '°</b> (편차 ' + (nMax - nMin).toFixed(3) + ')';
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-slerp [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'flip') { flipped = !flipped; draw(); }
+      else if (a === 'far') { flipped = false; set('sl-s-th', 250); draw(); }
+      else {
+        animating = !animating;
+        if (animating) {
+          (function loop() {
+            var t = val('sl-s-t') + 0.006*dir;
+            if (t > 1) { t = 1; dir = -1; } else if (t < 0) { t = 0; dir = 1; }
+            set('sl-s-t', t); draw(); raf = requestAnimationFrame(loop);
+          })();
+        } else if (raf) { cancelAnimationFrame(raf); raf = null; }
+      }
+    });
+  });
+  ['sl-s-t','sl-s-th','sl-s-az','sl-s-el','sl-s-n','sl-s-yaw'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
