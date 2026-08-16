@@ -96,7 +96,7 @@ h4 { font-size:.97rem; font-weight:660; margin:1.5rem 0 .45rem; color:var(--ink-
 p { margin:.95rem 0; }
 strong { font-weight:670; }
 hr { border:0; border-top:1px solid var(--rule-soft); margin:2.6rem 0; }
-a { color:var(--accent); }
+a { color:var(--accent); overflow-wrap:anywhere; }  /* 긴 URL 이 안 접혀 좁은 창에서 본문을 미는 것 방지 */
 
 ul,ol { margin:.9rem 0; padding-left:1.35rem; }
 li { margin:.42rem 0; }
@@ -146,6 +146,10 @@ code {
 }
 mjx-container[display="true"] { margin:0 !important; }
 mjx-container { max-width:none; }
+/* MathJax 의 보조 MathML 은 position:absolute + width:auto 라 .mathblock 의
+   overflow:auto 클리핑을 빠져나간다 — 좁은 창에서 본문을 옆으로 미는 진짜 원인.
+   화면에는 clip 으로 이미 감춰져 있으니 레이아웃 폭만 1px 로 묶는다. (3_Pitfalls C9) */
+mjx-assistive-mml { width:1px !important; height:1px !important; overflow:hidden !important; }
 
 /* ---- widgets ---- */
 .lab {
@@ -3546,12 +3550,12 @@ f_*|\mathbf{x}_*, \mathbf{X}, \mathbf{y} \sim \mathcal{N}\big(&amp;k(\mathbf{x}_
 <ol>
 <li><a href="https://infograph.tistory.com/191">(Blog) 평균과 기댓값</a></li>
 <li><a href="https://norman3.github.io/prml/docs/chapter02/4">(Blog) PRLM - 4. The Exponential Family</a></li>
-<li>[(Blog) [수리통계학] 38. 지수족](https://analysisbugs.tistory.com/121)</li>
+<li><a href="https://analysisbugs.tistory.com/121">(Blog) [수리통계학] 38. 지수족</a></li>
 <li><a href="https://en.wikipedia.org/wiki/Law_of_total_expectation">(Wiki) Law of total expectation</a></li>
 <li><a href="http://bigdata.dongguk.ac.kr/lectures/med_stat/_book/%ED%99%95%EB%A5%A0%EB%B3%80%EC%88%98%EB%B6%84%ED%8F%AC.html">(Blog) 2 장 확률변수와 확률분포</a></li>
 <li><a href="https://www.edwith.org/bayesiandeeplearning/lecture/24679">(Lecture) Bayesian Deep Learning - 최성준</a></li>
 <li><a href="https://link.springer.com/book/10.1007/b100712#page=71">Williams, Christopher KI, and Carl Edward Rasmussen. Gaussian processes for machine learning. Vol. 2. No. 3. Cambridge, MA: MIT press, 2006.</a></li>
-<li>[(Blog) [확률/통계] 확률분포 종 정리 (이산확률분포, 연속확률분포) - roytravel님 블로그](https://roytravel.tistory.com/344)</li>
+<li><a href="https://roytravel.tistory.com/344">(Blog) [확률/통계] 확률분포 종 정리 (이산확률분포, 연속확률분포) - roytravel님 블로그</a></li>
 </ol>
 <h1 id="13-revision-log">13 Revision log</h1>
 <ul>
@@ -3625,6 +3629,26 @@ window.MathJax = {
         box.dataset.fitted = ratio.toFixed(2);
       } else {
         delete box.dataset.fitted;
+      }
+    });
+    // 인라인 수식도 줄인다. 인라인은 .mathblock 처럼 스크롤 상자가 없어서
+    // 넘치면 그대로 본문 폭을 밀어낸다 (좁은 창에서 가로 스크롤이 생기는 원인).
+    // 줄바꿈이 불가능한 긴 식이 여기 걸린다. (3_Pitfalls C9)
+    document.querySelectorAll('mjx-container:not([display="true"])').forEach(function (eq) {
+      eq.style.fontSize = '';
+      // 부모가 <span class="hl"> 같은 인라인이면 clientWidth 가 0 이다.
+      // 폭을 재려면 블록 조상까지 올라가야 한다.
+      var host = eq.parentElement;
+      while (host && host.clientWidth <= 0) host = host.parentElement;
+      var avail = host ? host.clientWidth - 2 : 0;
+      if (avail <= 0) return;
+      var need = eq.getBoundingClientRect().width;
+      if (need > avail) {
+        var r = Math.max(MIN, (avail / need) * 0.97);
+        eq.style.fontSize = (r * 100).toFixed(1) + '%';
+        eq.dataset.fitted = r.toFixed(2);
+      } else {
+        delete eq.dataset.fitted;
       }
     });
   }

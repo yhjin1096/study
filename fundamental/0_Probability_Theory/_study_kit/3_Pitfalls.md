@@ -605,6 +605,43 @@ $\mathbf{p}_{i+1}-\mathbf{p}_{i-1}$ 에 적용하면 8.6° 차이에 성공률 9
 **대처** — 후보 해석을 **전부 구현해서 나란히 재고**, 그 비교 자체를 위젯으로 남긴다.
 "원문이 틀렸다"와 "원문을 잘못 읽었다"를 숫자로 갈라 놓아야 한다. (C4 와 같은 태도다.)
 
+### C9. 좁은 창에서 본문이 옆으로 밀리면 **범인은 수식 상자가 아니다** ⚠️ 찾기 어려운 버그
+
+**증상** — 창을 480px 로 좁히면 `document.body.scrollWidth` 가 뷰포트보다 56~119px 크다.
+가로 스크롤바가 생기고 본문 전체가 밀린다. 그런데 `.mathblock` 은 `overflow-x:auto` 라
+넘치는 수식은 자기 상자 안에서 스크롤될 뿐이다. 넘치는 수식을 아무리 찾아봐도 원인이 아니다.
+
+**원인 — 세 가지가 따로 있었고, 셋 다 `.mathblock` 밖이었다.**
+
+1. **줄바꿈이 불가능한 인라인 수식.** `$\det(2\ 3\ 4)c_1 - \cdots = 0$` 같은 식은
+   `.mathblock` 같은 스크롤 상자가 없어 그대로 폭을 밀어낸다.
+   자동 축소를 인라인에도 걸어야 하는데, 이때 **부모가 `<span class="hl">` 이면
+   `clientWidth` 가 0** 이다 (인라인 요소). 블록 조상까지 올라가서 재야 한다.
+2. **`mjx-assistive-mml`.** MathJax 가 넣는 보조 MathML 은
+   `position:absolute; width:auto` 라 **조상의 `overflow:auto` 클리핑을 빠져나간다**.
+   화면에는 `clip` 으로 감춰져 있어 눈에 보이지 않는데 레이아웃 폭만 밀어낸다.
+   → 레이아웃 폭을 `1px` 로 묶는다.
+3. **링크로 파싱되지 않은 긴 URL.** 링크 정규식 `\[([^\]]+)\]\(...\)` 은
+   `[(Blog) [SLAM] 제목](url)` 처럼 **텍스트 안에 대괄호가 든 링크**에서 실패한다.
+   그러면 원시 마크다운(=긴 URL 통짜)이 본문에 그대로 남아 안 접힌다.
+   → 한 겹 중첩까지 허용하도록 고친다.
+
+**찾는 법** — "오른쪽 끝이 뷰포트를 넘는 요소"를 훑으면 **클리핑된 것까지 잡혀 헛짚는다**.
+가장 빠른 것은 **자식을 하나씩 `display:none` 해 보며 `scrollWidth` 가 줄어드는 놈을 찾는 것**이다.
+
+```js
+var wrap = document.querySelector('.wrap'), base = wrap.scrollWidth;
+[].slice.call(wrap.children).forEach(function (el, i) {
+  var d = el.style.display; el.style.display = 'none';
+  if (wrap.scrollWidth < base - 1) console.log(i, el.tagName, el.className, wrap.scrollWidth);
+  el.style.display = d;
+});
+```
+
+**대처** — 빌드 뒤 **창 폭 1440/900/700/480/360px 掃引**을 고정 절차로 넣는다.
+`본문가로 넘침 = 0` 이 아니면 위 세 가지부터 본다.
+셋 다 `build_html.py` 에 고쳐 두었고 아홉 킷에 동기화했다.
+
 ## D. 환경
 
 ### D1. `pip`이 없다
@@ -692,3 +729,4 @@ s = s.replace('\n(function () {', '\nwindow.IC = (function () {', 1)
 | C7 | 수식 자동 축소는 `scrollWidth` 로 판정하고 **재보고 다시 줄인다**. 축소된 개수도 함께 확인 |
 | C8 | 원문 공식을 쓰기 전에 **무엇에 적용하는 공식인지** 후보를 전부 재 본다 |
 | D5 | 헬퍼를 복사·개명할 때 `window.XX = ` **전역 대입문이 살아 있는지** 확인한다 |
+| C9 | 좁은 창에서 본문이 밀리면 **인라인 수식·`mjx-assistive-mml`·안 접히는 URL** 셋을 본다. 자식을 하나씩 숨겨 범인을 찾는다 |

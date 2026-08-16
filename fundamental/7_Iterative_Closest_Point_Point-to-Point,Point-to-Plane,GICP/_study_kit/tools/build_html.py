@@ -98,7 +98,9 @@ def inline(text, vault):
     (vault 복원은 build() 최상위에서 한 번만 수행한다.)"""
     text = html.escape(text, quote=False)
     text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r'<img src="\2" alt="\1">', text)
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
+    # 링크 텍스트 안에 대괄호가 한 겹 들어갈 수 있다 (예: "[(Blog) [SLAM] 제목](url)").
+    # [^\]]+ 로만 잡으면 이런 줄은 매치에 실패해 원시 마크다운이 그대로 본문에 남는다.
+    text = re.sub(r"\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"(?<![\w*])\*([^*\n]+)\*(?!\w)", r"<em>\1</em>", text)
     # ==강조== → 원문의 색 강조를 재현한다. 수식은 이미 vault에 들어가 있으므로
@@ -443,7 +445,7 @@ h4 {{ font-size:.97rem; font-weight:660; margin:1.5rem 0 .45rem; color:var(--ink
 p {{ margin:.95rem 0; }}
 strong {{ font-weight:670; }}
 hr {{ border:0; border-top:1px solid var(--rule-soft); margin:2.6rem 0; }}
-a {{ color:var(--accent); }}
+a {{ color:var(--accent); overflow-wrap:anywhere; }}  /* 긴 URL 이 안 접혀 좁은 창에서 본문을 미는 것 방지 */
 
 ul,ol {{ margin:.9rem 0; padding-left:1.35rem; }}
 li {{ margin:.42rem 0; }}
@@ -542,6 +544,10 @@ code {{
 }}
 mjx-container[display="true"] {{ margin:0 !important; }}
 mjx-container {{ max-width:none; }}
+/* MathJax 의 보조 MathML 은 position:absolute + width:auto 라 .mathblock 의
+   overflow:auto 클리핑을 빠져나간다 — 좁은 창에서 본문을 옆으로 미는 진짜 원인.
+   화면에는 clip 으로 이미 감춰져 있으니 레이아웃 폭만 1px 로 묶는다. (3_Pitfalls C9) */
+mjx-assistive-mml {{ width:1px !important; height:1px !important; overflow:hidden !important; }}
 
 /* ---- widgets ---- */
 .lab {{
@@ -680,6 +686,26 @@ window.MathJax = {{
         box.dataset.fitted = ratio.toFixed(2);
       }} else {{
         delete box.dataset.fitted;
+      }}
+    }});
+    // 인라인 수식도 줄인다. 인라인은 .mathblock 처럼 스크롤 상자가 없어서
+    // 넘치면 그대로 본문 폭을 밀어낸다 (좁은 창에서 가로 스크롤이 생기는 원인).
+    // 줄바꿈이 불가능한 긴 식이 여기 걸린다. (3_Pitfalls C9)
+    document.querySelectorAll('mjx-container:not([display="true"])').forEach(function (eq) {{
+      eq.style.fontSize = '';
+      // 부모가 <span class="hl"> 같은 인라인이면 clientWidth 가 0 이다.
+      // 폭을 재려면 블록 조상까지 올라가야 한다.
+      var host = eq.parentElement;
+      while (host && host.clientWidth <= 0) host = host.parentElement;
+      var avail = host ? host.clientWidth - 2 : 0;
+      if (avail <= 0) return;
+      var need = eq.getBoundingClientRect().width;
+      if (need > avail) {{
+        var r = Math.max(MIN, (avail / need) * 0.97);
+        eq.style.fontSize = (r * 100).toFixed(1) + '%';
+        eq.dataset.fitted = r.toFixed(2);
+      }} else {{
+        delete eq.dataset.fitted;
       }}
     }});
   }}
