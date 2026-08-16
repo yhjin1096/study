@@ -1,0 +1,389 @@
+<!--
+  실험 1 — 매니폴드와 접평면
+  대응: 2.4 Topology of Lie Theory (p.5 두 그림), 2.6 Tangent Space and Lie Algebra
+-->
+<div class="lab" id="w-lie-manifold-tangent">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">매니폴드와 접평면 &mdash; Exp / Log 가 오가는 두 공간</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p>p.5의 두 그림을 돌려 볼 수 있게 만든 것이다. 구는 Lie Group(제약조건 공간),
+       구에 붙은 회색 평면은 항등원 <code>I</code>에서의 접평면 &mdash; 즉 <b>Lie Algebra</b>다.
+       접평면 위의 벡터 <code>τ</code>를 움직이면 <code>Exp(τ)</code>가 구 위의 어느 점으로 가는지,
+       <code>Log</code>가 그것을 그대로 되돌리는지 확인할 수 있다.
+       여기서는 SO(3)를 쓰되, 그림처럼 보이도록 <b>회전축을 xy평면에 두고</b> 회전한 z축의 끝점을
+       구 위의 점으로 그렸다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>‖τ‖ (회전각)</span><b id="lm-v-t">75°</b></label>
+        <input type="range" id="lm-s-t" min="0" max="180" step="1" value="75"></div>
+      <div class="slider"><label><span>τ 방향</span><b id="lm-v-a">30°</b></label>
+        <input type="range" id="lm-s-a" min="-180" max="180" step="1" value="30"></div>
+      <div class="slider"><label><span>접평면 격자 폭</span><b id="lm-v-g">1.10</b></label>
+        <input type="range" id="lm-s-g" min="0.4" max="2" step="0.05" value="1.1"></div>
+      <div class="slider"><label><span>시점 회전</span><b id="lm-v-y">-35°</b></label>
+        <input type="range" id="lm-s-y" min="-180" max="180" step="1" value="-35"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="zero">τ = 0 (항등원)</button>
+      <button class="ghost" data-act="big">τ 를 크게 (180°)</button>
+      <button class="ghost" data-act="spin">시점 돌리기</button>
+    </div>
+
+    <canvas id="lm-canvas" width="880" height="390"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>접평면 위의 τ (Lie Algebra)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>Exp(τ) 로 옮겨진 군 원소</span>
+      <span><i class="swatch" style="background:var(--rule)"></i>Lie Group (Manifold)</span>
+    </div>
+    <div class="readout" id="lm-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Lie group 공용 헬퍼 (위젯마다 같은 블록. if 로 한 번만 정의된다) ────────
+  if (!window.LG) window.LG = (function () {
+    // ---- 일반 행렬 ------------------------------------------------------
+    function zeros(r, c) { var M = []; for (var i = 0; i < r; i++) M.push(new Array(c).fill(0)); return M; }
+    function eye(n) { var M = zeros(n, n); for (var i = 0; i < n; i++) M[i][i] = 1; return M; }
+    function mm(A, B) {
+      var r = A.length, c = B[0].length, k2 = B.length, C = zeros(r, c);
+      for (var i = 0; i < r; i++) for (var j = 0; j < c; j++) {
+        var s = 0; for (var k = 0; k < k2; k++) s += A[i][k]*B[k][j]; C[i][j] = s;
+      }
+      return C;
+    }
+    function mT(A) { var C = zeros(A[0].length, A.length);
+      for (var i = 0; i < A.length; i++) for (var j = 0; j < A[0].length; j++) C[j][i] = A[i][j];
+      return C; }
+    function madd(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+    function msub(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v - B[i][j]; }); }); }
+    function mscale(A, k) { return A.map(function (r) { return r.map(function (v) { return v*k; }); }); }
+    function mv(A, v) { return A.map(function (r) { var s = 0; for (var j = 0; j < v.length; j++) s += r[j]*v[j]; return s; }); }
+    function minv(A) {                                    // 가우스-조던
+      var n = A.length, M = A.map(function (r, i) { return r.concat(eye(n)[i]); });
+      for (var c = 0; c < n; c++) {
+        var p = c;
+        for (var r2 = c + 1; r2 < n; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[p][c])) p = r2;
+        if (Math.abs(M[p][c]) < 1e-14) return eye(n);
+        var tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+        var d = M[c][c];
+        for (var j = 0; j < 2*n; j++) M[c][j] /= d;
+        for (var r3 = 0; r3 < n; r3++) if (r3 !== c) {
+          var f = M[r3][c];
+          if (f) for (var j2 = 0; j2 < 2*n; j2++) M[r3][j2] -= f*M[c][j2];
+        }
+      }
+      return M.map(function (r) { return r.slice(n); });
+    }
+    function mmaxabs(A) { var m = 0; A.forEach(function (r) { r.forEach(function (v) { m = Math.max(m, Math.abs(v)); }); }); return m; }
+    function blk(TL, TR, BL, BR) {                        // 3×3 넷 → 6×6
+      var M = zeros(6, 6);
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+        M[i][j] = TL[i][j]; M[i][j+3] = TR[i][j]; M[i+3][j] = BL[i][j]; M[i+3][j+3] = BR[i][j];
+      }
+      return M;
+    }
+
+    // ---- 벡터 -----------------------------------------------------------
+    function nrm(v) { var s = 0; for (var i = 0; i < v.length; i++) s += v[i]*v[i]; return Math.sqrt(s); }
+    function unit(v) { var n = nrm(v) || 1; return v.map(function (x) { return x/n; }); }
+    function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+    function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+    function sc(a, k) { return a.map(function (v) { return v*k; }); }
+    function dot(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i]*b[i]; return s; }
+    function cross(a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+    function axis(azDeg, elDeg) {
+      var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+      return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+    }
+
+    // ---- so(3) / SO(3) --------------------------------------------------
+    function hat(w) { return [[0, -w[2], w[1]], [w[2], 0, -w[0]], [-w[1], w[0], 0]]; }   // 식 (17)(32)
+    function vee(W) { return [W[2][1], W[0][2], W[1][0]]; }
+    function expSO3(w) {                                  // 식 (27) 로드리게스
+      var t = nrm(w), W = hat(w);
+      if (t < 1e-10) return madd(eye(3), madd(W, mscale(mm(W, W), 0.5)));
+      return madd(eye(3), madd(mscale(W, Math.sin(t)/t), mscale(mm(W, W), (1 - Math.cos(t))/(t*t))));
+    }
+    function logSO3(R) {                                  // 식 (28)
+      var tr = (R[0][0] + R[1][1] + R[2][2] - 1)/2;
+      var t = Math.acos(Math.max(-1, Math.min(1, tr)));
+      if (t < 1e-8) return sc(vee(msub(R, mT(R))), 0.5);
+      if (Math.PI - t < 1e-6) {                           // θ≈π — 대칭 성분에서 축을 뽑는다
+        var S = mscale(madd(R, eye(3)), 0.5), best = 0, bi = 0;
+        for (var i = 0; i < 3; i++) if (S[i][i] > best) { best = S[i][i]; bi = i; }
+        var u = unit([S[0][bi], S[1][bi], S[2][bi]]);
+        var dsym = vee(msub(R, mT(R)));                   // 부호는 반대칭 성분으로 가린다
+        if (dot(dsym, u) < 0) u = sc(u, -1);
+        return sc(u, t);
+      }
+      return sc(vee(msub(R, mT(R))), t/(2*Math.sin(t)));
+    }
+    function JrSO3(w) {                                   // 식 (48) 오른쪽 자코비안
+      var t = nrm(w), W = hat(w);
+      if (t < 1e-8) return msub(eye(3), mscale(W, 0.5));
+      return madd(msub(eye(3), mscale(W, (1 - Math.cos(t))/(t*t))),
+                  mscale(mm(W, W), (t - Math.sin(t))/(t*t*t)));
+    }
+    function JlSO3(w) { return mT(JrSO3(w)); }            // 식 (50)
+    function JinvCoef(t) {                                // 1/θ² − (1+cosθ)/(2θ sinθ)
+      if (t < 1e-4) return 1/12 + t*t/720;
+      return 1/(t*t) - (1 + Math.cos(t))/(2*t*Math.sin(t));
+    }
+    function JlInvSO3(w) {                                // 식 (65)
+      var t = nrm(w), W = hat(w);
+      return madd(msub(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+    }
+    function JrInvSO3(w) {                                // 식 (48) 주석
+      var t = nrm(w), W = hat(w);
+      return madd(madd(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+    }
+    function AdSO3(R) { return R; }                       // 식 (46)
+
+    // ---- se(3) / SE(3) --------------------------------------------------
+    // ξ = [ω; v] (회전 먼저) — 원문 식 (55) 의 순서
+    function T(R, t) {
+      return [[R[0][0], R[0][1], R[0][2], t[0]],
+              [R[1][0], R[1][1], R[1][2], t[1]],
+              [R[2][0], R[2][1], R[2][2], t[2]],
+              [0, 0, 0, 1]];
+    }
+    function TR(M) { return [[M[0][0], M[0][1], M[0][2]], [M[1][0], M[1][1], M[1][2]], [M[2][0], M[2][1], M[2][2]]]; }
+    function Tt(M) { return [M[0][3], M[1][3], M[2][3]]; }
+    function Tinv(M) {                                    // 식 (52)
+      var R = TR(M), Rt = mT(R);
+      return T(Rt, sc(mv(Rt, Tt(M)), -1));
+    }
+    function expSE3(xi) {                                 // 식 (64)
+      var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+      return T(expSO3(w), mv(JlSO3(w), v));
+    }
+    function logSE3(M) {                                  // 식 (67)
+      var w = logSO3(TR(M)), v = mv(JlInvSO3(w), Tt(M));
+      return [w[0], w[1], w[2], v[0], v[1], v[2]];
+    }
+    function AdSE3(M) {                                   // 식 (73)
+      var R = TR(M), t = Tt(M);
+      return blk(R, zeros(3, 3), mm(hat(t), R), R);
+    }
+    function QlSE3(xi) {                                  // 식 (78)
+      var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+      var t = nrm(w), W = hat(w), V = hat(v), W2 = mm(W, W);
+      var c1, c2, c3;
+      if (t < 1e-4) { c1 = 1/6; c2 = -1/24; c3 = -1/120; }
+      else {
+        c1 = (t - Math.sin(t))/(t*t*t);
+        c2 = (t*t + 2*Math.cos(t) - 2)/(2*t*t*t*t);
+        c3 = (2*t - 3*Math.sin(t) + t*Math.cos(t))/(2*Math.pow(t, 5));
+      }
+      var A = madd(madd(mm(W, V), mm(V, W)), mm(mm(W, V), W));
+      var B = msub(madd(mm(W2, V), mm(V, W2)), mscale(mm(mm(W, V), W), 3));
+      var C = madd(mm(mm(W, V), W2), mm(mm(W2, V), W));
+      return madd(mscale(V, 0.5), madd(mscale(A, c1), madd(mscale(B, c2), mscale(C, c3))));
+    }
+    function QrSE3(xi) { return QlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+    // ξ = [ω; v] (회전 먼저) 순서에서는 Q 블록이 왼쪽 아래에 온다.
+    // 원문 (75)·(77) 의 [[J, Q], [0, J]] 배치는 ξ = [v; ω] (이동 먼저) 순서를 전제한 것이다.
+    // 수치 미분으로 확인했다 — 노트의 "원문 그대로 둔 것" 참조.
+    function JlSE3(xi) {
+      var w = [xi[0], xi[1], xi[2]], J = JlSO3(w);
+      return blk(J, zeros(3, 3), QlSE3(xi), J);
+    }
+    function JrSE3(xi) { return JlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+
+    // ---- ⊕ / ⊖ ----------------------------------------------------------
+    function plusSO3(R, w) { return mm(R, expSO3(w)); }                          // 식 (40)
+    function minusSO3(R2, R1) { return logSO3(mm(mT(R1), R2)); }                 // 식 (42)
+    function plusSE3(M, xi) { return mm(M, expSE3(xi)); }                        // 식 (68)
+    function minusSE3(M2, M1) { return logSE3(mm(Tinv(M1), M2)); }               // 식 (69)
+
+    // ---- 정사영 3D 장면 ---------------------------------------------------
+    function scene(ctx, cx, cy, s, yaw, pitch) {
+      var cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      function P(p) {
+        var X = p[0]*cyw - p[1]*syw, Y = p[0]*syw + p[1]*cyw;
+        return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+      }
+      function head(A, B, col) {
+        var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+        ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+        ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      return {
+        P: P,
+        line: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+        },
+        arrow: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+          head(A, B, col);
+        },
+        poly: function (pts, col, w, dash) {
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+          ctx.stroke(); ctx.restore();
+        },
+        fillPoly: function (pts, col, alpha) {
+          ctx.save(); ctx.fillStyle = col; ctx.globalAlpha = alpha === undefined ? 0.16 : alpha;
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+          ctx.closePath(); ctx.fill(); ctx.restore();
+        },
+        dot: function (p, col, r) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+        },
+        label: function (p, txt, col, dx, dy) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+          ctx.restore();
+        }
+      };
+    }
+    function circle3(n, r, N) {
+      var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+      var e1 = unit(cross(n, a)), e2 = cross(n, e1), pts = [];
+      for (var i = 0; i <= (N || 64); i++) {
+        var t = i/(N || 64)*2*Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+        pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+      }
+      return pts;
+    }
+    function frame(S, R, origin, len, cols, tag) {        // 좌표축 세 개
+      var o = origin || [0,0,0];
+      for (var i = 0; i < 3; i++) {
+        var e = add(o, [R[0][i]*len, R[1][i]*len, R[2][i]*len]);
+        S.arrow(o, e, cols[i], 2);
+        if (tag && tag[i]) S.label(e, tag[i], cols[i]);
+      }
+    }
+    return { zeros: zeros, eye: eye, mm: mm, mT: mT, madd: madd, msub: msub, mscale: mscale,
+             mv: mv, minv: minv, mmaxabs: mmaxabs, blk: blk,
+             nrm: nrm, unit: unit, add: add, sub: sub, sc: sc, dot: dot, cross: cross, axis: axis,
+             hat: hat, vee: vee, expSO3: expSO3, logSO3: logSO3,
+             JrSO3: JrSO3, JlSO3: JlSO3, JrInvSO3: JrInvSO3, JlInvSO3: JlInvSO3, AdSO3: AdSO3,
+             T: T, TR: TR, Tt: Tt, Tinv: Tinv, expSE3: expSE3, logSE3: logSE3, AdSE3: AdSE3,
+             QlSE3: QlSE3, QrSE3: QrSE3, JlSE3: JlSE3, JrSE3: JrSE3,
+             plusSO3: plusSO3, minusSO3: minusSO3, plusSE3: plusSE3, minusSE3: minusSE3,
+             scene: scene, circle3: circle3, frame: frame };
+  })();
+  var LG = window.LG;
+  var cv = document.getElementById('lm-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lm-readout');
+  var spinning = false, raf = null, yawExtra = 0;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function f(x) { return (x >= 0 ? ' ' : '') + x.toFixed(4); }
+
+  function draw() {
+    var tDeg = val('lm-s-t'), aDeg = val('lm-s-a'), g = val('lm-s-g'), yDeg = val('lm-s-y');
+    document.getElementById('lm-v-t').textContent = tDeg + '°';
+    document.getElementById('lm-v-a').textContent = aDeg + '°';
+    document.getElementById('lm-v-g').textContent = g.toFixed(2);
+    document.getElementById('lm-v-y').textContent = yDeg + '°';
+
+    // 접평면은 항등원(북극, z축)에 접한 xy 평면. τ 는 그 평면 위의 벡터다.
+    var a = aDeg*Math.PI/180, th = tDeg*Math.PI/180;
+    var tau = [Math.cos(a)*th, Math.sin(a)*th, 0];
+    var R = LG.expSO3(tau);
+    var north = [0, 0, 1];
+    var p = LG.mv(R, north);                       // 구 위로 옮겨진 점
+    var back = LG.logSO3(R);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 390;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    var s = Math.min(W*0.24, H*0.30);
+    var S = LG.scene(ctx, W/2, H/2 + 40, s, (yDeg + yawExtra)*Math.PI/180, 0.36);
+
+    // 구 (Lie Group)
+    S.poly(LG.circle3([0,0,1], 1, 80), soft, 1, [3,3]);      // 적도(뒤쪽은 점선 느낌)
+    S.poly(LG.circle3([1,0,0], 1, 80), rule, 1.3);
+    S.poly(LG.circle3([0,1,0], 1, 80), rule, 1.3);
+
+    // 항등원에서의 접평면 (z = 1 평면)
+    var quad = [[-g,-g,1], [g,-g,1], [g,g,1], [-g,g,1]];
+    S.fillPoly(quad, faint, 0.13);
+    S.poly(quad.concat([quad[0]]), rule, 1.1);
+    for (var k = 1; k < 4; k++) {                            // 격자
+      var u = -g + 2*g*k/4;
+      S.line([u,-g,1], [u,g,1], soft, 0.9);
+      S.line([-g,u,1], [g,u,1], soft, 0.9);
+    }
+    S.dot(north, css('--ink'), 4);
+    S.label(north, 'I  (항등원)', css('--ink'), 8, -10);
+    ctx.font = '12px system-ui, sans-serif';
+
+    // τ 벡터 (접평면 위)
+    var tip = [tau[0], tau[1], 1];
+    S.arrow(north, tip, css('--accent'), 2.4);
+    S.label(tip, 'τ', css('--accent'));
+
+    // Exp 로 옮겨진 점과 그 경로
+    var path = [];
+    for (var i = 0; i <= 60; i++) path.push(LG.mv(LG.expSO3(LG.sc(tau, i/60)), north));
+    S.poly(path, css('--correct'), 2.2);
+    S.dot(p, css('--correct'), 5);
+    S.label(p, 'Exp(τ)', css('--correct'));
+    S.line(north, p, faint, 1, [2,3]);
+
+    // 옮겨진 좌표축 (군 원소가 실제로 무엇인지)
+    LG.frame(S, R, p, 0.42, [css('--correct'), css('--correct'), css('--correct')], ['','','']);
+
+    ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+    ctx.fillText('Lie Algebra — 항등원 접평면 (linear vector space)', 10, 20);
+    ctx.fillText('Lie Group — Manifold (non-linear)', 10, H - 12);
+
+    out.innerHTML =
+      'τ = <b>[' + f(tau[0]) + ', ' + f(tau[1]) + ', ' + f(tau[2]) + ']</b> &nbsp; ‖τ‖ = <b>' +
+      LG.nrm(tau).toFixed(4) + ' rad</b> (' + tDeg + '°)<br>' +
+      'Exp(τ) 로 옮겨진 점 = <b>[' + f(p[0]) + ', ' + f(p[1]) + ', ' + f(p[2]) + ']</b>' +
+      ' &nbsp; 구 위인가? ‖·‖ = <b>' + LG.nrm(p).toFixed(6) + '</b><br>' +
+      'Log(Exp(τ)) = <b>[' + f(back[0]) + ', ' + f(back[1]) + ', ' + f(back[2]) + ']</b>' +
+      ' &nbsp; 되돌린 오차 <b>' + LG.nrm(LG.sub(back, tau)).toExponential(2) + '</b><br>' +
+      'R{τ} 가 정말 SO(3)인가 &nbsp; ‖RRᵀ − I‖ = <b>' +
+      LG.mmaxabs(LG.msub(LG.mm(R, LG.mT(R)), LG.eye(3))).toExponential(1) + '</b>' +
+      ' &nbsp;·&nbsp; det R = <b>' +
+      (R[0][0]*(R[1][1]*R[2][2]-R[1][2]*R[2][1]) - R[0][1]*(R[1][0]*R[2][2]-R[1][2]*R[2][0]) +
+       R[0][2]*(R[1][0]*R[2][1]-R[1][1]*R[2][0])).toFixed(6) + '</b>' +
+      ' &nbsp;— 접평면에서 <b>자유롭게</b> 고른 τ 가 제약조건을 <b>저절로</b> 만족하는 군 원소가 된다';
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-lie-manifold-tangent [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'zero') { set('lm-s-t', 0); draw(); }
+      else if (a === 'big') { set('lm-s-t', 180); draw(); }
+      else {
+        spinning = !spinning;
+        if (spinning) { (function loop() { yawExtra += 0.7; draw(); raf = requestAnimationFrame(loop); })(); }
+        else if (raf) { cancelAnimationFrame(raf); raf = null; }
+      }
+    });
+  });
+  ['lm-s-t','lm-s-a','lm-s-g','lm-s-y'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

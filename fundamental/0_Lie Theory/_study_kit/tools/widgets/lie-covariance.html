@@ -1,0 +1,439 @@
+<!--
+  실험 4 — 매니폴드 위의 섭동과 공분산 전파
+  대응: 2.9 Perturbations on Lie Group (식 9·10·11·12)
+-->
+<div class="lab" id="w-lie-covariance">
+  <div class="lab-head">
+    <span class="lab-tag">실험 4</span>
+    <span class="lab-title">섭동과 공분산 &mdash; P<sub>y</sub> = J·P<sub>x</sub>·Jᵀ 를 몬테카를로로 검산</span>
+    <span class="lab-note">원문에 없는 추가 요소</span>
+  </div>
+  <div class="lab-body">
+    <p><b>식 (9)</b>처럼 <code>x = x̄ ⊕ τ</code>로 두면 불확실성은 <b>접평면 위의 가우시안</b>
+       <code>τ ~ N(0, P)</code>가 된다. 왼쪽은 그렇게 뽑은 표본들을 구 위에 올린 모습이다 &mdash;
+       <b>표본이 전부 매니폴드 위에 있다</b>는 점이 핵심이다.
+       오른쪽은 <code>f(x) = x·x</code>를 통과시킨 뒤 <b>식 (12)</b>의
+       <code>P<sub>y</sub> = J·P<sub>x</sub>·Jᵀ</code>가 예측한 타원(실선)과
+       표본에서 직접 잰 공분산(점선)을 겹쳐 그린 것이다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>σ₁ (1축)</span><b id="lc-v-s1">0.12</b></label>
+        <input type="range" id="lc-s-s1" min="0.01" max="0.5" step="0.005" value="0.12"></div>
+      <div class="slider"><label><span>σ₂ (2축)</span><b id="lc-v-s2">0.05</b></label>
+        <input type="range" id="lc-s-s2" min="0.01" max="0.5" step="0.005" value="0.05"></div>
+      <div class="slider"><label><span>σ₃ (3축)</span><b id="lc-v-s3">0.03</b></label>
+        <input type="range" id="lc-s-s3" min="0.01" max="0.5" step="0.005" value="0.03"></div>
+      <div class="slider"><label><span>표본 수 N</span><b id="lc-v-n">600</b></label>
+        <input type="range" id="lc-s-n" min="50" max="4000" step="50" value="600"></div>
+      <div class="slider"><label><span>x̄ 회전각</span><b id="lc-v-r">55°</b></label>
+        <input type="range" id="lc-s-r" min="0" max="179" step="1" value="55"></div>
+      <div class="slider"><label><span>시점 회전</span><b id="lc-v-y">-35°</b></label>
+        <input type="range" id="lc-s-y" min="-180" max="180" step="1" value="-35"></div>
+    </div>
+    <div class="btnrow">
+      <button data-act="resample">표본 다시 뽑기</button>
+      <button class="ghost" data-act="tiny">σ 를 아주 작게</button>
+      <button class="ghost" data-act="huge">σ 를 크게 (근사가 깨진다)</button>
+    </div>
+
+    <canvas id="lc-canvas" width="880" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>표본 x = x̄ ⊕ τ</span>
+      <span><i class="swatch" style="background:var(--ink)"></i>평균 x̄ 와 ȳ</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>식 (12) 예측 2σ 타원</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>표본에서 잰 2σ 타원</span>
+    </div>
+    <div class="readout" id="lc-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Lie group 공용 헬퍼 (위젯마다 같은 블록. if 로 한 번만 정의된다) ────────
+  if (!window.LG) window.LG = (function () {
+    // ---- 일반 행렬 ------------------------------------------------------
+    function zeros(r, c) { var M = []; for (var i = 0; i < r; i++) M.push(new Array(c).fill(0)); return M; }
+    function eye(n) { var M = zeros(n, n); for (var i = 0; i < n; i++) M[i][i] = 1; return M; }
+    function mm(A, B) {
+      var r = A.length, c = B[0].length, k2 = B.length, C = zeros(r, c);
+      for (var i = 0; i < r; i++) for (var j = 0; j < c; j++) {
+        var s = 0; for (var k = 0; k < k2; k++) s += A[i][k]*B[k][j]; C[i][j] = s;
+      }
+      return C;
+    }
+    function mT(A) { var C = zeros(A[0].length, A.length);
+      for (var i = 0; i < A.length; i++) for (var j = 0; j < A[0].length; j++) C[j][i] = A[i][j];
+      return C; }
+    function madd(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+    function msub(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v - B[i][j]; }); }); }
+    function mscale(A, k) { return A.map(function (r) { return r.map(function (v) { return v*k; }); }); }
+    function mv(A, v) { return A.map(function (r) { var s = 0; for (var j = 0; j < v.length; j++) s += r[j]*v[j]; return s; }); }
+    function minv(A) {                                    // 가우스-조던
+      var n = A.length, M = A.map(function (r, i) { return r.concat(eye(n)[i]); });
+      for (var c = 0; c < n; c++) {
+        var p = c;
+        for (var r2 = c + 1; r2 < n; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[p][c])) p = r2;
+        if (Math.abs(M[p][c]) < 1e-14) return eye(n);
+        var tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+        var d = M[c][c];
+        for (var j = 0; j < 2*n; j++) M[c][j] /= d;
+        for (var r3 = 0; r3 < n; r3++) if (r3 !== c) {
+          var f = M[r3][c];
+          if (f) for (var j2 = 0; j2 < 2*n; j2++) M[r3][j2] -= f*M[c][j2];
+        }
+      }
+      return M.map(function (r) { return r.slice(n); });
+    }
+    function mmaxabs(A) { var m = 0; A.forEach(function (r) { r.forEach(function (v) { m = Math.max(m, Math.abs(v)); }); }); return m; }
+    function blk(TL, TR, BL, BR) {                        // 3×3 넷 → 6×6
+      var M = zeros(6, 6);
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+        M[i][j] = TL[i][j]; M[i][j+3] = TR[i][j]; M[i+3][j] = BL[i][j]; M[i+3][j+3] = BR[i][j];
+      }
+      return M;
+    }
+
+    // ---- 벡터 -----------------------------------------------------------
+    function nrm(v) { var s = 0; for (var i = 0; i < v.length; i++) s += v[i]*v[i]; return Math.sqrt(s); }
+    function unit(v) { var n = nrm(v) || 1; return v.map(function (x) { return x/n; }); }
+    function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+    function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+    function sc(a, k) { return a.map(function (v) { return v*k; }); }
+    function dot(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i]*b[i]; return s; }
+    function cross(a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+    function axis(azDeg, elDeg) {
+      var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+      return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+    }
+
+    // ---- so(3) / SO(3) --------------------------------------------------
+    function hat(w) { return [[0, -w[2], w[1]], [w[2], 0, -w[0]], [-w[1], w[0], 0]]; }   // 식 (17)(32)
+    function vee(W) { return [W[2][1], W[0][2], W[1][0]]; }
+    function expSO3(w) {                                  // 식 (27) 로드리게스
+      var t = nrm(w), W = hat(w);
+      if (t < 1e-10) return madd(eye(3), madd(W, mscale(mm(W, W), 0.5)));
+      return madd(eye(3), madd(mscale(W, Math.sin(t)/t), mscale(mm(W, W), (1 - Math.cos(t))/(t*t))));
+    }
+    function logSO3(R) {                                  // 식 (28)
+      var tr = (R[0][0] + R[1][1] + R[2][2] - 1)/2;
+      var t = Math.acos(Math.max(-1, Math.min(1, tr)));
+      if (t < 1e-8) return sc(vee(msub(R, mT(R))), 0.5);
+      if (Math.PI - t < 1e-6) {                           // θ≈π — 대칭 성분에서 축을 뽑는다
+        var S = mscale(madd(R, eye(3)), 0.5), best = 0, bi = 0;
+        for (var i = 0; i < 3; i++) if (S[i][i] > best) { best = S[i][i]; bi = i; }
+        var u = unit([S[0][bi], S[1][bi], S[2][bi]]);
+        var dsym = vee(msub(R, mT(R)));                   // 부호는 반대칭 성분으로 가린다
+        if (dot(dsym, u) < 0) u = sc(u, -1);
+        return sc(u, t);
+      }
+      return sc(vee(msub(R, mT(R))), t/(2*Math.sin(t)));
+    }
+    function JrSO3(w) {                                   // 식 (48) 오른쪽 자코비안
+      var t = nrm(w), W = hat(w);
+      if (t < 1e-8) return msub(eye(3), mscale(W, 0.5));
+      return madd(msub(eye(3), mscale(W, (1 - Math.cos(t))/(t*t))),
+                  mscale(mm(W, W), (t - Math.sin(t))/(t*t*t)));
+    }
+    function JlSO3(w) { return mT(JrSO3(w)); }            // 식 (50)
+    function JinvCoef(t) {                                // 1/θ² − (1+cosθ)/(2θ sinθ)
+      if (t < 1e-4) return 1/12 + t*t/720;
+      return 1/(t*t) - (1 + Math.cos(t))/(2*t*Math.sin(t));
+    }
+    function JlInvSO3(w) {                                // 식 (65)
+      var t = nrm(w), W = hat(w);
+      return madd(msub(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+    }
+    function JrInvSO3(w) {                                // 식 (48) 주석
+      var t = nrm(w), W = hat(w);
+      return madd(madd(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+    }
+    function AdSO3(R) { return R; }                       // 식 (46)
+
+    // ---- se(3) / SE(3) --------------------------------------------------
+    // ξ = [ω; v] (회전 먼저) — 원문 식 (55) 의 순서
+    function T(R, t) {
+      return [[R[0][0], R[0][1], R[0][2], t[0]],
+              [R[1][0], R[1][1], R[1][2], t[1]],
+              [R[2][0], R[2][1], R[2][2], t[2]],
+              [0, 0, 0, 1]];
+    }
+    function TR(M) { return [[M[0][0], M[0][1], M[0][2]], [M[1][0], M[1][1], M[1][2]], [M[2][0], M[2][1], M[2][2]]]; }
+    function Tt(M) { return [M[0][3], M[1][3], M[2][3]]; }
+    function Tinv(M) {                                    // 식 (52)
+      var R = TR(M), Rt = mT(R);
+      return T(Rt, sc(mv(Rt, Tt(M)), -1));
+    }
+    function expSE3(xi) {                                 // 식 (64)
+      var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+      return T(expSO3(w), mv(JlSO3(w), v));
+    }
+    function logSE3(M) {                                  // 식 (67)
+      var w = logSO3(TR(M)), v = mv(JlInvSO3(w), Tt(M));
+      return [w[0], w[1], w[2], v[0], v[1], v[2]];
+    }
+    function AdSE3(M) {                                   // 식 (73)
+      var R = TR(M), t = Tt(M);
+      return blk(R, zeros(3, 3), mm(hat(t), R), R);
+    }
+    function QlSE3(xi) {                                  // 식 (78)
+      var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+      var t = nrm(w), W = hat(w), V = hat(v), W2 = mm(W, W);
+      var c1, c2, c3;
+      if (t < 1e-4) { c1 = 1/6; c2 = -1/24; c3 = -1/120; }
+      else {
+        c1 = (t - Math.sin(t))/(t*t*t);
+        c2 = (t*t + 2*Math.cos(t) - 2)/(2*t*t*t*t);
+        c3 = (2*t - 3*Math.sin(t) + t*Math.cos(t))/(2*Math.pow(t, 5));
+      }
+      var A = madd(madd(mm(W, V), mm(V, W)), mm(mm(W, V), W));
+      var B = msub(madd(mm(W2, V), mm(V, W2)), mscale(mm(mm(W, V), W), 3));
+      var C = madd(mm(mm(W, V), W2), mm(mm(W2, V), W));
+      return madd(mscale(V, 0.5), madd(mscale(A, c1), madd(mscale(B, c2), mscale(C, c3))));
+    }
+    function QrSE3(xi) { return QlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+    // ξ = [ω; v] (회전 먼저) 순서에서는 Q 블록이 왼쪽 아래에 온다.
+    // 원문 (75)·(77) 의 [[J, Q], [0, J]] 배치는 ξ = [v; ω] (이동 먼저) 순서를 전제한 것이다.
+    // 수치 미분으로 확인했다 — 노트의 "원문 그대로 둔 것" 참조.
+    function JlSE3(xi) {
+      var w = [xi[0], xi[1], xi[2]], J = JlSO3(w);
+      return blk(J, zeros(3, 3), QlSE3(xi), J);
+    }
+    function JrSE3(xi) { return JlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+
+    // ---- ⊕ / ⊖ ----------------------------------------------------------
+    function plusSO3(R, w) { return mm(R, expSO3(w)); }                          // 식 (40)
+    function minusSO3(R2, R1) { return logSO3(mm(mT(R1), R2)); }                 // 식 (42)
+    function plusSE3(M, xi) { return mm(M, expSE3(xi)); }                        // 식 (68)
+    function minusSE3(M2, M1) { return logSE3(mm(Tinv(M1), M2)); }               // 식 (69)
+
+    // ---- 정사영 3D 장면 ---------------------------------------------------
+    function scene(ctx, cx, cy, s, yaw, pitch) {
+      var cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      function P(p) {
+        var X = p[0]*cyw - p[1]*syw, Y = p[0]*syw + p[1]*cyw;
+        return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+      }
+      function head(A, B, col) {
+        var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+        ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+        ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      return {
+        P: P,
+        line: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+        },
+        arrow: function (a, b, col, w, dash) {
+          var A = P(a), B = P(b);
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+          head(A, B, col);
+        },
+        poly: function (pts, col, w, dash) {
+          ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+          if (dash) ctx.setLineDash(dash);
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+          ctx.stroke(); ctx.restore();
+        },
+        fillPoly: function (pts, col, alpha) {
+          ctx.save(); ctx.fillStyle = col; ctx.globalAlpha = alpha === undefined ? 0.16 : alpha;
+          ctx.beginPath();
+          for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+          ctx.closePath(); ctx.fill(); ctx.restore();
+        },
+        dot: function (p, col, r) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+        },
+        label: function (p, txt, col, dx, dy) {
+          var A = P(p); ctx.save(); ctx.fillStyle = col;
+          ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+          ctx.restore();
+        }
+      };
+    }
+    function circle3(n, r, N) {
+      var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+      var e1 = unit(cross(n, a)), e2 = cross(n, e1), pts = [];
+      for (var i = 0; i <= (N || 64); i++) {
+        var t = i/(N || 64)*2*Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+        pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+      }
+      return pts;
+    }
+    function frame(S, R, origin, len, cols, tag) {        // 좌표축 세 개
+      var o = origin || [0,0,0];
+      for (var i = 0; i < 3; i++) {
+        var e = add(o, [R[0][i]*len, R[1][i]*len, R[2][i]*len]);
+        S.arrow(o, e, cols[i], 2);
+        if (tag && tag[i]) S.label(e, tag[i], cols[i]);
+      }
+    }
+    return { zeros: zeros, eye: eye, mm: mm, mT: mT, madd: madd, msub: msub, mscale: mscale,
+             mv: mv, minv: minv, mmaxabs: mmaxabs, blk: blk,
+             nrm: nrm, unit: unit, add: add, sub: sub, sc: sc, dot: dot, cross: cross, axis: axis,
+             hat: hat, vee: vee, expSO3: expSO3, logSO3: logSO3,
+             JrSO3: JrSO3, JlSO3: JlSO3, JrInvSO3: JrInvSO3, JlInvSO3: JlInvSO3, AdSO3: AdSO3,
+             T: T, TR: TR, Tt: Tt, Tinv: Tinv, expSE3: expSE3, logSE3: logSE3, AdSE3: AdSE3,
+             QlSE3: QlSE3, QrSE3: QrSE3, JlSE3: JlSE3, JrSE3: JrSE3,
+             plusSO3: plusSO3, minusSO3: minusSO3, plusSE3: plusSE3, minusSE3: minusSE3,
+             scene: scene, circle3: circle3, frame: frame };
+  })();
+  var LG = window.LG;
+  var cv = document.getElementById('lc-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('lc-readout');
+  var seed = 20240524;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function rng(s) { var x = s; return function () { x = (x*1664525 + 1013904223) % 4294967296; return x/4294967296; }; }
+  function gaussMaker(r) {
+    return function () { var u = 1 - r(), v = r(); return Math.sqrt(-2*Math.log(u + 1e-12))*Math.cos(2*Math.PI*v); };
+  }
+
+  function fmap(R) { return LG.mm(R, R); }                     // f(x) = x·x
+  function Jf(R) { return LG.madd(LG.AdSO3(LG.mT(R)), LG.eye(3)); }   // 실험 3 과 같은 해석적 자코비안
+
+  function run() {
+    var s1 = val('lc-s-s1'), s2 = val('lc-s-s2'), s3 = val('lc-s-s3');
+    var N = Math.round(val('lc-s-n')), rd = val('lc-s-r');
+    var g = gaussMaker(rng(seed));
+    var xbar = LG.expSO3(LG.sc(LG.axis(35, 40), rd*Math.PI/180));
+    var ybar = fmap(xbar);
+    var sig = [s1, s2, s3];
+    var taus = [], etas = [];
+    for (var i = 0; i < N; i++) {
+      var t = [g()*s1, g()*s2, g()*s3];
+      taus.push(t);
+      etas.push(LG.minusSO3(fmap(LG.plusSO3(xbar, t)), ybar));    // y ⊖ ȳ
+    }
+    function cov(list) {
+      var C = LG.zeros(3, 3);
+      list.forEach(function (t) {
+        for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) C[i][j] += t[i]*t[j];
+      });
+      return LG.mscale(C, 1/Math.max(1, list.length));
+    }
+    var Px = [[s1*s1,0,0],[0,s2*s2,0],[0,0,s3*s3]];
+    var J = Jf(xbar);
+    var Py = LG.mm(LG.mm(J, Px), LG.mT(J));                       // 식 (12)
+    return { xbar: xbar, ybar: ybar, taus: taus, etas: etas,
+             Px: Px, Py: Py, PxEmp: cov(taus), PyEmp: cov(etas), J: J, sig: sig };
+  }
+
+  // 2×2 부분행렬(1·2축)의 타원
+  function ellipse(C, k) {
+    var a = C[0][0], b = C[0][1], d = C[1][1];
+    var tr = a + d, det = a*d - b*b;
+    var l1 = tr/2 + Math.sqrt(Math.max(0, tr*tr/4 - det));
+    var l2 = tr/2 - Math.sqrt(Math.max(0, tr*tr/4 - det));
+    var th = 0.5*Math.atan2(2*b, a - d);
+    return { rx: k*Math.sqrt(Math.max(0, l1)), ry: k*Math.sqrt(Math.max(0, l2)), th: th };
+  }
+
+  function draw() {
+    document.getElementById('lc-v-s1').textContent = val('lc-s-s1').toFixed(3);
+    document.getElementById('lc-v-s2').textContent = val('lc-s-s2').toFixed(3);
+    document.getElementById('lc-v-s3').textContent = val('lc-s-s3').toFixed(3);
+    document.getElementById('lc-v-n').textContent = Math.round(val('lc-s-n'));
+    document.getElementById('lc-v-r').textContent = val('lc-s-r') + '°';
+    document.getElementById('lc-v-y').textContent = val('lc-s-y') + '°';
+
+    var S0 = run();
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 360;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var rule = css('--rule'), soft = css('--rule-soft'), faint = css('--ink-faint');
+    ctx.font = '12px system-ui, sans-serif';
+
+    var LW = W*0.46;
+    // ── 왼쪽: 구 위의 표본 ──────────────────────────────────────
+    (function () {
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.fillText('표본 x = x̄ ⊕ τ  (전부 매니폴드 위에 있다)', 8, 16);
+      var s = Math.min(LW*0.30, H*0.34);
+      var Sc = LG.scene(ctx, LW/2, H/2 + 12, s, val('lc-s-y')*Math.PI/180, 0.38);
+      [[1,0,0],[0,1,0],[0,0,1]].forEach(function (n) { Sc.poly(LG.circle3(n, 1, 72), rule, 1); });
+      var col = css('--predict');
+      S0.taus.forEach(function (t, i) {
+        if (i % Math.max(1, Math.floor(S0.taus.length/500)) !== 0) return;
+        var R = LG.plusSO3(S0.xbar, t);
+        Sc.dot([R[0][0], R[1][0], R[2][0]], col, 1.6);
+      });
+      LG.frame(Sc, S0.xbar, [0,0,0], 1.25, [css('--ink'), css('--ink'), css('--ink')], ['x̄','','']);
+    })();
+
+    // ── 오른쪽: 접평면 위의 공분산 비교 ─────────────────────────
+    (function () {
+      var ox = LW, RWv = W - LW, cx = ox + RWv/2, cy = H/2 + 14;
+      ctx.fillStyle = css('--ink-soft') || faint; ctx.textAlign = 'left';
+      ctx.fillText('ȳ 접평면에서 본 y ⊖ ȳ  (1·2축 단면)', ox + 8, 16);
+      var mx = 0;
+      S0.etas.forEach(function (e) { mx = Math.max(mx, Math.abs(e[0]), Math.abs(e[1])); });
+      var e12 = ellipse(S0.Py, 2);
+      mx = Math.max(mx, e12.rx, e12.ry)*1.15 + 1e-9;
+      var sc = Math.min(RWv*0.40, H*0.40)/mx;
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - RWv*0.42, cy); ctx.lineTo(cx + RWv*0.42, cy);
+      ctx.moveTo(cx, cy - H*0.40); ctx.lineTo(cx, cy + H*0.40); ctx.stroke();
+      ctx.fillStyle = css('--predict');
+      S0.etas.forEach(function (e, i) {
+        if (i % Math.max(1, Math.floor(S0.etas.length/900)) !== 0) return;
+        ctx.beginPath(); ctx.arc(cx + e[0]*sc, cy - e[1]*sc, 1.5, 0, 6.2832); ctx.fill();
+      });
+      function drawEll(C, col, dash, w) {
+        var e = ellipse(C, 2);
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+        if (dash) ctx.setLineDash(dash);
+        ctx.translate(cx, cy); ctx.rotate(-e.th);
+        ctx.beginPath(); ctx.ellipse(0, 0, e.rx*sc, e.ry*sc, 0, 0, 6.2832); ctx.stroke();
+        ctx.restore();
+      }
+      drawEll(S0.Py, css('--correct'));
+      drawEll(S0.PyEmp, css('--accent'), [6,4]);
+      ctx.fillStyle = faint; ctx.textAlign = 'center'; ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText('2σ', cx + 6, cy - ellipse(S0.Py, 2).ry*sc - 6);
+      ctx.font = '12px system-ui, sans-serif';
+    })();
+
+    var relPx = LG.mmaxabs(LG.msub(S0.PxEmp, S0.Px))/LG.mmaxabs(S0.Px);
+    var relPy = LG.mmaxabs(LG.msub(S0.PyEmp, S0.Py))/LG.mmaxabs(S0.Py);
+    function fmt(C) {
+      return C.map(function (r) { return r.map(function (v) { return v.toExponential(2); }).join('  '); }).join(' / ');
+    }
+    out.innerHTML =
+      'P<sub>x</sub> = diag(σ₁², σ₂², σ₃²) &nbsp;·&nbsp; 표본 수 ' + S0.taus.length + '<br>' +
+      '식 (12) 예측 &nbsp; P<sub>y</sub> = J·P<sub>x</sub>·Jᵀ = <b>' + fmt(S0.Py) + '</b><br>' +
+      '표본에서 잰 값 &nbsp; <b>' + fmt(S0.PyEmp) + '</b><br>' +
+      '상대 오차 &nbsp; P<sub>x</sub> <b>' + (relPx*100).toFixed(1) + '%</b> · ' +
+      'P<sub>y</sub> <b>' + (relPy*100).toFixed(1) + '%</b>' +
+      ' &nbsp;— 표본을 늘리면 줄고, σ 를 키우면 <b>선형화 오차 때문에 늘어난다</b> ' +
+      '(식 (12)는 1차 근사다).';
+  }
+
+  function set(id, v) { document.getElementById(id).value = v; }
+  document.querySelectorAll('#w-lie-covariance [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'resample') seed = (seed*7919 + 11) % 2147483647;
+      else if (a === 'tiny') { set('lc-s-s1', 0.02); set('lc-s-s2', 0.01); set('lc-s-s3', 0.01); }
+      else { set('lc-s-s1', 0.5); set('lc-s-s2', 0.35); set('lc-s-s3', 0.2); }
+      draw();
+    });
+  });
+  ['lc-s-s1','lc-s-s2','lc-s-s3','lc-s-n','lc-s-r','lc-s-y'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
