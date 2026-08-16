@@ -1,0 +1,150 @@
+<!--
+  실험 5 — factor graph 와 preintegration 이 줄이는 것
+  대응 식: (26) (27) (28)
+-->
+<div class="lab" id="w-fg">
+  <div class="lab-head">
+    <span class="lab-tag">실험 5</span>
+    <span class="lab-title">Factor graph — preintegration 은 무엇을 줄이는가</span>
+    <span class="lab-note">원문에 없는 추가 요소 · 식 (26)~(28)</span>
+  </div>
+  <div class="lab-body">
+    <p>식 (27)의 곱 구조를 그림으로 옮긴 것이 factor graph 다. 동그라미가 상태 변수 $\mathbf{x}_i$,
+       네모가 factor(= likelihood 한 개 = 식 (28)의 residual 한 항)다.
+       위는 <b>IMU 측정값마다 상태를 두는 경우</b>, 아래는 5장이 하는 대로
+       <b>키프레임 사이 IMU 를 하나로 합친 경우</b>다. 같은 정보를 담지만 미지수의 수가 다르다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>키프레임 수</span><b id="fg-v-kf">6</b></label>
+        <input type="range" id="fg-s-kf" min="2" max="12" step="1" value="6"></div>
+      <div class="slider"><label><span>IMU 주파수 (Hz)</span><b id="fg-v-hz">200</b></label>
+        <input type="range" id="fg-s-hz" min="50" max="1000" step="50" value="200"></div>
+      <div class="slider"><label><span>키프레임 간격 (s)</span><b id="fg-v-dt">0.10</b></label>
+        <input type="range" id="fg-s-dt" min="0.02" max="0.50" step="0.01" value="0.10"></div>
+      <div class="slider"><label><span>키프레임당 랜드마크 관측</span><b id="fg-v-lm">8</b></label>
+        <input type="range" id="fg-s-lm" min="0" max="40" step="1" value="8"></div>
+    </div>
+    <div class="btnrow">
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="fg-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>상태 변수 노드 $\mathbf{x}_i$</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>IMU factor $\mathbf{r}_{\mathcal{I}_{ij}}$</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>vision factor $\mathbf{r}_{\mathcal{C}_{il}}$</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>prior $\mathbf{r}_0$</span>
+    </div>
+    <div class="readout" id="fg-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // 이 위젯은 그림만 그리므로 window.PI 를 쓰지 않는다 (헬퍼를 넣지 않았다)
+  var cv = document.getElementById('fg-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('fg-readout');
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+
+  function node(x, y, r, col, fill) {
+    ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+    ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+    ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  function square(x, y, s, col) {
+    ctx.save(); ctx.fillStyle = col; ctx.fillRect(x - s/2, y - s/2, s, s); ctx.restore();
+  }
+  function link(x1, y1, x2, y2, col, w) {
+    ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.1; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+  }
+
+  function draw() {
+    var K = Math.round(val('fg-s-kf')), hz = Math.round(val('fg-s-hz')),
+        dt = val('fg-s-dt'), lm = Math.round(val('fg-s-lm'));
+    document.getElementById('fg-v-kf').textContent = K;
+    document.getElementById('fg-v-hz').textContent = hz;
+    document.getElementById('fg-v-dt').textContent = dt.toFixed(2);
+    document.getElementById('fg-v-lm').textContent = lm;
+
+    var perSeg = Math.max(1, Math.round(hz*dt));     // 키프레임 사이 IMU 샘플 수
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 330;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var ink = css('--ink'), faint = css('--ink-faint'), acc = css('--accent'),
+        cor = css('--correct'), pre = css('--predict'), panel = css('--panel');
+
+    ctx.save(); ctx.font = '12px ui-sans-serif, system-ui, sans-serif'; ctx.fillStyle = faint;
+    ctx.textAlign = 'left';
+    ctx.fillText('① preintegration 없이 — IMU 샘플마다 상태를 둔다', 14, 20);
+    ctx.fillText('② 5장의 방식 — 키프레임 사이 IMU 를 하나의 factor 로 합친다', 14, 190);
+    ctx.restore();
+
+    var L = 42, Rr = W - 26, y1 = 78, y2 = 250;
+
+    // ① 촘촘한 그래프 (그리는 개수는 화면에 맞춰 자름)
+    var shown = Math.min(perSeg, Math.max(1, Math.floor((Rr - L)/((K-1)*9))));
+    var totalDots = (K - 1)*shown + 1;
+    var stepx = (Rr - L)/Math.max(1, totalDots - 1);
+    for (var i = 0; i < totalDots; i++) {
+      var x = L + i*stepx;
+      if (i < totalDots - 1) { square(x + stepx/2, y1, 6, pre); link(x, y1, x + stepx, y1, pre, 1); }
+      var isKF = (i % shown === 0);
+      node(x, y1, isKF ? 7 : 3.4, isKF ? acc : faint, panel);
+    }
+    node(L, y1, 7, acc, panel); square(L - 20, y1, 8, faint); link(L - 20, y1, L, y1, faint);
+    if (shown < perSeg) {
+      ctx.save(); ctx.fillStyle = faint; ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'right'; ctx.fillText('(그림은 구간당 ' + shown + '개만 그렸다)', Rr, y1 - 26); ctx.restore();
+    }
+
+    // ② 키프레임만
+    var sx = (Rr - L)/Math.max(1, K - 1);
+    for (var k = 0; k < K; k++) {
+      var xk = L + k*sx;
+      if (k < K - 1) { square(xk + sx/2, y2, 11, pre); link(xk, y2, xk + sx, y2, pre, 1.6); }
+      node(xk, y2, 9, acc, panel);
+      ctx.save(); ctx.fillStyle = faint; ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText('x' + k, xk, y2 + 24); ctx.restore();
+      for (var l = 0; l < Math.min(lm, 6); l++) {
+        var lx = xk + (l - 2.5)*7, ly = y2 - 34 - (l % 2)*10;
+        square(lx, ly, 5, cor); link(xk, y2 - 9, lx, ly, cor, 0.8);
+      }
+      if (lm > 6) {
+        ctx.save(); ctx.fillStyle = cor; ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.fillText('×' + lm, xk, y2 - 56); ctx.restore();
+      }
+    }
+    square(L - 20, y2, 11, faint); link(L - 20, y2, L, y2, faint, 1.6);
+
+    var nA = (K - 1)*perSeg + 1, fA = 1 + (K - 1)*perSeg + K*lm;
+    var nB = K,                  fB = 1 + (K - 1) + K*lm;
+    out.innerHTML =
+      '키프레임 간격 ' + dt.toFixed(2) + 's · IMU ' + hz + 'Hz → 구간마다 <b>' + perSeg + '</b>개의 측정값' +
+      ' (3.2절이 말한 "수 개에서 수 백개")' +
+      '<br>① 상태 노드 <b>' + nA + '</b>개 · 미지수 <b>' + (nA*15).toLocaleString() +
+        '</b>차원 · factor <b>' + fA.toLocaleString() + '</b>개' +
+      '<br>② 상태 노드 <b>' + nB + '</b>개 · 미지수 <b>' + (nB*15).toLocaleString() +
+        '</b>차원 · factor <b>' + fB.toLocaleString() + '</b>개' +
+      '<br>→ 미지수가 <b>' + (nA/nB).toFixed(1) + '배</b> 줄었다. ' +
+      '상태 하나는 $[\\mathbf{R},\\mathbf{p},\\mathbf{v},\\mathbf{b}]$ 로 식 (24) 기준 15차원이다.' +
+      '<br><b>다만 이것만으로는 절반이다.</b> 5장 도입부가 지적하듯 식 (36)을 그냥 쓰면 ' +
+      '$\\mathbf{R}_i$ 가 갱신될 때마다 구간 안 ' + perSeg + '개를 <b>다시 적분</b>해야 한다. ' +
+      '식 (37)로 상대량을 정의해야 그 재적분이 사라진다 — 실험 7에서 확인한다.';
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([out]);
+  }
+
+  document.querySelectorAll('#w-fg input').forEach(function (el) { el.addEventListener('input', draw); });
+  document.querySelectorAll('#w-fg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      set('fg-s-kf', 6); set('fg-s-hz', 200); set('fg-s-dt', 0.10); set('fg-s-lm', 8); draw();
+    });
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

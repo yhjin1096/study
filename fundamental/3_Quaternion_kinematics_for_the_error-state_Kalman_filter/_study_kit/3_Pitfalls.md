@@ -279,7 +279,7 @@ done
 
 인용구 밖의 수식은 여러 줄로 써도 문제가 없다.
 
-### B6. autoload 매크로 하나가 페이지 **전체** 수식을 죽인다 ⚠️ 증상이 엉뚱한 곳에서 나타난다
+### B6. autoload 매크로 하나가 페이지 **전체** 수식을 죽인다 (그리고 해결하는 법) ⚠️ 증상이 엉뚱한 곳에서 나타난다
 
 **증상** — 수식이 하나도 렌더링되지 않고 `$$...$$` 원본이 그대로 글자로 보인다. 문제의 매크로를 쓴 그
 수식만이 아니라 **문서의 모든 수식**이 그렇다. 오류 메시지는 없다.
@@ -288,12 +288,12 @@ done
 만나면 MathJax의 autoload가 CDN에서 해당 확장을 받아오려 하고, **오프라인이라 실패하면서 typeset
 프라미스 전체가 죽는다.** 그 결과 페이지의 수식이 통째로 렌더링되지 않는다.
 
-| 쓰면 안 되는 것 | 대신 | 비고 |
+| autoload 대상 | 번들에 이어 붙이면? | 안 붙였다면 대신 |
 |---|---|---|
-| `\color` · `\textcolor` | (색을 포기) | 원문의 색 강조는 재현 불가 |
-| `\boldsymbol` | `\pmb` | 굵은 그리스 문자. `\pmb`는 base라 안전하다 |
-| `\cancel` · `\bcancel` | (취소선 포기) | 소거되는 항은 다음 줄에서 확인된다 |
-| `\href` · `\enclose` · `\unicode` | 쓰지 않는다 | 모두 autoload 대상 |
+| `\color` · `\textcolor` | **된다** (`color.js`, 8.6KB) | 색을 포기하거나 CSS 로 (아래) |
+| `\boldsymbol` | **된다** (`boldsymbol.js`, 4KB) | `\pmb` (base 라 안전) |
+| `\cancel` · `\bcancel` | 안 된다 (같은 방법으로도 실패) | 취소선 포기 |
+| `\href` · `\enclose` · `\unicode` | 확인 안 함 | 쓰지 않는다 |
 
 `\substack` · `\boxplus` · `\therefore` · `\leftrightarrows` · `\underline` · `\intercal` · `\boxed`는
 ams 또는 base에 있으므로 **안전하다.** 새 매크로를 쓸 때는 아래 한 줄로 먼저 확인하라.
@@ -303,6 +303,15 @@ ams 또는 base에 있으므로 **안전하다.** 새 매크로를 쓸 때는 �
 google-chrome --headless --disable-gpu --no-sandbox --virtual-time-budget=25000 \
     --dump-dom "file://$PWD/notes/노트.html" | grep -o '<mjx-container' | wc -l
 ```
+
+> **오류 개수를 셀 때는 `<script>` 를 먼저 지워라.** MathJax 번들 소스 안에 `merror` 와
+> `"data-mjx-error"` 라는 **문자열이 그대로 들어 있다.** 인라인된 2MB 번들을 통째로 grep 하면
+> 실제 오류가 0 건이어도 각각 3건씩 잡혀서 "오류가 있다" 고 잘못 판단하게 된다.
+>
+> ```python
+> body = re.sub(r'<script.*?</script>', '', dom, flags=re.S)   # 이 다음에 센다
+> print(len(re.findall(r'data-mjx-error', body)))
+> ```
 
 > **덤으로** — 헤드리스 스크린샷으로 수식을 확인할 때 `--virtual-time-budget` 이 짧으면
 > (2MB 번들 기준 10초 미만) MathJax가 끝나기 전에 캡처되어 **렌더링이 안 된 것처럼 보인다.**
@@ -335,6 +344,48 @@ grep 하면 MathJax가 주입한 `<script src=".../input/tex/extensions/boldsymb
 칠해진다. `\color` 를 쓰지 않으므로 autoload 가 발동하지 않는다.
 Lie Theory 스터디는 이 방법으로 원문의 파란 강조 12곳을 그대로 살렸다
 (빌더에 `==강조==` → `<span class="hl">` 규칙을 한 줄 추가했다).
+
+**수식 *안*에 색이 있으면 CSS 로는 안 된다. 그때는 확장을 번들에 이어 붙인다.**
+preintegration 스터디의 원문은 `#a50000` 을 **수식 글리프**에 57구간 썼다(폰트가 CMMI/CMSY/CMEX 였다).
+CSS 로는 수식 전체가 물들 뿐 일부만 칠할 수 없어 `\color` 가 꼭 필요했다.
+
+해결은 간단하다 — **컴포넌트 파일을 번들 뒤에 이어 붙이고 `packages` 에만 더한다.**
+
+```bash
+curl -sO https://cdn.jsdelivr.net/npm/mathjax@3/es5/input/tex/extensions/color.js
+curl -sO https://cdn.jsdelivr.net/npm/mathjax@3/es5/input/tex/extensions/boldsymbol.js
+cat tex-svg.js color.js boldsymbol.js > _study_kit/tools/vendor/tex-svg.js
+```
+
+```js
+window.MathJax = { tex: { packages: {'[+]': ['color', 'boldsymbol']}, ... } };
+```
+
+⚠️ **`loader: {load: ['[tex]/color']}` 로 부르면 안 된다.** 그러면 이미 로드된 코드가 있어도
+로더가 네트워크를 타서 B6 에 그대로 걸린다 — 실제로 이 경로로 시도했다가 `<mjx-container` 0개를 봤다.
+`<script>` 태그를 따로 두는 것도 위험하다(startup 프라미스가 그 사이에 끼어들 수 있다).
+**한 파일로 이어 붙이는 것**이 확실하다. 버전은 번들과 맞춰라(여기서는 3.2.2).
+
+같은 방법으로 `cancel.js` 는 **동작하지 않았다** — 붙여도 `<mjx-container` 가 0개였다.
+새 확장을 붙일 때는 반드시 아래 최소 예제로 하나씩 확인하라.
+
+```bash
+# 확장마다 그 확장의 매크로만 쓴 페이지로 따로 시험한다.
+# 한 페이지에 여러 매크로를 섞으면 로드 안 된 다른 매크로 때문에 전부 0 이 나와
+# "붙였는데도 안 된다" 고 잘못 판단하게 된다 — 실제로 한 번 헤맸다.
+```
+
+**어두운 배경 보정** — `\color` 값은 SVG 에 `fill`/`stroke` **속성**으로 박힌다.
+CSS 프로퍼티가 표현 속성을 이기므로 다크 테마에서만 밝은 값으로 덮어쓸 수 있다.
+
+```css
+:root[data-theme="dark"] [fill="#a50000"]   { fill:  #f2736b; }
+:root[data-theme="dark"] [stroke="#a50000"] { stroke:#f2736b; }
+```
+
+**`\color` 는 두 인자를 받는다** (`\color{색}{수식}`). 인자 밖으로는 색이 새지 않으므로
+`\color{black}` 으로 되돌릴 필요가 없다. `{\color{색} ...}` 그룹 형태도 동작하고
+`\boxed{\begin{aligned}...\end{aligned}}` 안에서도 문제없다.
 
 > **쿼터니언 스터디 사례** — 굵은 그리스 문자가 190곳 나오는 문서라 `\boldsymbol`을 그대로 두면
 > 3.9MB 문서의 수식이 **하나도** 렌더링되지 않았다. 일괄 치환 후 976개가 정상 렌더링됐다.
