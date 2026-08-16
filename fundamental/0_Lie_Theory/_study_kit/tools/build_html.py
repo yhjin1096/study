@@ -104,7 +104,8 @@ def inline(text, vault):
     # ==강조== → 원문의 색 강조를 재현한다. 수식은 이미 vault에 들어가 있으므로
     # 강조 구간 안의 인라인 수식도 함께 감싸진다. MathJax SVG 글리프는
     # currentColor를 상속하므로 \color 매크로 없이 수식까지 같이 물든다 (3_Pitfalls B6 회피).
-    text = re.sub(r"==([^=\n]+)==", r'<span class="hl">\1</span>', text)
+    # 강조 구간 안에 단일 '=' 가 들어갈 수 있다 (예: "트레이스 = 랭크"). '==' 만 경계로 본다.
+    text = re.sub(r"==((?:[^=\n]|=(?!=))+)==", r'<span class="hl">\1</span>', text)
     return text
 
 

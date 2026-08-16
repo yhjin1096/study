@@ -1,0 +1,24 @@
+# Notes on Linear Algebra — 그림 파일명 매핑
+# 이 문서에는 캡션이 하나도 없다 (Figure/Table/Fig. 전문 0회).
+# 그래서 그림 번호는 원문에 없는 것이고, 여기서 등장 순서대로 붙인 것이다.
+# 형식:  파일명(확장자 제외) = 무엇을 그린 그림인가 (원문 쪽, 절)
+
+fig01_p06_overdetermined_system            = (m > n) Overdetermined System 의 행렬 모양      (p6, 1.4)
+fig02_p06_underdetermined_system           = (m < n) Underdetermined System 의 행렬 모양     (p6, 1.5)
+fig03_p07_span_in_R2_and_R3                = R² 와 R³ 에서의 Span                            (p7, 1.8)
+fig04_p08_linear_independence_vs_dependence = 선형독립 v₃ ∉ Span{v₁,v₂} 과 선형의존 v₃ ∈ Span{v₁,v₂}  (p8, 1.11)
+fig05_p10_standard_basis_vectors           = R³ 의 표준기저벡터 e₁, e₂, e₃                    (p10, 1.15)
+fig06_p11_column_space                     = Col A = Span{a_1,col, …, a_m,col}               (p11, 1.17)
+fig07_p13_domain_codomain_range            = Domain / Co-Domain / Range / Image              (p13, 1.21)
+fig08_p14_surjective_injective             = Surjective(onto) 와 Injective(one-to-one)       (p14, 1.25)
+fig09_p16_orthogonal_vectors               = u ⊥ v = u·v = 0                                 (p16, 2.7)
+fig10_p16_least_square_projection          = Ax = b ⇒ Ax̂ = b̂, Col A 로의 프로젝션            (p16, 2.8)
+fig11_p19_orthogonal_vs_orthonormal_set    = 직교 집합과 정규직교 집합                       (p19, 2.14)
+fig12_p20_projection_onto_line             = 직선 L = Span{u} 위로의 정사영 ŷ                (p20, 2.16)
+fig13_p20_projection_onto_plane            = 평면 W = Span{u₁,u₂} 위로의 정사영 ŷ            (p20, 2.17)
+fig14_p21_gram_schmidt                     = 그람-슈미트 v₂ = x₂ − x̂₂                        (p21, 2.21)
+fig15_p22_eigenvector                      = Ax = λx                                          (p22, 3장 도입)
+fig16_p23_four_subspaces_orthogonality     = Row{A} ⊥ Nul{A}, Col{A} ⊥ Nul{Aᵀ}               (p23, 3.2)
+fig17_p26_svd_matrix_shapes                = A = UDVᵀ 의 행렬 크기                            (p26, 4장 도입)
+fig18_p37_leading_principal_minors         = leading principal submatrix / minors             (p37, 6.9)
+fig19_p42_svd_matrix_shapes                = A = UDVᵀ 의 행렬 크기 (fig17 과 같은 그림)       (p42, 7.6)
