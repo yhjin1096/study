@@ -1,0 +1,941 @@
+<!--
+  실험 10 — 식 (60)~(65) IMU residual 과 자코비안
+-->
+<div class="lab" id="w-ires">
+  <div class="lab-head">
+    <span class="lab-tag">실험 10</span>
+    <span class="lab-title">식 (60) residual 과 (62)~(65) 자코비안 — 수치미분과 맞는가</span>
+    <span class="lab-note">원문에 없는 추가 요소 · 식 (60)~(65)</span>
+  </div>
+  <div class="lab-body">
+    <p>4.3절이 손으로 유도한 $15\times 30$ 자코비안($\mathbf{J}[0..3]$ 을 가로로 붙인 것)을
+       식 (61)의 상태를 실제로 흔들어 <b>중심차분으로 미분한 것</b>과 나란히 놓는다.
+       오른쪽 판이 거의 비어 보이면 유도가 맞다는 뜻이다.
+       흰 세로선이 $[\mathbf{p}_{b_k}^w\ \boldsymbol{\phi}_{b_k}\ |\ \mathbf{v}_{b_k}^w\ \mathbf{b}_{a_k}\ \mathbf{b}_{g_k}\ |\ \mathbf{p}_{b_{k+1}}^w\ \boldsymbol{\phi}_{b_{k+1}}\ |\ \mathbf{v}_{b_{k+1}}^w\ \mathbf{b}_{a_{k+1}}\ \mathbf{b}_{g_{k+1}}]$ 를 나눈다.</p>
+
+    <div class="sliders">
+      <div class="slider"><label><span>$\Delta t_k$ (s)</span><b id="ir-v-T">0.30</b></label>
+        <input type="range" id="ir-s-T" min="0.05" max="1" step="0.05" value="0.30"></div>
+      <div class="slider"><label><span>$\mathbf{q}_{b_k}^w$ 회전량</span><b id="ir-v-r">0.60</b></label>
+        <input type="range" id="ir-s-r" min="0" max="3" step="0.02" value="0.6"></div>
+      <div class="slider"><label><span>상태를 정답에서 틀기</span><b id="ir-v-d">0.00</b></label>
+        <input type="range" id="ir-s-d" min="0" max="0.5" step="0.005" value="0"></div>
+      <div class="slider"><label><span>수치미분 $\log_{10} h$</span><b id="ir-v-h">-6.0</b></label>
+        <input type="range" id="ir-s-h" min="-9" max="-3" step="0.5" value="-6"></div>
+    </div>
+    <div class="btnrow">
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="ir-canvas" width="880" height="250"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>양수</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>음수</span>
+      <span><i class="swatch" style="background:var(--rule)"></i>0</span>
+    </div>
+    <div class="readout" id="ir-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ==VM-BEGIN== (자동 생성 — 고치지 말 것. tools/widgets/_vm_helper.js 를 고칠 것)
+  // window.VM — 이 스터디의 위젯 12개가 공유하는 계산 라이브러리
+  //
+  //   앞부분은 4_On-manifold_preintegration 스터디의 window.PI 를 그대로 가져온 것이다
+  //   (SO(3) 지수·로그, 오른쪽 자코비안, 3D 씬, 난수, 수치미분, 2D 플롯).
+  //   뒷부분("여기부터 VINS-Mono 스터디에서 더한 것")이 이 문서 전용이다 —
+  //   쿼터니언 대수와 Ω_L/Ω_R(NOMENCLATURE), 식 (9) mid-point preintegration,
+  //   식 (37)(38) F·G 와 (27)(28) P·J 전파, 식 (29) bias 1차 보정,
+  //   식 (60) residual, 초기화 선형시스템, 식 (79)~(82) Schur complement.
+  //
+  //   쿼터니언은 [w, x, y, z] 순서의 길이 4 배열이다 (원문 표기와 같다).
+  //   중력은 원문 NOMENCLATURE 대로 g^w = [0,0,+9.8] 이다 — 부호에 주의.
+  //
+  //   위젯 파일에는 `//%VM%` 한 줄만 두고 tools/inject_helper.py 로 채워 넣는다.
+  //   검산 결과는 _study_kit/README.md 의 표를 볼 것.
+
+  if (!window.VM) window.VM = (function () {
+      // ---- 일반 행렬 ------------------------------------------------------
+      function zeros(r, c) { var M = []; for (var i = 0; i < r; i++) M.push(new Array(c).fill(0)); return M; }
+      function eye(n) { var M = zeros(n, n); for (var i = 0; i < n; i++) M[i][i] = 1; return M; }
+      function mm(A, B) {
+        var r = A.length, c = B[0].length, k2 = B.length, C = zeros(r, c);
+        for (var i = 0; i < r; i++) for (var j = 0; j < c; j++) {
+          var s = 0; for (var k = 0; k < k2; k++) s += A[i][k]*B[k][j]; C[i][j] = s;
+        }
+        return C;
+      }
+      function mT(A) { var C = zeros(A[0].length, A.length);
+        for (var i = 0; i < A.length; i++) for (var j = 0; j < A[0].length; j++) C[j][i] = A[i][j];
+        return C; }
+      function madd(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v + B[i][j]; }); }); }
+      function msub(A, B) { return A.map(function (r, i) { return r.map(function (v, j) { return v - B[i][j]; }); }); }
+      function mscale(A, k) { return A.map(function (r) { return r.map(function (v) { return v*k; }); }); }
+      function mv(A, v) { return A.map(function (r) { var s = 0; for (var j = 0; j < v.length; j++) s += r[j]*v[j]; return s; }); }
+      function minv(A) {                                    // 가우스-조던
+        var n = A.length, M = A.map(function (r, i) { return r.concat(eye(n)[i]); });
+        for (var c = 0; c < n; c++) {
+          var p = c;
+          for (var r2 = c + 1; r2 < n; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[p][c])) p = r2;
+          if (Math.abs(M[p][c]) < 1e-14) return eye(n);
+          var tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+          var d = M[c][c];
+          for (var j = 0; j < 2*n; j++) M[c][j] /= d;
+          for (var r3 = 0; r3 < n; r3++) if (r3 !== c) {
+            var f = M[r3][c];
+            if (f) for (var j2 = 0; j2 < 2*n; j2++) M[r3][j2] -= f*M[c][j2];
+          }
+        }
+        return M.map(function (r) { return r.slice(n); });
+      }
+      function mmaxabs(A) { var m = 0; A.forEach(function (r) { r.forEach(function (v) { m = Math.max(m, Math.abs(v)); }); }); return m; }
+      function blk(TL, TR, BL, BR) {                        // 3×3 넷 → 6×6
+        var M = zeros(6, 6);
+        for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+          M[i][j] = TL[i][j]; M[i][j+3] = TR[i][j]; M[i+3][j] = BL[i][j]; M[i+3][j+3] = BR[i][j];
+        }
+        return M;
+      }
+
+      // ---- 벡터 -----------------------------------------------------------
+      function nrm(v) { var s = 0; for (var i = 0; i < v.length; i++) s += v[i]*v[i]; return Math.sqrt(s); }
+      function unit(v) { var n = nrm(v) || 1; return v.map(function (x) { return x/n; }); }
+      function add(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+      function sub(a, b) { return a.map(function (v, i) { return v - b[i]; }); }
+      function sc(a, k) { return a.map(function (v) { return v*k; }); }
+      function dot(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i]*b[i]; return s; }
+      function cross(a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+      function axis(azDeg, elDeg) {
+        var a = azDeg*Math.PI/180, e = elDeg*Math.PI/180;
+        return [Math.cos(e)*Math.cos(a), Math.cos(e)*Math.sin(a), Math.sin(e)];
+      }
+
+      // ---- so(3) / SO(3) --------------------------------------------------
+      function hat(w) { return [[0, -w[2], w[1]], [w[2], 0, -w[0]], [-w[1], w[0], 0]]; }   // 식 (17)(32)
+      function vee(W) { return [W[2][1], W[0][2], W[1][0]]; }
+      function expSO3(w) {                                  // 식 (27) 로드리게스
+        var t = nrm(w), W = hat(w);
+        if (t < 1e-10) return madd(eye(3), madd(W, mscale(mm(W, W), 0.5)));
+        return madd(eye(3), madd(mscale(W, Math.sin(t)/t), mscale(mm(W, W), (1 - Math.cos(t))/(t*t))));
+      }
+      function logSO3(R) {                                  // 식 (28)
+        var tr = (R[0][0] + R[1][1] + R[2][2] - 1)/2;
+        var t = Math.acos(Math.max(-1, Math.min(1, tr)));
+        if (t < 1e-8) return sc(vee(msub(R, mT(R))), 0.5);
+        if (Math.PI - t < 1e-6) {                           // θ≈π — 대칭 성분에서 축을 뽑는다
+          var S = mscale(madd(R, eye(3)), 0.5), best = 0, bi = 0;
+          for (var i = 0; i < 3; i++) if (S[i][i] > best) { best = S[i][i]; bi = i; }
+          var u = unit([S[0][bi], S[1][bi], S[2][bi]]);
+          var dsym = vee(msub(R, mT(R)));                   // 부호는 반대칭 성분으로 가린다
+          if (dot(dsym, u) < 0) u = sc(u, -1);
+          return sc(u, t);
+        }
+        return sc(vee(msub(R, mT(R))), t/(2*Math.sin(t)));
+      }
+      function JrSO3(w) {                                   // 식 (48) 오른쪽 자코비안
+        var t = nrm(w), W = hat(w);
+        if (t < 1e-8) return msub(eye(3), mscale(W, 0.5));
+        return madd(msub(eye(3), mscale(W, (1 - Math.cos(t))/(t*t))),
+                    mscale(mm(W, W), (t - Math.sin(t))/(t*t*t)));
+      }
+      function JlSO3(w) { return mT(JrSO3(w)); }            // 식 (50)
+      function JinvCoef(t) {                                // 1/θ² − (1+cosθ)/(2θ sinθ)
+        if (t < 1e-4) return 1/12 + t*t/720;
+        return 1/(t*t) - (1 + Math.cos(t))/(2*t*Math.sin(t));
+      }
+      function JlInvSO3(w) {                                // 식 (65)
+        var t = nrm(w), W = hat(w);
+        return madd(msub(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+      }
+      function JrInvSO3(w) {                                // 식 (48) 주석
+        var t = nrm(w), W = hat(w);
+        return madd(madd(eye(3), mscale(W, 0.5)), mscale(mm(W, W), JinvCoef(t)));
+      }
+      function AdSO3(R) { return R; }                       // 식 (46)
+
+      // ---- se(3) / SE(3) --------------------------------------------------
+      // ξ = [ω; v] (회전 먼저) — 원문 식 (55) 의 순서
+      function T(R, t) {
+        return [[R[0][0], R[0][1], R[0][2], t[0]],
+                [R[1][0], R[1][1], R[1][2], t[1]],
+                [R[2][0], R[2][1], R[2][2], t[2]],
+                [0, 0, 0, 1]];
+      }
+      function TR(M) { return [[M[0][0], M[0][1], M[0][2]], [M[1][0], M[1][1], M[1][2]], [M[2][0], M[2][1], M[2][2]]]; }
+      function Tt(M) { return [M[0][3], M[1][3], M[2][3]]; }
+      function Tinv(M) {                                    // 식 (52)
+        var R = TR(M), Rt = mT(R);
+        return T(Rt, sc(mv(Rt, Tt(M)), -1));
+      }
+      function expSE3(xi) {                                 // 식 (64)
+        var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+        return T(expSO3(w), mv(JlSO3(w), v));
+      }
+      function logSE3(M) {                                  // 식 (67)
+        var w = logSO3(TR(M)), v = mv(JlInvSO3(w), Tt(M));
+        return [w[0], w[1], w[2], v[0], v[1], v[2]];
+      }
+      function AdSE3(M) {                                   // 식 (73)
+        var R = TR(M), t = Tt(M);
+        return blk(R, zeros(3, 3), mm(hat(t), R), R);
+      }
+      function QlSE3(xi) {                                  // 식 (78)
+        var w = [xi[0], xi[1], xi[2]], v = [xi[3], xi[4], xi[5]];
+        var t = nrm(w), W = hat(w), V = hat(v), W2 = mm(W, W);
+        var c1, c2, c3;
+        if (t < 1e-4) { c1 = 1/6; c2 = -1/24; c3 = -1/120; }
+        else {
+          c1 = (t - Math.sin(t))/(t*t*t);
+          c2 = (t*t + 2*Math.cos(t) - 2)/(2*t*t*t*t);
+          c3 = (2*t - 3*Math.sin(t) + t*Math.cos(t))/(2*Math.pow(t, 5));
+        }
+        var A = madd(madd(mm(W, V), mm(V, W)), mm(mm(W, V), W));
+        var B = msub(madd(mm(W2, V), mm(V, W2)), mscale(mm(mm(W, V), W), 3));
+        var C = madd(mm(mm(W, V), W2), mm(mm(W2, V), W));
+        return madd(mscale(V, 0.5), madd(mscale(A, c1), madd(mscale(B, c2), mscale(C, c3))));
+      }
+      function QrSE3(xi) { return QlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+      // ξ = [ω; v] (회전 먼저) 순서에서는 Q 블록이 왼쪽 아래에 온다.
+      // 원문 (75)·(77) 의 [[J, Q], [0, J]] 배치는 ξ = [v; ω] (이동 먼저) 순서를 전제한 것이다.
+      // 수치 미분으로 확인했다 — 노트의 "원문 그대로 둔 것" 참조.
+      function JlSE3(xi) {
+        var w = [xi[0], xi[1], xi[2]], J = JlSO3(w);
+        return blk(J, zeros(3, 3), QlSE3(xi), J);
+      }
+      function JrSE3(xi) { return JlSE3(xi.map(function (v) { return -v; })); }   // 식 (79)
+
+      // ---- ⊕ / ⊖ ----------------------------------------------------------
+      function plusSO3(R, w) { return mm(R, expSO3(w)); }                          // 식 (40)
+      function minusSO3(R2, R1) { return logSO3(mm(mT(R1), R2)); }                 // 식 (42)
+      function plusSE3(M, xi) { return mm(M, expSE3(xi)); }                        // 식 (68)
+      function minusSE3(M2, M1) { return logSE3(mm(Tinv(M1), M2)); }               // 식 (69)
+
+      // ---- 정사영 3D 장면 ---------------------------------------------------
+      function scene(ctx, cx, cy, s, yaw, pitch) {
+        var cyw = Math.cos(yaw), syw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+        function P(p) {
+          var X = p[0]*cyw - p[1]*syw, Y = p[0]*syw + p[1]*cyw;
+          return [cx + X*s, cy - (p[2]*cp - Y*sp)*s];
+        }
+        function head(A, B, col) {
+          var ang = Math.atan2(B[1]-A[1], B[0]-A[0]), h = 8;
+          ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+          ctx.moveTo(B[0], B[1]);
+          ctx.lineTo(B[0] - h*Math.cos(ang-0.36), B[1] - h*Math.sin(ang-0.36));
+          ctx.lineTo(B[0] - h*Math.cos(ang+0.36), B[1] - h*Math.sin(ang+0.36));
+          ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+        return {
+          P: P,
+          line: function (a, b, col, w, dash) {
+            var A = P(a), B = P(b);
+            ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.4;
+            if (dash) ctx.setLineDash(dash);
+            ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+          },
+          arrow: function (a, b, col, w, dash) {
+            var A = P(a), B = P(b);
+            ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+            if (dash) ctx.setLineDash(dash);
+            ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.restore();
+            head(A, B, col);
+          },
+          poly: function (pts, col, w, dash) {
+            ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 1.2;
+            if (dash) ctx.setLineDash(dash);
+            ctx.beginPath();
+            for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+            ctx.stroke(); ctx.restore();
+          },
+          fillPoly: function (pts, col, alpha) {
+            ctx.save(); ctx.fillStyle = col; ctx.globalAlpha = alpha === undefined ? 0.16 : alpha;
+            ctx.beginPath();
+            for (var i = 0; i < pts.length; i++) { var A = P(pts[i]); i ? ctx.lineTo(A[0], A[1]) : ctx.moveTo(A[0], A[1]); }
+            ctx.closePath(); ctx.fill(); ctx.restore();
+          },
+          dot: function (p, col, r) {
+            var A = P(p); ctx.save(); ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(A[0], A[1], r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+          },
+          label: function (p, txt, col, dx, dy) {
+            var A = P(p); ctx.save(); ctx.fillStyle = col;
+            ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(txt, A[0] + (dx === undefined ? 7 : dx), A[1] + (dy === undefined ? -6 : dy));
+            ctx.restore();
+          }
+        };
+      }
+      function circle3(n, r, N) {
+        var a = Math.abs(n[0]) < 0.9 ? [1,0,0] : [0,1,0];
+        var e1 = unit(cross(n, a)), e2 = cross(n, e1), pts = [];
+        for (var i = 0; i <= (N || 64); i++) {
+          var t = i/(N || 64)*2*Math.PI, c = Math.cos(t)*r, s2 = Math.sin(t)*r;
+          pts.push([e1[0]*c + e2[0]*s2, e1[1]*c + e2[1]*s2, e1[2]*c + e2[2]*s2]);
+        }
+        return pts;
+      }
+      function frame(S, R, origin, len, cols, tag) {        // 좌표축 세 개
+        var o = origin || [0,0,0];
+        for (var i = 0; i < 3; i++) {
+          var e = add(o, [R[0][i]*len, R[1][i]*len, R[2][i]*len]);
+          S.arrow(o, e, cols[i], 2);
+          if (tag && tag[i]) S.label(e, tag[i], cols[i]);
+        }
+      }
+
+      // ══ 여기부터 이 스터디에서 더한 것 ══════════════════════════════════
+      // 위쪽은 Lie Theory 스터디의 window.LG 를 그대로 가져온 것이고,
+      // 아래는 preintegration 노트에 필요한 것만 새로 쓴 것이다.
+
+      // ---- 난수 ------------------------------------------------------------
+      // 위젯이 "다시 굴려도 같은 그림"이 되게 하려면 시드가 필요하다.
+      // mulberry32 — 짧고 품질이 충분하다.
+      function rng(seed) {
+        var s = seed >>> 0;
+        return function () {
+          s |= 0; s = (s + 0x6D2B79F5) | 0;
+          var t = Math.imul(s ^ (s >>> 15), 1 | s);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function randn(rnd) {                                   // Box–Muller
+        var u = 1 - rnd(), v = rnd();
+        return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+      }
+      function randnVec(n, rnd) { var v = []; for (var i = 0; i < n; i++) v.push(randn(rnd)); return v; }
+
+      // ---- 대칭행렬 도구 ----------------------------------------------------
+      function chol(A) {                                      // A = L Lᵀ (PD 아니면 null)
+        var n = A.length, L = zeros(n, n);
+        for (var i = 0; i < n; i++) for (var j = 0; j <= i; j++) {
+          var s = A[i][j];
+          for (var k = 0; k < j; k++) s -= L[i][k]*L[j][k];
+          if (i === j) { if (s <= 1e-300) return null; L[i][j] = Math.sqrt(s); }
+          else L[i][j] = s/L[j][j];
+        }
+        return L;
+      }
+      function symmetrize(A) { return mscale(madd(A, mT(A)), 0.5); }
+      function fro(A) { var s = 0; A.forEach(function (r) { r.forEach(function (v) { s += v*v; }); }); return Math.sqrt(s); }
+
+      // ---- 수치 미분 --------------------------------------------------------
+      // f: R^n → R^m 을 중심차분으로 미분한다. 해석적 자코비안 검산 전용.
+      function numJac(f, x, h) {
+        h = h || 1e-6;
+        var n = x.length, f0 = f(x), m = f0.length, J = zeros(m, n);
+        for (var j = 0; j < n; j++) {
+          var xp = x.slice(), xm = x.slice();
+          xp[j] += h; xm[j] -= h;
+          var a = f(xp), b = f(xm);
+          for (var i = 0; i < m; i++) J[i][j] = (a[i] - b[i])/(2*h);
+        }
+        return J;
+      }
+
+      // ---- IMU 시뮬레이터 ---------------------------------------------------
+      // 참 궤적을 해석적으로 정의하고 그것을 미분해 참 ω, a 를 만든다.
+      // 이렇게 해야 "적분 오차"와 "모델 오차"를 섞지 않고 볼 수 있다.
+      //   p(t) = [Rx cos(ωp t), Ry sin(ωp t), Az sin(ωz t)]
+      //   R(t) = Exp([0,0,ψ t]) · Exp([φ sin(ωr t), 0, 0])
+      var G = [0, 0, -9.81];                                  // 월드 중력
+      function truth(t, o) {
+        o = o || {};
+        var Rx = o.Rx === undefined ? 2 : o.Rx, Ry = o.Ry === undefined ? 1.2 : o.Ry,
+            wp = o.wp === undefined ? 1.1 : o.wp, Az = o.Az === undefined ? 0.4 : o.Az,
+            wz = o.wz === undefined ? 2.3 : o.wz, psi = o.psi === undefined ? 0.7 : o.psi,
+            phi = o.phi === undefined ? 0.5 : o.phi, wr = o.wr === undefined ? 1.7 : o.wr;
+        var p = [Rx*Math.cos(wp*t), Ry*Math.sin(wp*t), Az*Math.sin(wz*t)];
+        var v = [-Rx*wp*Math.sin(wp*t), Ry*wp*Math.cos(wp*t), Az*wz*Math.cos(wz*t)];
+        var a = [-Rx*wp*wp*Math.cos(wp*t), -Ry*wp*wp*Math.sin(wp*t), -Az*wz*wz*Math.sin(wz*t)];
+        var R = mm(expSO3([0, 0, psi*t]), expSO3([phi*Math.sin(wr*t), 0, 0]));
+        return { p: p, v: v, a: a, R: R };
+      }
+      // 참 각속도는 Ṙ = R ω^ 에서 수치미분으로 얻는다 (합성회전이라 닫힌형이 지저분하다)
+      function trueOmega(t, o, h) {
+        h = h || 1e-6;
+        var R = truth(t, o).R, R2 = truth(t + h, o).R, R1 = truth(t - h, o).R;
+        var Rd = mscale(msub(R2, R1), 1/(2*h));
+        return vee(mm(mT(R), Rd));                            // ω = (Rᵀ Ṙ)ᵨ
+      }
+
+      // 측정값 만들기 — 식 (29). bias·노이즈는 body 좌표계에서 더한다.
+      //   ω̃ = ω + b^g + η^g,  ã = Rᵀ(a − g) + b^a + η^a
+      function makeMeas(n, dt, bg, ba, sg, sa, seed, o) {
+        var rnd = rng(seed === undefined ? 7 : seed), M = [];
+        for (var k = 0; k < n; k++) {
+          var t = k*dt, T = truth(t, o), w = trueOmega(t, o);
+          var aB = mv(mT(T.R), sub(T.a, G));
+          M.push({
+            t: t,
+            w: [w[0] + bg[0] + sg*randn(rnd), w[1] + bg[1] + sg*randn(rnd), w[2] + bg[2] + sg*randn(rnd)],
+            a: [aB[0] + ba[0] + sa*randn(rnd), aB[1] + ba[1] + sa*randn(rnd), aB[2] + ba[2] + sa*randn(rnd)]
+          });
+        }
+        return M;
+      }
+
+      // ---- 식 (34) 전방 적분 ------------------------------------------------
+      // 절대 상태를 그대로 굴린다. R_i, v_i, p_i 가 바뀌면 전부 다시 계산해야 한다.
+      function integrate(R0, v0, p0, M, dt, bg, ba) {
+        var R = R0, v = v0.slice(), p = p0.slice(), traj = [{ R: R, v: v, p: p }];
+        for (var k = 0; k < M.length; k++) {
+          var w = sub(M[k].w, bg), a = sub(M[k].a, ba), Ra = mv(R, a);
+          var pn = add(add(p, sc(v, dt)), sc(add(Ra, G), 0.5*dt*dt));
+          var vn = add(v, sc(add(Ra, G), dt));
+          R = mm(R, expSO3(sc(w, dt))); v = vn; p = pn;
+          traj.push({ R: R, v: v, p: p });
+        }
+        return traj;
+      }
+
+      // ---- 식 (37)(58)(66) preintegration ------------------------------------
+      // 측정값과 bias 만으로 ΔR, Δv, Δp 를 만든다. R_i, v_i, p_i 는 쓰지 않는다.
+      // 같이 굴리는 것:
+      //   Sig  9×9 공분산  — 식 (58) 반복식, [δφ, δv, δp] 순
+      //   dRg, dvg, dva, dpg, dpa  — 식 (66) bias 자코비안
+      function preint(M, dt, bg, ba, Seta) {
+        var dR = eye(3), dv = [0,0,0], dp = [0,0,0], Sig = zeros(9, 9);
+        var dRg = zeros(3,3), dvg = zeros(3,3), dva = zeros(3,3), dpg = zeros(3,3), dpa = zeros(3,3);
+        var Z = zeros(3,3), I = eye(3);
+        for (var k = 0; k < M.length; k++) {
+          var w = sub(M[k].w, bg), a = sub(M[k].a, ba);
+          var dRk = expSO3(sc(w, dt)), Jr = JrSO3(sc(w, dt));
+          var Rda = mm(dR, hat(a));                           // ΔR_ik (ã−b^a)^
+
+          if (Seta) {                                          // 식 (57)(58)
+            var A = zeros(9,9), B = zeros(9,6), dRkT = mT(dRk);
+            function put(Mt, r, c, X, s) {
+              for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) Mt[r+i][c+j] = X[i][j]*(s===undefined?1:s);
+            }
+            put(A, 0, 0, dRkT);
+            put(A, 3, 0, Rda, -dt);      put(A, 3, 3, I);
+            put(A, 6, 0, Rda, -0.5*dt*dt); put(A, 6, 3, I, dt); put(A, 6, 6, I);
+            put(B, 0, 0, Jr, dt);
+            put(B, 3, 3, dR, dt);
+            put(B, 6, 3, dR, 0.5*dt*dt);
+            Sig = madd(mm(mm(A, Sig), mT(A)), mm(mm(B, Seta), mT(B)));
+          }
+
+          // 식 (66) — 누적형. 갱신 순서가 중요하다(dRg 는 마지막에 갱신).
+          dpa = madd(msub(dpa, mscale(dR, 0.5*dt*dt)), mscale(dva, dt));
+          dpg = madd(msub(dpg, mscale(mm(Rda, dRg), 0.5*dt*dt)), mscale(dvg, dt));
+          dva = msub(dva, mscale(dR, dt));
+          dvg = msub(dvg, mscale(mm(Rda, dRg), dt));
+          dRg = msub(mm(mT(dRk), dRg), mscale(JrSO3(sc(w, dt)), dt));
+
+          // 식 (37) 본체 — 갱신 순서: p → v → R
+          dp = add(add(dp, sc(dv, dt)), sc(mv(dR, a), 0.5*dt*dt));
+          dv = add(dv, sc(mv(dR, a), dt));
+          dR = mm(dR, dRk);
+        }
+        return { dR: dR, dv: dv, dp: dp, dtij: M.length*dt, Sig: Sig,
+                 dRg: dRg, dvg: dvg, dva: dva, dpg: dpg, dpa: dpa };
+      }
+
+      // 식 (48) — 재적분 없이 bias 를 1차로 고쳐 쓴다
+      function biasUpdate(P, dbg, dba) {
+        return {
+          dR: mm(P.dR, expSO3(mv(P.dRg, dbg))),
+          dv: add(P.dv, add(mv(P.dvg, dbg), mv(P.dva, dba))),
+          dp: add(P.dp, add(mv(P.dpg, dbg), mv(P.dpa, dba))),
+          dtij: P.dtij
+        };
+      }
+
+      // 식 (37) 좌변 — 두 키프레임 상태에서 상대량을 만든다
+      function relFromStates(Ri, vi, pi, Rj, vj, pj, dtij) {
+        var RiT = mT(Ri);
+        return {
+          dR: mm(RiT, Rj),
+          dv: mv(RiT, sub(sub(vj, vi), sc(G, dtij))),
+          dp: mv(RiT, sub(sub(sub(pj, pi), sc(vi, dtij)), sc(G, 0.5*dtij*dtij)))
+        };
+      }
+
+      // 식 (49) residual — bias 보정항까지 포함한다
+      function residual(P, Ri, vi, pi, Rj, vj, pj, dbg, dba) {
+        var U = biasUpdate(P, dbg, dba), rel = relFromStates(Ri, vi, pi, Rj, vj, pj, P.dtij);
+        return {
+          rR: logSO3(mm(mT(U.dR), rel.dR)),
+          rv: sub(rel.dv, U.dv),
+          rp: sub(rel.dp, U.dp)
+        };
+      }
+
+      // ---- 2D 플롯 ----------------------------------------------------------
+      // 축·눈금·격자만 그려 주고 좌표 변환 함수를 돌려준다.
+      function plot(ctx, box, xr, yr, opt) {
+        opt = opt || {};
+        var L = box[0], T = box[1], W = box[2], H = box[3];
+        function X(x) { return L + (x - xr[0])/(xr[1] - xr[0])*W; }
+        function Y(y) { return T + H - (y - yr[0])/(yr[1] - yr[0])*H; }
+        ctx.save();
+        ctx.strokeStyle = opt.rule || '#888'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
+        var nx = opt.nx || 5, ny = opt.ny || 4, i;
+        for (i = 0; i <= nx; i++) { var x = xr[0] + (xr[1]-xr[0])*i/nx;
+          ctx.beginPath(); ctx.moveTo(X(x), T); ctx.lineTo(X(x), T+H); ctx.stroke(); }
+        for (i = 0; i <= ny; i++) { var y = yr[0] + (yr[1]-yr[0])*i/ny;
+          ctx.beginPath(); ctx.moveTo(L, Y(y)); ctx.lineTo(L+W, Y(y)); ctx.stroke(); }
+        ctx.restore();
+        return {
+          X: X, Y: Y,
+          curve: function (pts, col, w, dash) {
+            ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = w || 2;
+            if (dash) ctx.setLineDash(dash);
+            ctx.beginPath();
+            for (var i = 0; i < pts.length; i++) {
+              var px = X(pts[i][0]), py = Y(pts[i][1]);
+              i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+            }
+            ctx.stroke(); ctx.restore();
+          },
+          dot: function (p, col, r) {
+            ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+            ctx.arc(X(p[0]), Y(p[1]), r || 3, 0, 6.2832); ctx.fill(); ctx.restore();
+          },
+          bar: function (x0, x1, y, col, alpha) {
+            ctx.save(); ctx.fillStyle = col; ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
+            ctx.fillRect(X(x0), Y(y), X(x1)-X(x0), Y(yr[0])-Y(y)); ctx.restore();
+          },
+          text: function (s, x, y, col, align, font) {
+            ctx.save(); ctx.fillStyle = col; ctx.textAlign = align || 'center';
+            ctx.font = font || '11px ui-sans-serif, system-ui, sans-serif';
+            ctx.fillText(s, X(x), Y(y)); ctx.restore();
+          }
+        };
+      }
+
+      // ---- 표시용 --------------------------------------------------------
+      function fmt(x, d) {
+        if (!isFinite(x)) return String(x);
+        var a = Math.abs(x);
+        if (a !== 0 && (a < 1e-3 || a >= 1e5)) return x.toExponential(d === undefined ? 2 : d);
+        return x.toFixed(d === undefined ? 3 : d);
+      }
+
+
+      // ══ 여기부터 VINS-Mono 스터디에서 더한 것 ═══════════════════════════
+      // 위쪽은 4_On-manifold preintegration 스터디의 window.PI 를 그대로 가져온 것이다
+      // (SO(3) 지수·로그, 3D 씬, 난수, 수치미분, 2D 플롯).
+      // 이 문서는 쿼터니언 기반이므로 아래를 새로 썼다 —
+      //   쿼터니언 대수와 Ω_L/Ω_R, mid-point preintegration(α,β,γ), F·G·J·P 전파,
+      //   초기화 선형시스템, Schur complement.
+      //
+      // 규약: 쿼터니언은 [w, x, y, z] 순서의 길이 4 배열이다 (원문 NOMENCLATURE 와 같다).
+
+      // ---- 쿼터니언 -------------------------------------------------------
+      function qmul(a, b) {                                   // a ⊗ b
+        return [a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+                a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+                a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+                a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]];
+      }
+      function qconj(q) { return [q[0], -q[1], -q[2], -q[3]]; }
+      function qinv(q) {                                      // 단위 쿼터니언이면 켤레와 같다
+        var n = q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3];
+        return qconj(q).map(function (v) { return v/n; });
+      }
+      function qnorm(q) { return Math.sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]); }
+      function qunit(q) { var n = qnorm(q) || 1; return q.map(function (v) { return v/n; }); }
+      function qxyz(q) { return [q[1], q[2], q[3]]; }         // [·]_xyz — 식 (60)
+
+      // 식 NOMENCLATURE — 좌·우 곱셈 연산자. Ω_L(w)q = w ⊗ q,  Ω_R(w)q = q ⊗ w
+      // 인자는 3차원 벡터 ω 이며 순수 쿼터니언 [0, ω] 로 본다.
+      function OmegaL(w) {
+        return [[0, -w[0], -w[1], -w[2]],
+                [w[0],  0,  -w[2],  w[1]],
+                [w[1],  w[2],  0,  -w[0]],
+                [w[2], -w[1],  w[0],  0]];
+      }
+      function OmegaR(w) {
+        return [[0, -w[0], -w[1], -w[2]],
+                [w[0],  0,   w[2], -w[1]],
+                [w[1], -w[2],  0,   w[0]],
+                [w[2],  w[1], -w[0],  0]];
+      }
+      function q2R(q) {                                       // R{q} — 식 NOMENCLATURE
+        var w = q[0], x = q[1], y = q[2], z = q[3];
+        return [[1-2*(y*y+z*z), 2*(x*y-w*z),   2*(x*z+w*y)],
+                [2*(x*y+w*z),   1-2*(x*x+z*z), 2*(y*z-w*x)],
+                [2*(x*z-w*y),   2*(y*z+w*x),   1-2*(x*x+y*y)]];
+      }
+      function R2q(R) {
+        var tr = R[0][0] + R[1][1] + R[2][2], s, q;
+        if (tr > 0) { s = Math.sqrt(tr + 1)*2; q = [0.25*s, (R[2][1]-R[1][2])/s, (R[0][2]-R[2][0])/s, (R[1][0]-R[0][1])/s]; }
+        else if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+          s = Math.sqrt(1 + R[0][0] - R[1][1] - R[2][2])*2;
+          q = [(R[2][1]-R[1][2])/s, 0.25*s, (R[0][1]+R[1][0])/s, (R[0][2]+R[2][0])/s];
+        } else if (R[1][1] > R[2][2]) {
+          s = Math.sqrt(1 + R[1][1] - R[0][0] - R[2][2])*2;
+          q = [(R[0][2]-R[2][0])/s, (R[0][1]+R[1][0])/s, 0.25*s, (R[1][2]+R[2][1])/s];
+        } else {
+          s = Math.sqrt(1 + R[2][2] - R[0][0] - R[1][1])*2;
+          q = [(R[1][0]-R[0][1])/s, (R[0][2]+R[2][0])/s, (R[1][2]+R[2][1])/s, 0.25*s];
+        }
+        return q[0] < 0 ? q.map(function (v) { return -v; }) : q;
+      }
+      function qexp(v) {                                      // 회전벡터 → 단위 쿼터니언
+        var t = nrm(v);
+        if (t < 1e-9) return qunit([1, v[0]/2, v[1]/2, v[2]/2]);
+        var s = Math.sin(t/2)/t;
+        return [Math.cos(t/2), v[0]*s, v[1]*s, v[2]*s];
+      }
+      function qlog(q) {                                      // 단위 쿼터니언 → 회전벡터
+        q = q[0] < 0 ? q.map(function (v) { return -v; }) : q;
+        var v = qxyz(q), s = nrm(v);
+        if (s < 1e-12) return sc(v, 2);
+        return sc(v, 2*Math.atan2(s, q[0])/s);
+      }
+      // 원문이 자주 쓰는 작은 회전 근사 δq ≈ [1, ½δθ]  (식 (6) 아래 주석)
+      function qsmall(dth) { return [1, dth[0]/2, dth[1]/2, dth[2]/2]; }
+
+      // ---- IMU 시뮬레이터 (월드 좌표계 기준) ------------------------------
+      // 원문 (2) 를 그대로 따른다:  â = a + b_a + R^t_w g^w + n_a ,  ω̂ = ω + b_g + n_g
+      // 여기서 g^w = [0,0,+9.8] 이다 (원문 NOMENCLATURE. 부호에 주의).
+      var GW = [0, 0, 9.8];
+      function truthVI(t, o) {
+        o = o || {};
+        var Rx = o.Rx === undefined ? 2 : o.Rx, Ry = o.Ry === undefined ? 1.2 : o.Ry,
+            wp = o.wp === undefined ? 1.1 : o.wp, Az = o.Az === undefined ? 0.4 : o.Az,
+            wz = o.wz === undefined ? 2.3 : o.wz, psi = o.psi === undefined ? 0.7 : o.psi,
+            phi = o.phi === undefined ? 0.5 : o.phi, wr = o.wr === undefined ? 1.7 : o.wr;
+        return {
+          p: [Rx*Math.cos(wp*t), Ry*Math.sin(wp*t), Az*Math.sin(wz*t)],
+          v: [-Rx*wp*Math.sin(wp*t), Ry*wp*Math.cos(wp*t), Az*wz*Math.cos(wz*t)],
+          a: [-Rx*wp*wp*Math.cos(wp*t), -Ry*wp*wp*Math.sin(wp*t), -Az*wz*wz*Math.sin(wz*t)],
+          q: qmul(qexp([0, 0, psi*t]), qexp([phi*Math.sin(wr*t), 0, 0]))
+        };
+      }
+      function trueOmegaVI(t, o, h) {
+        h = h || 1e-6;
+        var q = truthVI(t, o).q, q2 = truthVI(t + h, o).q, q1 = truthVI(t - h, o).q;
+        var qd = [(q2[0]-q1[0])/(2*h), (q2[1]-q1[1])/(2*h), (q2[2]-q1[2])/(2*h), (q2[3]-q1[3])/(2*h)];
+        return sc(qxyz(qmul(qconj(q), qd)), 2);               // ω = 2 (q* ⊗ q̇)_xyz
+      }
+      function makeMeasVI(n, dt, bg, ba, sg, sa, seed, o) {
+        var rnd = rng(seed === undefined ? 7 : seed), M = [];
+        for (var k = 0; k <= n; k++) {
+          var t = k*dt, T = truthVI(t, o), w = trueOmegaVI(t, o);
+          var Rwt = mT(q2R(T.q));                             // R^t_w
+          var aB = mv(Rwt, add(T.a, GW));                     // â = R^t_w(a + g) …  (2) 를 옮긴 것
+          M.push({ t: t,
+            w: [w[0] + bg[0] + sg*randn(rnd), w[1] + bg[1] + sg*randn(rnd), w[2] + bg[2] + sg*randn(rnd)],
+            a: [aB[0] + ba[0] + sa*randn(rnd), aB[1] + ba[1] + sa*randn(rnd), aB[2] + ba[2] + sa*randn(rnd)] });
+        }
+        return M;
+      }
+
+      // ---- 절대 적분 (식 4·5) ---------------------------------------------
+      // ★ preintVI 와 **같은 수치 해법**을 써야 한다. 식 (7)의 좌변=우변을 확인할 때
+      //   한쪽만 오일러로 굴리면 O(δt²) 만큼 어긋나서 (실측 5.6e-3) 마치 식이 틀린 것처럼 보인다.
+      //   그래서 여기도 식 (9) mid-point 로 맞췄다.
+      function integrateVI(q0, v0, p0, M, dt, bg, ba, method) {
+        var euler = (method === 'euler');
+        var q = q0.slice(), v = v0.slice(), p = p0.slice(), tr = [{ q: q, v: v, p: p }];
+        for (var k = 0; k + 1 < M.length; k++) {
+          var w0 = sub(M[k].w, bg), w1 = sub(M[k+1].w, bg);
+          var wm = sc(add(w0, w1), 0.5);
+          var qN = qunit(qmul(q, qsmall(sc(euler ? w0 : wm, dt))));
+          var f0 = sub(mv(q2R(q), sub(M[k].a, ba)), GW);      // (3): a = R(â − b) − g
+          var f1 = sub(mv(q2R(qN), sub(M[k+1].a, ba)), GW);
+          var fm = euler ? f0 : sc(add(f0, f1), 0.5);
+          p = add(add(p, sc(v, dt)), sc(fm, 0.5*dt*dt));
+          v = add(v, sc(fm, dt));
+          q = qN;
+          tr.push({ q: q, v: v, p: p });
+        }
+        return tr;
+      }
+
+      // ---- preintegration (식 9 mid-point / 식 10 euler) -------------------
+      // 같이 굴리는 것:  P 9×9? 아니다 — 이 문서의 에러 상태는 15차원이다
+      //   δx = [δα, δθ, δβ, δb_a, δb_g]  (식 37 의 순서)
+      //   F 15×15, G 15×18, J 15×15, P 15×15
+      function preintVI(M, dt, bg, ba, Q, method) {
+        var euler = (method === 'euler');
+        var al = [0,0,0], be = [0,0,0], ga = [1,0,0,0];
+        var J = eye(15), P = zeros(15, 15);
+        var I3 = eye(3), Z3 = zeros(3,3);
+        function put(A, r, c, X, s) {
+          for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) A[r+i][c+j] = X[i][j]*(s === undefined ? 1 : s);
+        }
+        for (var k = 0; k + 1 < M.length; k++) {
+          var a0 = sub(M[k].a, ba), a1 = sub(M[k+1].a, ba);
+          var w0 = sub(M[k].w, bg), w1 = sub(M[k+1].w, bg);
+          var wm = sc(add(w0, w1), 0.5);                      // mid-point 각속도
+          var Rk = q2R(ga);
+          var gaN = euler ? qunit(qmul(ga, qsmall(sc(w0, dt))))
+                          : qunit(qmul(ga, qsmall(sc(wm, dt))));
+          var Rk1 = q2R(gaN);
+          var f0 = mv(Rk, a0), f1 = mv(Rk1, a1);
+          if (euler) {                                        // 식 (10)
+            al = add(add(al, sc(be, dt)), sc(f0, 0.5*dt*dt));
+            be = add(be, sc(f0, dt));
+          } else {                                            // 식 (9)
+            var fm = sc(add(f0, f1), 0.5);
+            al = add(add(al, sc(be, dt)), sc(fm, 0.5*dt*dt));
+            be = add(be, sc(fm, dt));
+          }
+
+          if (Q) {                                            // 식 (37)(38) → (27)(28)
+            var F = eye(15), G = zeros(15, 18);
+            var A0 = mm(Rk, hat(a0)), A1 = mm(Rk1, hat(a1));
+            var W = msub(I3, mscale(hat(wm), dt));            // F11
+            put(F, 0, 3, madd(mscale(A0, -dt*dt/4), mscale(mm(A1, W), -dt*dt/4)));   // F01
+            put(F, 0, 6, I3, dt);
+            put(F, 0, 9, madd(Rk, Rk1), -dt*dt/4);                                   // F03
+            put(F, 0, 12, A1, dt*dt*dt/4);                                           // F04
+            put(F, 3, 3, W);                                                         // F11
+            put(F, 3, 12, I3, -dt);
+            put(F, 6, 3, madd(mscale(A0, -dt/2), mscale(mm(A1, W), -dt/2)));         // F21
+            put(F, 6, 9, madd(Rk, Rk1), -dt/2);                                      // F23
+            put(F, 6, 12, A1, dt*dt/2);                                              // F24
+            put(G, 0, 0, Rk, -dt*dt/4);                                              // G00
+            put(G, 0, 3, A1, dt*dt*dt/8);                                            // G01
+            put(G, 0, 6, Rk1, -dt*dt/4);                                             // G02
+            put(G, 0, 9, A1, dt*dt*dt/8);                                            // G03
+            put(G, 3, 3, I3, -dt/2);
+            put(G, 3, 9, I3, -dt/2);
+            put(G, 6, 0, Rk, -dt/2);
+            put(G, 6, 3, A1, dt*dt/4);                                               // G21
+            put(G, 6, 6, Rk1, -dt/2);
+            put(G, 6, 9, A1, dt*dt/4);                                               // G23
+            put(G, 9, 12, I3, dt);
+            put(G, 12, 15, I3, dt);
+            P = madd(mm(mm(F, P), mT(F)), mm(mm(G, Q), mT(G)));   // 식 (27)
+            J = mm(F, J);                                          // 식 (28)
+          }
+          ga = gaN;
+        }
+        return { al: al, be: be, ga: ga, dt: (M.length - 1)*dt, J: J, P: P };
+      }
+
+      // 식 (29) — 재적분 없이 bias 를 1차로 고쳐 쓴다
+      function biasUpdateVI(PR, dbg, dba) {
+        function blk(r, c) {
+          var B = zeros(3,3);
+          for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) B[i][j] = PR.J[r+i][c+j];
+          return B;
+        }
+        var Jaa = blk(0, 9), Jag = blk(0, 12), Jba = blk(6, 9), Jbg = blk(6, 12), Jgg = blk(3, 12);
+        return {
+          al: add(PR.al, add(mv(Jaa, dba), mv(Jag, dbg))),
+          be: add(PR.be, add(mv(Jba, dba), mv(Jbg, dbg))),
+          ga: qunit(qmul(PR.ga, qsmall(mv(Jgg, dbg)))),
+          dt: PR.dt
+        };
+      }
+
+      // 식 (7) 좌변 — 두 키프레임 상태에서 상대량을 만든다
+      function relFromStatesVI(qi, vi, pi, qj, vj, pj, dtij) {
+        var Rwi = mT(q2R(qi));                                // R^{b_k}_w
+        return {
+          al: mv(Rwi, sub(sub(sub(pj, pi), sc(vi, dtij)), sc(GW, -0.5*dtij*dtij))),
+          be: mv(Rwi, sub(sub(vj, vi), sc(GW, -dtij))),
+          ga: qmul(qinv(qi), qj)
+        };
+      }
+
+      // 식 (60) IMU residual
+      function residualVI(PR, qi, vi, pi, qj, vj, pj, dbg, dba) {
+        var U = biasUpdateVI(PR, dbg, dba), rel = relFromStatesVI(qi, vi, pi, qj, vj, pj, PR.dt);
+        return {
+          ra: sub(rel.al, U.al),
+          rth: sc(qxyz(qmul(qinv(U.ga), rel.ga)), 2),
+          rb: sub(rel.be, U.be)
+        };
+      }
+
+      // ---- 선형대수 (초기화·marginalization 용) ----------------------------
+      function solveLS(A, b) {                                // 정규방정식 + 가우스-조던
+        var At = mT(A);
+        return mv(minv(mm(At, A)), mv(At, b));
+      }
+      function schur(H, b, m) {                               // 앞 m개를 marginalize
+        var n = H.length, r = n - m;
+        function sub2(R0, C0, R1, C1) {
+          var M2 = zeros(R1-R0, C1-C0);
+          for (var i = R0; i < R1; i++) for (var j = C0; j < C1; j++) M2[i-R0][j-C0] = H[i][j];
+          return M2;
+        }
+        var Hmm = sub2(0,0,m,m), Hmr = sub2(0,m,m,n), Hrm = sub2(m,0,n,m), Hrr = sub2(m,m,n,n);
+        var bm = b.slice(0,m), br = b.slice(m);
+        var Hmi = minv(Hmm), K = mm(Hrm, Hmi);
+        return { Hp: msub(Hrr, mm(K, Hmr)), bp: sub(br, mv(K, bm)),
+                 Hmm: Hmm, Hmr: Hmr, Hrm: Hrm, Hrr: Hrr };
+      }
+      // 접평면 basis — 식 (47)(70) 이 쓰는 두 직교 basis
+      function tangentBasis(g) {
+        var a = Math.abs(g[0]) < 0.9 ? [1,0,0] : [0,1,0];
+        var b1 = unit(cross(unit(g), a)), b2 = cross(unit(g), b1);
+        return [b1, b2];
+      }
+
+  return { zeros: zeros, eye: eye, mm: mm, mT: mT, madd: madd, msub: msub, mscale: mscale,
+               mv: mv, minv: minv, mmaxabs: mmaxabs, blk: blk,
+               nrm: nrm, unit: unit, add: add, sub: sub, sc: sc, dot: dot, cross: cross, axis: axis,
+               hat: hat, vee: vee, expSO3: expSO3, logSO3: logSO3,
+               JrSO3: JrSO3, JlSO3: JlSO3, JrInvSO3: JrInvSO3, JlInvSO3: JlInvSO3, AdSO3: AdSO3,
+               T: T, TR: TR, Tt: Tt, Tinv: Tinv, expSE3: expSE3, logSE3: logSE3, AdSE3: AdSE3,
+               QlSE3: QlSE3, QrSE3: QrSE3, JlSE3: JlSE3, JrSE3: JrSE3,
+               plusSO3: plusSO3, minusSO3: minusSO3, plusSE3: plusSE3, minusSE3: minusSE3,
+               scene: scene, circle3: circle3, frame: frame,
+               // ── 이 스터디에서 더한 것 ──
+               rng: rng, randn: randn, randnVec: randnVec, chol: chol,
+               symmetrize: symmetrize, fro: fro, numJac: numJac,
+               G: G, truth: truth, trueOmega: trueOmega, makeMeas: makeMeas,
+               integrate: integrate, preint: preint, biasUpdate: biasUpdate,
+               relFromStates: relFromStates, residual: residual,
+               plot: plot, fmt: fmt,
+               // ── VINS-Mono 스터디에서 더한 것 ──
+               qmul: qmul, qconj: qconj, qinv: qinv, qnorm: qnorm, qunit: qunit, qxyz: qxyz,
+               OmegaL: OmegaL, OmegaR: OmegaR, q2R: q2R, R2q: R2q,
+               qexp: qexp, qlog: qlog, qsmall: qsmall,
+               GW: GW, truthVI: truthVI, trueOmegaVI: trueOmegaVI, makeMeasVI: makeMeasVI,
+               integrateVI: integrateVI, preintVI: preintVI, biasUpdateVI: biasUpdateVI,
+               relFromStatesVI: relFromStatesVI, residualVI: residualVI,
+               solveLS: solveLS, schur: schur, tangentBasis: tangentBasis };
+    })();
+  // ==VM-END==
+  var V = window.VM;
+  var cv = document.getElementById('ir-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('ir-readout');
+  var dt = 0.005, bg = [0.01, -0.02, 0.005], ba = [0.05, 0.02, -0.03];
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+  function set(id, v) { document.getElementById(id).value = v; }
+  function put(A, r, c, X, s) {
+    for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) A[r+i][c+j] = X[i][j]*(s === undefined ? 1 : s);
+  }
+
+  function compute() {
+    var T = val('ir-s-T'), rr = val('ir-s-r'), dd = val('ir-s-d'), h = Math.pow(10, val('ir-s-h'));
+    var n = Math.round(T/dt);
+    var M = V.makeMeasVI(n, dt, bg, ba, 0, 0, 23);
+    var Q = V.zeros(18,18); for (var i = 0; i < 18; i++) Q[i][i] = 1e-6;
+    var PR = V.preintVI(M, dt, bg, ba, Q);
+    var qi = V.qexp(V.sc(V.unit([0.5,-0.7,0.4]), rr)), vi = [0.5,-0.2,0.1], pi = [1,2,-0.5];
+    var tr = V.integrateVI(qi, vi, pi, M, dt, bg, ba), L = tr[tr.length-1];
+    var qj = V.qunit(V.qmul(L.q, V.qexp(V.sc(V.unit([1,-0.4,0.3]), dd))));
+    var vj = V.add(L.v, V.sc(V.unit([0.3,1,-0.2]), dd));
+    var pj = V.add(L.p, V.sc(V.unit([-0.5,0.4,1]), dd));
+
+    // x = [δp_i(3) δφ_i(3) | δv_i(3) δb_ai(3) δb_gi(3) | δp_j(3) δφ_j(3) | δv_j(3) δb_aj(3) δb_gj(3)]
+    function res(x) {
+      var qi2 = V.qunit(V.qmul(qi, V.qsmall(x.slice(3,6))));
+      var pi2 = V.add(pi, x.slice(0,3));
+      var vi2 = V.add(vi, x.slice(6,9));
+      var dba = x.slice(9,12), dbg = x.slice(12,15);
+      var qj2 = V.qunit(V.qmul(qj, V.qsmall(x.slice(18,21))));
+      var pj2 = V.add(pj, x.slice(15,18));
+      var vj2 = V.add(vj, x.slice(21,24));
+      var r = V.residualVI(PR, qi2, vi2, pi2, qj2, vj2, pj2, dbg, dba);
+      // (60) 의 순서: [δα, δθ, δβ, δb_a, δb_g]
+      return r.ra.concat(r.rth).concat(r.rb)
+        .concat(V.sub(V.add(ba, x.slice(27,30)), V.add(ba, dba)))
+        .concat(V.sub(V.add(bg, x.slice(24,27)), V.add(bg, dbg)));
+    }
+    var Jn = V.numJac(res, new Array(30).fill(0), h);
+
+    // 해석적 (62)~(65)
+    var Ja = V.zeros(15, 30), I3 = V.eye(3);
+    var Rwi = V.mT(V.q2R(qi)), Rij = V.q2R(V.qmul(V.qinv(qi), qj));
+    var r0 = V.residualVI(PR, qi, vi, pi, qj, vj, pj, [0,0,0], [0,0,0]);
+    var dtij = PR.dt;
+    function blkJ(r, c) { var B = V.zeros(3,3);
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) B[i][j] = PR.J[r+i][c+j]; return B; }
+    // J[0] : p_i, φ_i
+    put(Ja, 0, 0, Rwi, -1);
+    put(Ja, 0, 3, V.hat(V.mv(Rwi, V.sub(V.sub(V.sub(pj, pi), V.sc(vi, dtij)), V.sc(V.GW, -0.5*dtij*dtij)))));
+    put(Ja, 3, 3, V.mT(Rij), -1);
+    put(Ja, 6, 3, V.hat(V.mv(Rwi, V.sub(V.sub(vj, vi), V.sc(V.GW, -dtij)))));
+    // J[1] : v_i, b_ai, b_gi
+    put(Ja, 0, 6, Rwi, -dtij);
+    put(Ja, 0, 9,  blkJ(0, 9), -1);   put(Ja, 0, 12, blkJ(0, 12), -1);
+    put(Ja, 3, 12, blkJ(3, 12), -1);
+    put(Ja, 6, 6, Rwi, -1);
+    put(Ja, 6, 9,  blkJ(6, 9), -1);   put(Ja, 6, 12, blkJ(6, 12), -1);
+    put(Ja, 9, 9, I3, -1);            put(Ja, 12, 12, I3, -1);
+    // J[2] : p_j, φ_j
+    put(Ja, 0, 15, Rwi);
+    put(Ja, 3, 18, I3);
+    // J[3] : v_j, b_aj, b_gj
+    put(Ja, 6, 21, Rwi);
+    put(Ja, 9, 24, I3);               put(Ja, 12, 27, I3);
+    return { Ja: Ja, Jn: Jn, r0: r0, PR: PR, n: n, h: h };
+  }
+
+  function heat(A, x0, y0, cw, ch, scale, colP, colN, rule) {
+    for (var i = 0; i < 15; i++) for (var j = 0; j < 30; j++) {
+      var v = A[i][j], t = Math.min(1, Math.abs(v)/scale);
+      ctx.save(); ctx.fillStyle = (v >= 0 ? colP : colN);
+      ctx.globalAlpha = 0.05 + 0.95*Math.pow(t, 0.45);
+      ctx.fillRect(x0 + j*cw, y0 + i*ch, cw - 0.4, ch - 0.4); ctx.restore();
+    }
+    ctx.save(); ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.globalAlpha = 0.9;
+    [6, 15, 21].forEach(function (b) {
+      ctx.beginPath(); ctx.moveTo(x0 + b*cw, y0); ctx.lineTo(x0 + b*cw, y0 + 15*ch); ctx.stroke(); });
+    for (var s = 1; s < 5; s++) {
+      ctx.beginPath(); ctx.moveTo(x0, y0 + s*3*ch); ctx.lineTo(x0 + 30*cw, y0 + s*3*ch); ctx.stroke(); }
+    ctx.strokeRect(x0, y0, 30*cw, 15*ch); ctx.restore();
+  }
+
+  function draw() {
+    document.getElementById('ir-v-T').textContent = val('ir-s-T').toFixed(2);
+    document.getElementById('ir-v-r').textContent = val('ir-s-r').toFixed(2);
+    document.getElementById('ir-v-d').textContent = val('ir-s-d').toFixed(3);
+    document.getElementById('ir-v-h').textContent = val('ir-s-h').toFixed(1);
+    var C = compute(), D = V.msub(C.Ja, C.Jn);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 250;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var faint = css('--ink-faint'), cor = css('--correct'), pre = css('--predict'), rule = css('--rule');
+
+    var lpad = 34, pad = 14, pw = (W - lpad - pad*3)/3, cw = pw/30, ch = Math.min(11, cw*2.2);
+    var scale = Math.max(1e-12, V.mmaxabs(C.Ja));
+    ['해석적 — 식 (62)~(65)', '수치미분', '차이'].forEach(function (t, k) {
+      var x0 = lpad + k*(pw + pad), y0 = 46;
+      heat([C.Ja, C.Jn, D][k], x0, y0, cw, ch, scale, pre, cor, rule);
+      ctx.save(); ctx.fillStyle = faint; ctx.font = '10.5px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(t, x0 + pw/2, 30);
+      ctx.font = '8px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText('J[0]      J[1]         J[2]     J[3]', x0 + pw/2, y0 + 15*ch + 12);
+      if (k === 0) { ctx.textAlign = 'right';
+        ['δα','δθ','δβ','δbₐ','δb_g'].forEach(function (s, r) { ctx.fillText(s, x0 - 3, y0 + (r*3 + 2)*ch); }); }
+      ctx.restore();
+    });
+
+    var dmax = V.mmaxabs(D), rel = dmax/scale;
+    var rn = Math.max(V.nrm(C.r0.ra), V.nrm(C.r0.rth), V.nrm(C.r0.rb));
+    out.innerHTML =
+      '$\\Delta t_k$ = ' + C.PR.dt.toFixed(2) + 's (' + C.n + '스텝) · 수치미분 스텝 $h$ = <b>' +
+        C.h.toExponential(0) + '</b>' +
+      '<br>최대 차이 <b>' + dmax.toExponential(2) + '</b> · $\\|\\mathbf{J}\\|_\\infty$ = <b>' +
+        scale.toExponential(2) + '</b> → 상대오차 <b>' + rel.toExponential(2) + '</b>' +
+      ' ' + (rel < 1e-5 ? '— <b>4.3 의 유도가 맞다.</b>' : '— $h$ 를 $10^{-6}$ 근처로 돌려 보라') +
+      '<br>현재 residual 크기 <b>' + V.fmt(rn, 3) + '</b>' +
+      (val('ir-s-d') === 0
+        ? ' — 상태가 정답이면 (60)의 다섯 블록이 모두 <b>0</b> 이다.'
+        : ' — "상태를 정답에서 틀기" 슬라이더만큼 커졌다.') +
+      '<br>0 인 블록을 확인해 두면 좋다 — $\\mathbf{J}[2]$ 는 $\\mathbf{p}_{b_{k+1}}, \\mathbf{q}_{b_{k+1}}$ 에 대해 ' +
+        '위 두 블록만 살아 있고, $\\mathbf{J}[3]$ 은 (65)처럼 <b>$\\mathbf{R}_w^{b_k}$ 와 $\\mathbf{I}$ 만</b> 남는다. ' +
+        'bias 행 두 개는 $\\mathbf{b}_{k+1} - \\mathbf{b}_k$ 라서 $\\pm\\mathbf{I}$ 다.' +
+      '<br>$\\mathbf{J}[1]$ 의 bias 열들이 (29)에서 쓴 $\\mathbf{J}_{b_a}^\\alpha, \\mathbf{J}_{b_g}^\\gamma$ 등과 ' +
+        '<b>같은 행렬</b>이다 — preintegration 중 (28)로 미리 굴려 둔 값을 그대로 꺼내 쓴다.';
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([out]);
+  }
+
+  document.querySelectorAll('#w-ires input').forEach(function (el) { el.addEventListener('input', draw); });
+  document.querySelectorAll('#w-ires button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      set('ir-s-T', 0.30); set('ir-s-r', 0.6); set('ir-s-d', 0); set('ir-s-h', -6); draw();
+    });
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
