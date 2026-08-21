@@ -96,7 +96,7 @@ h4 { font-size:.97rem; font-weight:660; margin:1.5rem 0 .45rem; color:var(--ink-
 p { margin:.95rem 0; }
 strong { font-weight:670; }
 hr { border:0; border-top:1px solid var(--rule-soft); margin:2.6rem 0; }
-a { color:var(--accent); }
+a { color:var(--accent); overflow-wrap:anywhere; }  /* 긴 URL 이 안 접혀 좁은 창에서 본문을 미는 것 방지 */
 
 ul,ol { margin:.9rem 0; padding-left:1.35rem; }
 li { margin:.42rem 0; }
@@ -146,6 +146,10 @@ code {
 }
 mjx-container[display="true"] { margin:0 !important; }
 mjx-container { max-width:none; }
+/* MathJax 의 보조 MathML 은 position:absolute + width:auto 라 .mathblock 의
+   overflow:auto 클리핑을 빠져나간다 — 좁은 창에서 본문을 옆으로 미는 진짜 원인.
+   화면에는 clip 으로 이미 감춰져 있으니 레이아웃 폭만 1px 로 묶는다. (3_Pitfalls C9) */
+mjx-assistive-mml { width:1px !important; height:1px !important; overflow:hidden !important; }
 
 /* ---- widgets ---- */
 .lab {
@@ -488,9 +492,50 @@ print(belief)</code></pre></div>
 </ul>
 <h3 id="핵심-개념-complete-state">핵심 개념: Complete state</h3>
 <p>상태 $x_t$가 <strong>미래에 대한 최선의 예측자(best predictor of the future)</strong> 일 때 이를 <strong>완전(complete)</strong> 하다고 한다. 달리 말하면, <strong>완전성이란 과거의 상태·측정값·제어가 미래를 더 정확히 예측하는 데 어떤 추가 정보도 주지 않는다</strong>는 뜻이다.</p>
+<h4 id="한-문장으로-과거-기록을-다-버려도-되는-요약본">한 문장으로: "과거 기록을 다 버려도 되는 요약본"</h4>
+<p>Complete state를 직관적으로 이해하는 가장 좋은 방법은 이것을 <strong>"압축"</strong> 으로 보는 것이다. 로봇은 원리상 $t=0$부터 지금까지의 모든 기록을 갖고 있다 — 지나온 모든 상태 $x_{0:t-1}$, 찍은 모든 측정값 $z_{1:t-1}$, 내린 모든 제어 명령 $u_{1:t-1}$. 이 기록은 시간이 갈수록 무한히 길어진다.</p>
+<p>여기서 던질 질문은 하나다.</p>
+<blockquote><p><strong>"이 기록 전체를 지워버리고 $x_t$ 하나만 남겨도, 미래를 예측하는 능력이 조금이라도 줄어드는가?"</strong></p></blockquote>
+<ul>
+<li>줄어들지 <strong>않는다</strong> → $x_t$는 <strong>complete</strong>하다. 기록 전체가 $x_t$ 하나로 손실 없이 압축된 것이다.</li>
+<li>줄어<strong>든다</strong> → $x_t$는 <strong>incomplete</strong>하다. 기록 안에 $x_t$가 담아내지 못한 정보가 아직 남아 있다는 뜻이다.</li>
+</ul>
+<p>2.2절의 용어로 말하면, complete state란 $x_t$가 과거 전체의 <strong>충분통계량(sufficient statistic)</strong> 이라는 뜻이다. 과거를 "미래 예측에 필요한 만큼만" 요약한 값이다.</p>
+<h4 id="예제-a-b-위치만-vs-위치-속도">예제 A, B — 위치만 vs 위치 + 속도</h4>
+<p>날아가는 공의 상태를 <strong>위치만</strong>으로 정의했다고 하자: $x_t = (\text{위치})$. 지금 공이 좌표 5m에 있다는 것만 알 때, 1초 뒤 위치를 예측할 수 있는가? 못 한다. 그런데 여기서 과거 기록을 살짝 열어보면 — "직전에 3m에 있었다" — 갑자기 예측이 가능해진다 (초속 2m로 오른쪽으로 가고 있으니 대략 7m). <strong>과거가 추가 정보를 줬으므로 incomplete하다.</strong></p>
+<p>이제 상태를 $x_t = (\text{위치}, \text{속도})$로 확장하자. "5m, 초속 2m"만 알면 1초 뒤를 예측할 수 있고, "직전에 3m에 있었다"는 과거 정보는 <strong>아무것도 새로 알려주지 않는다</strong> — 속도 안에 이미 녹아 있기 때문이다. <strong>과거가 쓸모없어졌으므로 complete하다.</strong></p>
+<blockquote><p>여기서 얻는 실전 교훈: <strong>incomplete하다는 것은 곧 상태 변수가 부족하다는 신호다.</strong> "어떤 변수를 상태에 넣어야 하는가"라는 질문의 답은 "과거가 미래에 대해 말해주는 것을 현재로 끌어올 수 있을 만큼"이다. 5장의 velocity motion model이 속도를 상태에 포함시키고, 8.4절이 움직이는 물체의 속도를 상태에 넣는 이유가 바로 이것이다.</p></blockquote>
+<h4 id="예제-c-체스판-상태-설계의-미묘함">예제 C — 체스판 (상태 설계의 미묘함)</h4>
+<p>체스에서 상태는 무엇인가? "현재 기물 배치"라고 답하기 쉽다. 하지만 엄밀히는 부족하다 — 캐슬링 가능 여부, 앙파상 가능 여부, 50수 규칙 카운터는 배치만 봐서는 알 수 없고 <strong>과거 기보를 봐야</strong> 알 수 있다. 즉 "배치"만으로는 incomplete하며, 그래서 체스 엔진의 상태 표현(FEN)에는 이 플래그들이 명시적으로 포함되어 있다. 이 플래그들까지 넣으면 비로소 complete해지고, <strong>그 순간부터 기보 전체를 버려도 된다.</strong></p>
+<h4 id="예제-d-확률적이어도-complete할-수-있다">예제 D — 확률적이어도 complete할 수 있다</h4>
 <p>여기서 중요한 오해를 하나 짚고 가야 한다. <strong>완전성의 정의는 미래가 상태의 결정론적(deterministic) 함수일 것을 요구하지 않는다.</strong> 미래는 확률적(stochastic)일 수 있다. 다만 $x_t$ 이전의 어떤 변수도 미래 상태의 확률적 전개에 영향을 주어서는 안 된다 — 그런 의존성이 있다면 반드시 상태 $x_t$를 <em>경유해서만</em> 매개되어야 한다.</p>
+<p>주사위를 굴려 그 칸수만큼 전진하는 보드게임을 생각해보자. 지금 7번 칸에 있다면 다음 위치는 8~13번 칸 중 하나로 <strong>랜덤</strong>하다 — 결정론적으로 예측할 수 없다. 하지만 "이전에 어느 칸들을 거쳐 왔는가"를 알려줘도 그 확률분포는 <strong>전혀 바뀌지 않는다.</strong> 예측이 불확실한 것과, 과거가 추가 정보를 주는 것은 완전히 다른 문제다. Complete state가 요구하는 것은 후자가 없다는 것뿐이다.</p>
+<blockquote><p>정리하면:</p>
+<ul>
+<li><strong>Complete ≠ 미래를 정확히 맞힌다</strong> (불확실성은 남아 있어도 된다)</li>
+<li><strong>Complete = 과거를 더 들여다봐도 그 불확실성이 줄어들지 않는다</strong></li>
+</ul></blockquote>
+<h4 id="markov-chain-미래는-현재를-통해서만-과거와-연결된다">Markov chain: "미래는 현재를 통해서만 과거와 연결된다"</h4>
 <p>이 조건을 만족하는 시간 과정(temporal process)을 <strong>마르코프 연쇄(Markov chain)</strong> 라 부른다.</p>
+<p>Markov chain은 그림으로 보면 가장 명확하다. 상태들이 <strong>한 줄로 이어진 사슬</strong>을 이루고, 정보는 이 사슬을 따라서만 흐른다.</p>
+<div class="codewrap"><pre><code class="lang-">   x_0  ──▶  x_1  ──▶  x_2  ──▶  x_3  ──▶  ...
+                        ▲
+              여기만 알면 x_3 이후는
+              x_0, x_1 을 몰라도 된다</code></pre></div>
+<p>$x_2$는 과거($x_0, x_1$)와 미래($x_3, x_4, \ldots$) 사이에 놓인 <strong>정보의 유일한 통로(bottleneck)</strong> 다. 과거가 미래에 영향을 주는 경로는 오직 "$x_2$를 어떤 값으로 만들었는가"뿐이고, 일단 $x_2$의 값이 주어지면 그 통로는 닫힌다. 이것이 2.2절 (13),(14)의 <strong>conditional independence</strong> — $x_2$로 조건화하면 과거와 미래가 독립이 된다 — 를 시간축에 적용한 것이다.</p>
+<p>이 성질을 <strong>Markov property(마르코프 성질)</strong> 또는 <strong>memorylessness(무기억성)</strong> 라 부른다. "기억이 없다"는 말은 과거가 무의미하다는 뜻이 <strong>아니다.</strong> 과거의 영향이 이미 <strong>현재 상태 안에 전부 흡수되어 있어서</strong>, 과거를 따로 기억할 필요가 없다는 뜻이다.</p>
+<p>일상적인 비유를 들면:</p>
+<ul>
+<li><strong>은행 잔고</strong>는 Markov하다. 지금 잔고가 100만 원이라면, 그 돈을 어떻게 벌었는지(입출금 내역)는 다음 달 잔고를 예측하는 데 필요 없다. 잔고 숫자 하나가 모든 내역을 요약한다.</li>
+<li>반면 <strong>"현재 위치"만으로 사람의 다음 행동을 예측</strong>하는 것은 Markov하지 <strong>않다.</strong> 누적 피로도라는 숨은 변수가 과거에 의존하기 때문이다. 피로도를 상태에 넣으면 Markov해진다.</li>
+</ul>
+<h4 id="왜-이-개념이-이-책-전체의-토대인가">왜 이 개념이 이 책 전체의 토대인가</h4>
+<p>Markov property 없이는 상태 전이 확률이 $p(x_t \mid x_{0:t-1}, z_{1:t-1}, u_{1:t})$ 형태가 되어 <strong>조건부의 길이가 시간에 따라 무한히 늘어난다.</strong> $t=10000$이면 만 개의 변수에 조건화해야 하고, 이는 저장도 계산도 불가능하다.</p>
+<p>Complete state를 가정하면 이것이 $p(x_t \mid x_{t-1}, u_t)$로 줄어든다 — <strong>조건부가 항상 두 개로 고정</strong>된다. 그 결과 로봇은 "지금까지의 belief" 하나만 들고 있으면 되고, 새 데이터가 올 때마다 그것을 갱신하는 <strong>재귀적(recursive)</strong> 계산이 성립한다. 이 장의 제목이 <em>Recursive</em> State Estimation인 이유가 바로 이것이다. 이 논증은 2.3.3절에서 식 (22), (23)으로 정식화되고, 2.4절 Bayes filter 알고리즘에서 결실을 맺는다.</p>
 <blockquote><p><strong>실용적 관점</strong>: 상태 완전성은 대체로 이론적 중요성만 갖는다. 실제로는 어떤 현실적인 로봇 시스템에 대해서도 complete state를 명시하는 것은 불가능하다. Complete state는 미래에 영향을 줄 수 있는 환경의 모든 측면뿐 아니라 로봇 자신, 컴퓨터 메모리의 내용, 주변 사람들의 머릿속까지 포함해야 하기 때문이다. 그래서 실제 구현에서는 위에 나열한 것 같은 <strong>상태 변수의 작은 부분집합만 골라내며, 이런 상태를 불완전 상태(incomplete state)</strong> 라 한다.</p></blockquote>
+<h4 id="그런데-실제로는-incomplete인데-왜-알고리즘이-작동하는가">그런데 실제로는 incomplete인데 왜 알고리즘이 작동하는가</h4>
+<p>책이 "complete state는 실현 불가능하다"고 인정한 뒤에 자연스럽게 남는 의문이다. 답은 <strong>빠진 정보를 노이즈로 취급해서 흡수하기 때문이다.</strong> 예를 들어 바퀴 슬립, 카펫의 마찰 변화, 배터리 전압 저하 같은 요인은 상태에 들어 있지 않지만, 이들 때문에 발생하는 예측 오차를 $p(x_t \mid x_{t-1}, u_t)$의 <strong>분포 폭(확률적 불확실성)</strong> 으로 모델링한다. 즉 <strong>"모르는 것은 랜덤으로 처리한다"</strong> 는 것이 확률적 접근의 핵심 타협점이다.</p>
+<p>대가는 있다. 빠뜨린 변수가 실제로는 시간적으로 상관된(correlated) 오차를 만드는데 그것을 매 스텝 독립적인 노이즈로 근사하면, <strong>불확실성을 과소평가</strong>하게 되어 필터가 과신(overconfident)하거나 발산한다. 이것이 EKF가 실무에서 노이즈 튜닝을 필요로 하는 근본 이유이며, 8.4절 dynamic environment나 SLAM의 data association 문제에서 반복해서 등장하는 주제다.</p>
 <h3 id="상태-공간의-종류와-시간">상태 공간의 종류와 시간</h3>
 <ul>
 <li>대부분의 로보틱스 응용에서 상태는 <strong>연속(continuous)</strong> 이다 — $x_t$가 연속체 위에서 정의된다. 로봇 pose가 좋은 예다.</li>
@@ -682,7 +727,7 @@ $$</div></p>
 </ul>
 <p><strong>라인 2 — "for all $x_t$"의 의미</strong></p>
 <p>$x_t$가 취할 수 있는 <strong>모든 값 각각에 대해</strong> 라인 3, 4를 수행한다. 즉 belief는 하나의 숫자가 아니라 <strong>상태 공간 전체에 걸친 분포</strong>이므로, 그 분포의 모든 점을 갱신해야 한다는 뜻이다. 이 한 줄이 "Bayes filter를 실제 컴퓨터에서 그대로 돌릴 수 없는" 근본 이유가 된다 (뒤에서 다시 설명).</p>
-<p><strong>라인 3 — Prediction (control update)</strong> — 유도는 아래 2.4.3절 식 (33)</p>
+<p><strong>라인 3 — Prediction (control update)</strong> — 유도는 아래 2.4.3절 식 (37)</p>
 <p><div class="mathblock">$$\overline{bel}(x_t) = \int p(x_t \mid u_t,\, x_{t-1})\; bel(x_{t-1})\; dx_{t-1}$$</div></p>
 <p>라인 3에서 알고리즘은 제어 $u_t$를 <strong>처리(process)</strong> 한다. 상태 $x_{t-1}$에 대한 prior belief와 제어 $u_t$를 바탕으로 상태 $x_t$에 대한 belief를 계산함으로써 그렇게 한다.</p>
 <p>구체적으로, 로봇이 상태 $x_t$에 부여하는 belief $\overline{bel}(x_t)$는 <strong>두 분포의 곱의 적분(이산이면 합)</strong> 으로 얻어진다:</p>
@@ -693,7 +738,7 @@ $$</div></p>
 <blockquote><p><strong>읽는 법</strong>: "가능한 모든 출발점 $x_{t-1}$에 대해, ① 거기 있었을 법한 정도($bel(x_{t-1})$)와 ② 거기서 $x_t$로 넘어올 확률($p(x_t \mid u_t, x_{t-1})$)을 곱하고, 그 모든 출발점에 대해 합산한다."</p></blockquote>
 <p>이 갱신 단계가 <strong>2.2절 식 (8)의 theorem of total probability와 형태가 닮았다</strong>는 점을 알아챌 수 있다 (책이 명시적으로 "Equation (2.12)와의 유사성을 알아볼 것"이라 언급한다). 실제로 2.4.3절의 유도에서 이 식은 정확히 theorem of total probability로부터 나온다.</p>
 <p>앞서 언급했듯 이 갱신 단계를 <strong>control update</strong> 또는 <strong>prediction</strong>이라 부른다.</p>
-<p><strong>라인 4 — Measurement update (correction)</strong> — 유도는 아래 2.4.3절 식 (30)</p>
+<p><strong>라인 4 — Measurement update (correction)</strong> — 유도는 아래 2.4.3절 식 (34)</p>
 <p><div class="mathblock">$$bel(x_t) = \eta\; p(z_t \mid x_t)\; \overline{bel}(x_t)$$</div></p>
 <p>Bayes filter의 두 번째 단계는 <strong>measurement update</strong>라 불린다. 라인 4에서 알고리즘은 belief $\overline{bel}(x_t)$에 <strong>측정 $z_t$가 관측되었을 확률</strong>을 곱한다. 그리고 이것을 <strong>각각의 가설적 사후 상태 $x_t$에 대해</strong> 수행한다.</p>
 <blockquote><p><strong>여기서 $\eta$가 왜 필요한가 (책이 명시하는 이유)</strong>: 실제로 기본 필터 방정식을 유도해보면 분명해지겠지만, <strong>그 결과로 나온 곱은 일반적으로 확률이 아니다.</strong> 적분해서 1이 되지 않을 수 있다. 왜냐하면 $p(z_t \mid x_t)$는 $z_t$에 대한 분포이지 $x_t$에 대한 분포가 아니기 때문이다 — $x_t$를 변수로 놓고 보면 이것은 단지 "가능도(likelihood)"라는 함수값일 뿐 정규화되어 있지 않다. 따라서 정규화 상수 $\eta$ (2.2절 식 (11))로 결과를 정규화한다. 이렇게 해서 최종 belief $bel(x_t)$가 나오고, 알고리즘의 라인 6에서 반환된다.</p></blockquote>
@@ -778,7 +823,7 @@ $$</div></p>
 </ul>
 <p><strong>(30) 제어 <code>do_nothing</code></strong>: 로봇은 매니퓰레이터를 사용하지 않기로 선택할 수도 있다. 그 경우 <strong>세계의 상태는 변하지 않는다.</strong> (대각 성분이 모두 1인 항등 전이.)</p>
 <h3 id="3-예제실습-실제-계산">3. 예제/실습 — 실제 계산</h3>
-<h4 id="시각-vault479-vault480-vault481">시각 $t=1$: $u_1 = \textbf{do\_nothing}$, $z_1 = \textbf{sense\_open}$</h4>
+<h4 id="시각-vault476-vault477-vault478">시각 $t=1$: $u_1 = \textbf{do\_nothing}$, $z_1 = \textbf{sense\_open}$</h4>
 <p><strong>Step 1 — 라인 3 (prediction)</strong></p>
 <p>상태 공간이 유한하므로 라인 3의 적분이 유한합이 된다:</p>
 <p><div class="mathblock">$$
@@ -830,7 +875,7 @@ $$</div></p>
 <p>따라서:</p>
 <p><div class="mathblock">$$bel(X_1 = \textbf{is\_open}) = 0.75, \qquad bel(X_1 = \textbf{is\_closed}) = 0.25$$</div></p>
 <blockquote><p>여기서 $\eta$의 정체가 숫자로 확인된다. $0.3 + 0.1 = 0.4$는 정확히 2.2절 식 (8)의 marginalization $\sum_{x'} p(z \mid x')\overline{bel}(x')$이며, 곧 $p(z_1)$이다.</p></blockquote>
-<h4 id="시각-vault492-vault493-vault494">시각 $t=2$: $u_2 = \textbf{push}$, $z_2 = \textbf{sense\_open}$</h4>
+<h4 id="시각-vault489-vault490-vault491">시각 $t=2$: $u_2 = \textbf{push}$, $z_2 = \textbf{sense\_open}$</h4>
 <p>이 계산은 다음 시간 스텝에 대해 쉽게 반복된다. 독자가 쉽게 검증할 수 있듯이:</p>
 <p><strong>Step 1 — prediction</strong> (이번엔 <code>push</code>이므로 식 (29) 사용, 직전 belief $0.75 / 0.25$가 새 prior):</p>
 <p><div class="mathblock">$$\overline{bel}(X_2 = \textbf{is\_open}) = 1 \cdot 0.75 + 0.8 \cdot 0.25 = 0.75 + 0.2 = 0.95$$</div> <div class="mathblock">$$\overline{bel}(X_2 = \textbf{is\_closed}) = 0 \cdot 0.75 + 0.2 \cdot 0.25 = 0 + 0.05 = 0.05$$</div></p>
@@ -1107,6 +1152,24 @@ $$</div></p>
 <li>상태 $x_t$가 <strong>complete</strong>하다 (2.3.1절의 정의).</li>
 <li><strong>제어가 무작위로 선택된다(controls are chosen at random)</strong>.</li>
 </ol>
+<blockquote><p><strong>귀납의 구조를 미리 못 박아두자</strong> — 유도 안에서 귀납법을 다시 찾을 필요가 없다.</p>
+<ul>
+<li><strong>base case</strong>: $t=0$에서 $bel(x_0)$를 올바르게 초기화했다 (2.4.1절의 경계 조건).</li>
+<li><strong>step</strong>: $bel(x_{t-1})$이 옳다면 $bel(x_t)$도 옳다. ← <strong>2.4.3절의 유도 전체가 이 step 하나다.</strong></li>
+</ul>
+<p>즉 유도가 끝나면 귀납도 끝난다. 아래 식들 사이에서 귀납의 흔적을 찾으려 하면 오히려 헤맨다.</p></blockquote>
+<h3 id="읽는-순서-주의-유도는-알고리즘과-반대-방향으로-진행된다">읽는 순서 주의 — 유도는 알고리즘과 <strong>반대 방향</strong>으로 진행된다</h3>
+<p>이 절에서 가장 헷갈리는 지점을 미리 밝혀둔다.</p>
+<div class="tablewrap"><table><thead><tr><th></th><th>순서</th></tr></thead><tbody><tr><td><strong>알고리즘 실행</strong></td><td>라인 3 (prediction) → 라인 4 (correction)</td></tr><tr><td><strong>유도 진행</strong></td><td>라인 4 먼저 (식 (31)~(34)) → 라인 3 나중 (식 (35)~(37))</td></tr></tbody></table></div>
+<p><strong>왜 역순인가</strong>: 유도는 목표 $bel(x_t)$에서 출발해 아래로 쪼개 내려가는 <strong>top-down</strong> 방식이다. 목표에 가장 가까이 붙어 있는 데이터가 $z_t$이므로, 그것부터 떼어낼 수밖에 없다.</p>
+<div class="codewrap"><pre><code class="lang-">   목표   bel(x_t)
+           │   z_t 를 떼어낸다        (31)~(34)   → 라인 4 완성
+           ▼
+         bel_bar(x_t)
+           │   x_{t-1} 로 쪼갠다      (35)~(37)   → 라인 3 완성
+           ▼
+         bel(x_{t-1})                도착. 재귀 성립.</code></pre></div>
+<p>따라서 <strong>(31)에서 갑자기 $z_t$가 등장하는 것이 정상이다.</strong> 라인 3(prediction)의 유도를 찾는다면 (31)이 아니라 <strong>(35)~(37)</strong> 로 가야 한다.</p>
 <h3 id="2-수식유도-7">2. 수식/유도</h3>
 <p><strong>전체 유도 과정 (먼저 한 번에)</strong></p>
 <p><div class="mathblock">$$
@@ -1133,6 +1196,11 @@ $$</div></p>
 <p><strong>(31) 목표 posterior에 Bayes rule 적용</strong> — 책 (2.35)</p>
 <p>유도의 첫 단계는 <strong>목표 posterior에 Bayes rule을 적용</strong>하는 것이다. 여기서 쓰는 것은 2.2절 식 (12)의 <strong>조건화된 Bayes rule</strong>이다.</p>
 <blockquote><p><strong>왜 조건화된 형태가 필요한가</strong>: 우리가 구하려는 것은 $p(x_t \mid z_{1:t}, u_{1:t})$인데, 조건부에 $z_{1:t}$와 $u_{1:t}$가 이미 잔뜩 들어 있다. 여기서 <strong>가장 최근 측정 $z_t$만 떼어내서</strong> Bayes rule의 "데이터" 역할로 삼고, 나머지 $z_{1:t-1}, u_{1:t}$는 <strong>조건화 변수로 그대로 달고 간다.</strong> 2.2절 식 (12) $p(x \mid y, z) = \dfrac{p(y \mid x, z)\, p(x \mid z)}{p(y \mid z)}$에서 $x \to x_t$, $y \to z_t$, $z \to (z_{1:t-1}, u_{1:t})$로 대응시킨 것이다.</p></blockquote>
+<blockquote><p><strong>왜 $z_t$만 떼어내고 $u_t$는 그대로 두는가 — 이 분해는 $\overline{bel}$의 정의에 맞춰 역설계된 것이다</strong></p>
+<p>두 정의를 나란히 놓아보자 (식 (24), (25)).</p>
+<p><div class="mathblock">$$bel(x_t) = p(x_t \mid z_{1:t},\, u_{1:t}), \qquad \overline{bel}(x_t) = p(x_t \mid z_{1:t-1},\, u_{1:t})$$</div></p>
+<p><strong>차이가 정확히 $z_t$ 하나다</strong> — $u$는 양쪽 모두 $t$까지 들어 있다. 그러므로 Bayes rule에서 $z_t$를 데이터로 잡으면, prior 자리에 남는 $p(x_t \mid z_{1:t-1}, u_{1:t})$가 <strong>정의상 정확히 $\overline{bel}(x_t)$</strong> 가 된다. 만약 $u_t$까지 데이터로 떼어냈다면 이 대응이 깨진다.</p>
+<p>즉 (31)은 임의의 분해가 아니라 <strong>"$\overline{bel}$가 튀어나오도록" 역으로 설계된 분해</strong>이며, 그래서 (34)에서 정의 치환이 매끄럽게 이루어진다.</p></blockquote>
 <p><div class="mathblock">$$p(x_t \mid z_{1:t}, u_{1:t}) = \frac{p(z_t \mid x_t, z_{1:t-1}, u_{1:t})\; p(x_t \mid z_{1:t-1}, u_{1:t})}{p(z_t \mid z_{1:t-1}, u_{1:t})}$$</div></p>
 <p>분모 $p(z_t \mid z_{1:t-1}, u_{1:t})$는 $x_t$에 의존하지 않으므로 (2.2절 식 (11)의 논리 그대로) normalizer $\eta$로 대체한다:</p>
 <p><div class="mathblock">$$= \eta\; p(z_t \mid x_t, z_{1:t-1}, u_{1:t})\; p(x_t \mid z_{1:t-1}, u_{1:t})$$</div></p>
@@ -1159,10 +1227,18 @@ $$</div></p>
 <p>또 한 번, 상태가 complete하다는 가정을 활용한다. 이는 <strong>우리가 $x_{t-1}$을 알면, 과거의 측정과 제어는 상태 $x_t$에 관해 아무 정보도 전달하지 않음</strong>을 함의한다. 이로부터:</p>
 <p><div class="mathblock">$$p(x_t \mid x_{t-1}, z_{1:t-1}, u_{1:t}) = p(x_t \mid x_{t-1}, u_t)$$</div></p>
 <blockquote><p><strong>여기서 $u_t$가 남는 이유 (책이 명시하는 부분)</strong>: 여기서 우리는 <strong>제어 변수 $u_t$를 유지한다. 왜냐하면 $u_t$는 상태 $x_{t-1}$보다 시간적으로 앞서지 않기 때문이다(does not predate the state $x_{t-1}$).</strong> $u_t$는 구간 $(t-1;\,t]$의 변화를 나타내므로 $x_{t-1}$ 이후의 정보다. 반면 $z_{1:t-1}, u_{1:t-1}$은 모두 $x_{t-1}$보다 과거이므로 complete state 가정에 의해 지워진다.</p>
-<p>책의 추가 언급: <strong>독자는 $p(x_t \mid x_{t-1}, u_t) = p(x_t \mid x_{t-1})$임을 빠르게 납득해야 한다.</strong> (제어가 무작위로 선택된다는 가정 하에서, $x_{t-1}$이 주어졌을 때 $u_t$ 자체는 $x_{t-1}$에 대한 정보를 주지 않으므로 — 다만 $x_t$를 예측하는 데는 $u_t$가 필요하므로 표기에는 남겨둔다.)</p></blockquote>
-<p><strong>(37) 마지막 정리 — 라인 3이 유도됨</strong> — 책 (2.41)</p>
+<p><strong>주의 — 이 항에서 $u_t$를 지우면 안 된다</strong>: $p(x_t \mid x_{t-1}, u_t) \ne p(x_t \mid x_{t-1})$이다. 제어 $u_t$는 $x_t$의 직접적인 원인이므로 반드시 남는다.</p>
+<p>"$u_t$를 생략할 수 있다"는 주장은 <strong>이 항이 아니라 아래 (37)의 belief 항</strong>에 대한 것이며, 그쪽은 $p(x_{t-1} \mid z_{1:t-1}, u_{1:t}) = p(x_{t-1} \mid z_{1:t-1}, u_{1:t-1})$ 형태다. 같은 $u_t$가 (36)에서는 남고 (37)에서는 지워지는데 <strong>근거가 서로 다르다</strong> — (37) 설명의 표를 참조.</p></blockquote>
+<p><strong>(37) 재귀를 닫는 단계 — 라인 3이 유도됨</strong> — 책 (2.41)</p>
 <p>마지막으로, <strong>무작위로 선택된 제어에 대해서는 $p(x_{t-1} \mid z_{1:t-1}, u_{1:t})$의 조건화 변수 집합에서 제어 $u_t$를 안전하게 생략할 수 있다</strong>는 점에 주목한다.</p>
-<blockquote><p><strong>왜 생략할 수 있는가</strong>: $u_t$는 시각 $t-1$ *이후*에 선택되는 제어다. 제어가 무작위로 선택된다면 (즉 $x_{t-1}$에 대한 지식에 의존해 선택되지 않는다면), 미래의 제어 $u_t$를 아는 것은 과거의 상태 $x_{t-1}$에 대해 아무 정보도 주지 않는다. 그래서 $u_{1:t} \to u_{1:t-1}$로 줄일 수 있다. (이것이 유도의 두 번째 전제 "controls are chosen at random"이 쓰이는 유일한 지점이다.)</p></blockquote>
+<blockquote><p><strong>왜 생략할 수 있는가</strong>: $u_t$는 시각 $t-1$ *이후*에 선택되는 제어다. 제어가 무작위로 선택된다면 (즉 $x_{t-1}$에 대한 지식에 의존해 선택되지 않는다면), 미래의 제어 $u_t$를 아는 것은 과거의 상태 $x_{t-1}$에 대해 아무 정보도 주지 않는다. 그래서 $u_{1:t} \to u_{1:t-1}$로 줄일 수 있다. (이것이 유도의 두 번째 전제 "controls are chosen at random"이 쓰이는 유일한 지점이다. 다시 말해 <strong>유도 전체에서 Markov 가정이 아닌 전제가 쓰이는 곳은 여기뿐이다.</strong>)</p></blockquote>
+<h4 id="이-단계가-왜-사소하지-않은가-재귀가-여기서-닫힌다">이 단계가 왜 사소하지 않은가 — 재귀가 여기서 닫힌다</h4>
+<p>(35)의 두 번째 인자와 $bel(x_{t-1})$의 정의를 비교해보자.</p>
+<p><div class="mathblock">$$\underbrace{p(x_{t-1} \mid z_{1:t-1},\, u_{1:t})}_{\text{(35)의 인자}} \qquad\text{vs}\qquad \underbrace{p(x_{t-1} \mid z_{1:t-1},\, u_{1:t-1})}_{bel(x_{t-1})\;\text{의 정의}}$$</div></p>
+<p>$u_t$가 남아 있어서 <strong>아직 다르다.</strong> 이 둘이 같아지지 않으면 재귀가 성립하지 않는다 — 알고리즘의 입력은 $bel(x_{t-1})$ 하나인데, 필요한 것이 "$u_t$까지 조건에 넣은 다른 분포"라면 입력이 부족해지기 때문이다. 그래서 (37)은 단순한 뒷정리가 아니라 <strong>유도를 성공시키는 결정적 단계</strong>다.</p>
+<h4 id="같은-vault608가-36에서는-남고-37에서는-지워지는-이유">같은 $u_t$가 (36)에서는 남고 (37)에서는 지워지는 이유</h4>
+<div class="tablewrap"><table><thead><tr><th>단계</th><th>항의 역할</th><th>$u_t$</th><th>근거</th></tr></thead><tbody><tr><td><strong>(36)</strong> $p(x_t \mid x_{t-1}, \cdots)$</td><td>$x_t$를 <strong>예측</strong>한다</td><td><strong>남는다</strong></td><td>$u_t$는 $x_{t-1}$ 이후의 정보이며 $x_t$의 원인이다</td></tr><tr><td><strong>(37)</strong> $p(x_{t-1} \mid \cdots)$</td><td>$x_{t-1}$을 <strong>회고</strong>한다</td><td><strong>지워진다</strong></td><td>$u_t$는 $x_{t-1}$ 이후에 선택되므로 과거 상태에 대한 정보가 없다</td></tr></tbody></table></div>
+<p>모순이 아니라 <strong>항의 역할이 다르다.</strong> (36)은 미래를 내다보는 항이라 $u_t$가 필요하고, (37)은 과거를 되돌아보는 항이라 미래의 제어가 쓸모없다.</p>
 <p>이로써 <strong>재귀 갱신 방정식(recursive update equation)</strong> 을 얻는다:</p>
 <p><div class="mathblock">$$\overline{bel}(x_t) = \int p(x_t \mid x_{t-1}, u_t)\; p(x_{t-1} \mid z_{1:t-1}, u_{1:t-1})\; dx_{t-1}$$</div></p>
 <p>여기서 우변의 두 번째 인자 $p(x_{t-1} \mid z_{1:t-1}, u_{1:t-1})$는 정의상 정확히 $bel(x_{t-1})$ (식 (24)의 $t \to t-1$)이다. 따라서:</p>
@@ -1562,6 +1638,26 @@ window.MathJax = {
         box.dataset.fitted = ratio.toFixed(2);
       } else {
         delete box.dataset.fitted;
+      }
+    });
+    // 인라인 수식도 줄인다. 인라인은 .mathblock 처럼 스크롤 상자가 없어서
+    // 넘치면 그대로 본문 폭을 밀어낸다 (좁은 창에서 가로 스크롤이 생기는 원인).
+    // 줄바꿈이 불가능한 긴 식이 여기 걸린다. (3_Pitfalls C9)
+    document.querySelectorAll('mjx-container:not([display="true"])').forEach(function (eq) {
+      eq.style.fontSize = '';
+      // 부모가 <span class="hl"> 같은 인라인이면 clientWidth 가 0 이다.
+      // 폭을 재려면 블록 조상까지 올라가야 한다.
+      var host = eq.parentElement;
+      while (host && host.clientWidth <= 0) host = host.parentElement;
+      var avail = host ? host.clientWidth - 2 : 0;
+      if (avail <= 0) return;
+      var need = eq.getBoundingClientRect().width;
+      if (need > avail) {
+        var r = Math.max(MIN, (avail / need) * 0.97);
+        eq.style.fontSize = (r * 100).toFixed(1) + '%';
+        eq.dataset.fitted = r.toFixed(2);
+      } else {
+        delete eq.dataset.fitted;
       }
     });
   }
