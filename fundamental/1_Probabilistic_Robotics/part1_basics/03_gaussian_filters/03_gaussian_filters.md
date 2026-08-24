@@ -225,6 +225,11 @@ multivariate normal distribution의 정의 (1)에 대입함으로써 얻어진�
 > 식 (1)의 $\mu$ 자리에 $0$을, $\Sigma$ 자리에 $R_t$를, $x$ 자리에 $\varepsilon_t$를 넣으면 된다. 즉
 > $(x - \mu) \to (x_t - A_t x_{t-1} - B_t u_t)$로 치환되는 것이다.
 
+> **더 자세히**: 위 대입이 왜 정당한지 — 조건화가 $\varepsilon_t$의 분포를 바꾸지 않는다는 확인,
+> 이항으로 문제를 $\varepsilon_t$ 쪽으로 옮기는 단계, 평행이동의 야코비안이 1이라는 확인까지 —
+> 를 Step 0~9로 나눠 정리한 것이 **[부록 A](#부록-a-식-4-유도의-상세-단계-책-3-4)** 다.
+> 책과 이 노트 본문은 이 중 결론만 적고 있다.
+
 따라서 **posterior state의 평균은 $A_t x_{t-1} + B_t u_t$, 공분산은 $R_t$** 로 주어진다:
 
 $$
@@ -3438,3 +3443,256 @@ particle 집합으로 표현한다.
 - **4장 Nonparametric Filters** (책 p.85~116 = PDF p.106~137) — belief를 가우시안이라는 고정된 함수
   형태로 가정하지 않는 필터들. Histogram Filter와 Particle Filter가 이 장의 두 축이며, 3장이 끝내
   넘지 못한 **unimodal 한계**를 여기서 걷어낸다.
+
+---
+
+# 부록 A — 식 (4) 유도의 상세 단계 (책 (3.4))
+
+3.2.1절의 식 (4)에 대해 책은 **결론만** 적는다 — "(3.2)를 (3.1)에 대입해서 얻어지며, 평균은
+$A_t x_{t-1} + B_t u_t$, 공분산은 $R_t$다." 실무에서는 이 결론을 즉시 읽어 쓰는 것이 표준이지만,
+**왜 그 대입이 정당한지**는 한 번 확인해둘 값이 있다. 이 부록은 그 유도를 생략 없이 단계로 나눈 것이다.
+
+특히 책과 본문이 건너뛴 세 지점을 명시한다.
+
+| 생략된 지점 | 내용 |
+|---|---|
+| **Step 3** | 조건화 후에도 $\varepsilon_t \sim \mathcal{N}(0, R_t)$인가 (독립 가정이 필요) |
+| **Step 4** | 이항으로 문제를 $\varepsilon_t$ 쪽으로 옮기는 전환 |
+| **Step 6** | 평행이동의 야코비안이 $1$이라 보정 인자가 붙지 않는다는 확인 |
+
+## A.1 준비물과 목표
+
+**재료 ①** — 식 (1), multivariate normal distribution의 정의:
+
+$$p(x) = \det(2\pi\Sigma)^{-\frac{1}{2}} \exp\left\{-\tfrac{1}{2}(x-\mu)^T \Sigma^{-1} (x-\mu)\right\}$$
+
+**재료 ②** — 식 (2), linear Gaussian state transition:
+
+$$x_t = A_t\, x_{t-1} + B_t\, u_t + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal{N}(0, R_t)$$
+
+**구할 것**: $p(x_t \mid u_t, x_{t-1})$
+
+## A.2 단계별 유도
+
+**Step 0 — 무엇을 구하는지 확정한다**
+
+$$p(x_t \mid u_t, x_{t-1})$$
+
+- **자유변수**: $x_t$ — 밀도를 평가할 대상
+- **고정**: $x_{t-1},\, u_t$ — 주어진 값
+
+이 구분이 이후 모든 단계를 지배한다.
+
+**Step 1 — 조건화를 식 (2)에 반영한다**
+
+$x_{t-1}$과 $u_t$가 고정되었으므로 $A_t x_{t-1}$, $B_t u_t$, 그리고 그 합이 모두 **고정된 벡터**다.
+이 합에 이름을 붙인다 (표기 축약이며, 아직 아무 주장도 하지 않는다):
+
+$$m_t \;:=\; A_t x_{t-1} + B_t u_t \;\in\; \mathbb{R}^n$$
+
+**Step 2 — 식 (2)를 축약한다**
+
+$$x_t = m_t + \varepsilon_t$$
+
+우변에서 확률적인 항은 $\varepsilon_t$ 하나뿐이다. 즉 $x_t$의 불확실성은 전부 $\varepsilon_t$에서 온다.
+
+**Step 3 — 조건화가 $\varepsilon_t$의 분포를 바꾸지 않음을 확인한다** ← *책이 생략*
+
+$\varepsilon_t$가 $(x_{t-1}, u_t)$와 **독립**이라고 가정했으므로:
+
+$$\varepsilon_t \mid u_t, x_{t-1} \;\sim\; \varepsilon_t \;\sim\; \mathcal{N}(0, R_t)$$
+
+이 확인이 없으면 다음 단계가 성립하지 않는다. 만약 $\varepsilon_t$가 $x_{t-1}$에 의존한다면
+조건을 거는 순간 $\varepsilon_t$의 분포가 달라지기 때문이다.
+
+**Step 4 — 문제를 $\varepsilon_t$의 문제로 바꾼다 (전환점)** ← *본문 인용 박스가 다루는 부분*
+
+Step 2를 $\varepsilon_t$에 대해 이항한다:
+
+$$\varepsilon_t = x_t - m_t$$
+
+이 등식이 뜻하는 것은 다음과 같다.
+
+> "$x_t$가 특정 값을 가질 밀도" $=$ "$\varepsilon_t$가 $x_t - m_t$ 값을 가질 밀도"
+
+$x_t$의 분포는 아직 모르지만 $\varepsilon_t$의 분포는 알고 있다. 그래서 **아는 쪽으로 문제를 옮긴다.**
+이것이 이 유도의 핵심 아이디어이고, 나머지는 대입과 표기 정리다.
+
+**Step 5 — $\varepsilon_t$의 밀도를 식 (1)로 적는다**
+
+$\varepsilon_t \sim \mathcal{N}(0, R_t)$이므로 식 (1)에 다음을 대입한다.
+
+| (1)의 자리 | 대입 |
+|---|---|
+| $x$ | $\varepsilon_t$ |
+| $\mu$ | $0$ |
+| $\Sigma$ | $R_t$ |
+
+$$p(\varepsilon_t) = \det(2\pi R_t)^{-\frac{1}{2}} \exp\left\{-\tfrac{1}{2}(\varepsilon_t - 0)^T R_t^{-1} (\varepsilon_t - 0)\right\} = \det(2\pi R_t)^{-\frac{1}{2}} \exp\left\{-\tfrac{1}{2}\varepsilon_t^T R_t^{-1} \varepsilon_t\right\}$$
+
+$\mu = 0$이므로 편차항이 $\varepsilon_t$ 자체로 단순해진다.
+
+**Step 6 — 평행이동이 밀도값을 보존함을 확인한다** ← *책이 생략*
+
+Step 4의 대입을 정당화하는 단계다. 변수변환은 원칙적으로 야코비안 보정을 요구한다.
+
+$$x_t = m_t + \varepsilon_t \;\;\Longrightarrow\;\; \varepsilon_t = x_t - m_t, \qquad \frac{\partial \varepsilon_t}{\partial x_t} = I, \qquad |\det I| = 1$$
+
+야코비안이 $1$이므로 보정 인자가 붙지 않는다:
+
+$$p(x_t \mid u_t, x_{t-1}) = p(\varepsilon_t)\big|_{\varepsilon_t = x_t - m_t} \times 1$$
+
+즉 **$\varepsilon_t$ 자리에 $x_t - m_t$를 그대로 써넣으면 된다.** 일반적인 선형변환이 아니라
+순수한 평행이동이기 때문에 이렇게 간단해진다. (일반 선형변환 $Gx$였다면 $|\det G|^{-1}$이 붙는다.)
+
+**Step 7 — 대입한다**
+
+Step 5의 식에서 $\varepsilon_t \to x_t - m_t$로 바꾼다:
+
+$$p(x_t \mid u_t, x_{t-1}) = \det(2\pi R_t)^{-\frac{1}{2}} \exp\left\{-\tfrac{1}{2}(x_t - m_t)^T R_t^{-1} (x_t - m_t)\right\}$$
+
+**Step 8 — $m_t$를 원래 식으로 풀어 쓴다**
+
+$m_t = A_t x_{t-1} + B_t u_t$를 되돌려 넣으면 **식 (4)** 를 얻는다:
+
+$$
+\begin{aligned}
+p(x_t \mid u_t, x_{t-1}) = \det(2\pi R_t)^{-\frac{1}{2}} \exp\Big\{ &-\tfrac{1}{2}(x_t - A_t x_{t-1} - B_t u_t)^T \\
+&\times R_t^{-1}(x_t - A_t x_{t-1} - B_t u_t) \Big\}
+\end{aligned}
+$$
+
+$m_t$로 두지 않고 풀어 쓰는 이유는, 이 밀도가 $x_{t-1}$과 $u_t$에 **어떻게** 의존하는지를
+식 안에 드러내야 하기 때문이다. 그래서 식 (4)가 길어 보이는 것뿐이다.
+
+**Step 9 — 좌변의 조건부 표기를 정당화한다**
+
+식 (1)의 좌변은 $p(x)$이지만, 이는 파라미터 의존성을 생략한 표기이며 정확히는 $p(x;\mu,\Sigma)$다.
+Step 7에서 대입한 파라미터가
+
+$$\mu = A_t x_{t-1} + B_t u_t \quad (\leftarrow x_{t-1}, u_t \text{ 를 포함}), \qquad \Sigma = R_t$$
+
+이므로 결과 밀도는 $x_{t-1}, u_t$에 의존한다. **그 의존성을 조건부로 옮겨 적은 것이
+$p(x_t \mid u_t, x_{t-1})$의 세로 막대다.** 대입 때문에 좌변이 바뀐 것이 아니라, 식 (1)의 좌변이
+원래부터 밀도였고 파라미터 의존성만 표기에 드러난 것이다.
+
+## A.3 검산
+
+| 항목 | 확인 |
+|---|---|
+| **차원** | $(x_t - A_tx_{t-1} - B_tu_t) \in \mathbb{R}^n$, $R_t^{-1} \in \mathbb{R}^{n\times n}$ → $(1{\times}n)(n{\times}n)(n{\times}1)$ = 스칼라 ✓ |
+| **정규화** | $\int p(x_t \mid u_t,x_{t-1})\,dx_t = \int p(\varepsilon_t)\,d\varepsilon_t = 1$ (Step 6의 야코비안이 1이므로 적분값 보존) ✓ |
+| **평균** | 지수부는 $x_t = A_tx_{t-1}+B_tu_t$에서만 $0$이고 그 밖에서 음수 → 그 점에서 밀도 최대 → 평균이자 mode ✓ |
+| **공분산** | $\Sigma$ 자리에 $R_t$가 들어갔으므로 공분산은 $R_t$ ✓ |
+
+**공분산에 $A_t$가 없는 이유**: Step 1에서 $x_{t-1}$을 상수로 고정했으므로 $A_t x_{t-1}$은 상수벡터이고,
+상수는 공분산에 기여하지 않는다. $x_{t-1}$이 상수가 아니라 분포 $bel(x_{t-1}) = \mathcal{N}(\mu_{t-1},\Sigma_{t-1})$를
+따르는 경우는 다르며, 그때 $A_t \Sigma_{t-1} A_t^T$ 항이 추가된다 (Bayes filter 라인 3).
+
+$$\text{조건부 } (x_{t-1} \text{ 고정}): \;\; \mathrm{Cov} = R_t \qquad\text{vs}\qquad \text{prediction } (x_{t-1} \text{ 분포}): \;\; \overline{\Sigma}_t = A_t\Sigma_{t-1}A_t^T + R_t$$
+
+이 구분이 3.2.4절 유도에서 가장 혼동하기 쉬운 지점이다.
+
+## A.4 보충
+
+### A.4.1 동등한 대안 경로
+
+Step 4~7 대신 조건부 모멘트를 먼저 계산하고 식 (1)에 바로 대입해도 같은 결과가 나온다.
+
+| 경로 A — 책·본문의 방식 | 경로 B — 모멘트 방식 |
+|---|---|
+| $\varepsilon_t$를 이항한다 | 조건부 모멘트를 계산한다 |
+| $\varepsilon_t$의 밀도를 (1)로 쓴다 | $E[x_t \mid \cdot] = A_tx_{t-1}+B_tu_t$ |
+| 야코비안 $=1$ 확인 | $\mathrm{Cov}[x_t \mid \cdot] = R_t$ |
+| $\varepsilon_t$ 자리에 $x_t - m_t$ 대입 | 아핀변환 보존 보조정리 적용 후 (1)에 대입 |
+
+경로 B의 모멘트 계산은 기댓값의 선형성(2장 식 (16))만으로 끝난다:
+
+$$E[x_t \mid u_t, x_{t-1}] = A_tx_{t-1} + B_tu_t + \underbrace{E[\varepsilon_t]}_{=\,0} = A_tx_{t-1} + B_tu_t$$
+$$\mathrm{Cov}[x_t \mid u_t, x_{t-1}] = \mathrm{Cov}[m_t + \varepsilon_t] = \mathrm{Cov}[\varepsilon_t] = R_t$$
+
+그리고 아핀변환 보존 보조정리를 쓴다 — $x \sim \mathcal{N}(\mu,\Sigma)$이고 $G$가 상수행렬, $b$가 상수벡터이면
+
+$$Gx + b \sim \mathcal{N}(G\mu + b,\; G\Sigma G^T)$$
+
+여기서는 $G = I$, $b = m_t$인 평행이동이므로 $x_t \sim \mathcal{N}(m_t, R_t)$다.
+경로 A는 $(x-\mu)$ 자리에 무엇이 들어가는지가 눈에 보이고, 경로 B는 평균·공분산이 먼저 확정된다.
+결과는 동일하다.
+
+### A.4.2 표기 주의 — $\varepsilon_t$는 분산이 아니다
+
+식 (2)를 읽을 때 흔한 혼동이다.
+
+| 대상 | 정체 | 식 (4)에서의 위치 |
+|---|---|---|
+| $A_tx_{t-1} + B_tu_t$ | 고정된 벡터 | $\mu$ 자리 (평균) |
+| $R_t = \mathrm{Cov}[\varepsilon_t]$ | 고정된 행렬 | $\Sigma$ 자리 (공분산) |
+| $\varepsilon_t$ | **확률변수** ($\in \mathbb{R}^n$) | 파라미터 자리에 가지 않는다 |
+
+$\varepsilon_t$는 파라미터가 아니라 **변수 부분**에 나타난다 — 식 (4)의 편차항이 곧 $\varepsilon_t$다:
+
+$$\underbrace{x_t - A_tx_{t-1} - B_tu_t}_{(x-\mu) \text{ 자리}} = \varepsilon_t$$
+
+"$\varepsilon_t$가 분산"이라고 기억하면 식 (4)를 쓸 때 어디에 넣어야 할지 헷갈린다.
+
+### A.4.3 지름길로 읽을 때의 조건
+
+실무·문헌에서는 유도 없이 다음 패턴을 즉시 읽는다.
+
+$$x_t = (\text{결정론적 부분}) + (\text{평균 } 0 \text{ 인 가우시안 노이즈}) \;\;\Longrightarrow\;\; \mathcal{N}(\text{결정론적 부분},\; \text{노이즈 공분산})$$
+
+이 지름길이 성립하려면 네 조건이 필요하며, 그것이 곧 식 (2)에 담긴 가정이다.
+
+| 조건 | 깨지면 |
+|---|---|
+| ① 노이즈가 **덧셈**으로 결합 | 곱셈($x_t = (A_tx_{t-1})(1+\varepsilon_t)$)이면 평균·공분산을 새로 계산해야 한다 |
+| ② $E[\varepsilon_t] = 0$ | $E[\varepsilon_t] = b$면 평균이 $A_tx_{t-1}+B_tu_t+b$가 된다 |
+| ③ $\varepsilon_t \perp (x_{t-1}, u_t)$ | 조건화가 $\varepsilon_t$의 분포를 바꾸므로 Step 3이 무너진다 |
+| ④ $\varepsilon_t$가 Gaussian | 평균·공분산은 읽을 수 있으나 식 (1) 형태로 쓸 수 없다 |
+
+②와 관련해, 체계적 편향은 노이즈가 아니라 결정론적 부분이 담당해야 한다. 편향 $c$가 있다면
+$x_t = A_tx_{t-1} + B_tu_t + c + \varepsilon_t$로 옮겨 적고 $\varepsilon_t$를 다시 평균 $0$으로 만든다.
+3.2.1절이 언급한 "상수 가법항"이 바로 이 자리이며, $E[\varepsilon_t]=0$은 **이 분업을 지켰다는 선언**이다.
+
+### A.4.4 곁가지 — 식 (4)에 선형성은 필요하지 않다
+
+위 조건 목록에 **선형성이 없다는 점**을 눈여겨볼 만하다. 실제로 $g$가 비선형이어도
+
+$$x_t = g(x_{t-1}, u_t) + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal{N}(0, R_t)$$
+
+에서 $x_{t-1}, u_t$를 고정하면 $g(x_{t-1},u_t)$도 고정된 벡터이므로
+
+$$p(x_t \mid u_t, x_{t-1}) = \mathcal{N}\big(x_t;\; g(x_{t-1},u_t),\; R_t\big)$$
+
+가 **정확히** 성립한다 (근사가 아니다). 그러면 선형성은 어디에 필요한가?
+
+| 대상 | 선형성 필요 여부 |
+|---|---|
+| 식 (4) — 조건부 밀도 | **불필요.** 비선형이어도 정확히 Gaussian |
+| Bayes filter 라인 3 — prediction | **필요.** $x_{t-1}$이 분포이므로 $g$를 통과시켜야 하고, 비선형이면 결과가 Gaussian이 아니다 |
+
+즉 **선형성이 지키는 것은 "적분 후에도 Gaussian으로 남는다"** 이며, 3.2.1절이 선형성을 가정으로
+든 이유는 식 (4)를 만들기 위해서가 아니라 식 (4)를 적분한 뒤에도 Gaussian이 유지되게 하기 위해서다.
+이 성질이 깨지는 지점을 다루는 것이 **3.3절 EKF**(비선형 $g$를 테일러 1차로 선형화)와
+**3.4절 UKF**(sigma point로 통과)다.
+
+## A.5 요약
+
+| Step | 한 일 | 사용한 도구 |
+|---|---|---|
+| 0 | 구할 것 확정 — 자유변수 $x_t$, 고정 $x_{t-1}, u_t$ | 조건부 확률의 정의 |
+| 1 | $A_tx_{t-1}+B_tu_t$가 상수벡터임을 확인, $m_t$로 명명 | 조건화 |
+| 2 | 식 (2)를 $x_t = m_t + \varepsilon_t$로 축약 | — |
+| 3 | 조건화 후에도 $\varepsilon_t \sim \mathcal{N}(0,R_t)$ 확인 | 독립 가정 |
+| 4 | 이항 — $\varepsilon_t = x_t - m_t$. 문제를 $\varepsilon_t$ 쪽으로 옮긴다 | **핵심 전환** |
+| 5 | $\varepsilon_t$의 밀도를 식 (1)로 작성 ($x{\leftarrow}\varepsilon_t$, $\mu{\leftarrow}0$, $\Sigma{\leftarrow}R_t$) | 식 (1) |
+| 6 | 야코비안 $|\det I| = 1$ 확인 → 보정 없이 대입 가능 | 변수변환 공식 |
+| 7 | $\varepsilon_t$ 자리에 $x_t - m_t$ 대입 | — |
+| 8 | $m_t$를 풀어 써서 **식 (4)** 완성 | — |
+| 9 | 파라미터가 $x_{t-1}, u_t$에 의존하므로 좌변을 조건부로 표기 | — |
+
+핵심은 **Step 4**다. $x_t$의 분포는 모르지만 $\varepsilon_t$의 분포는 알고 있으므로, 등식을 이항해
+**아는 쪽으로 문제를 옮긴 것**이 이 유도의 전부이고 나머지는 대입과 표기 정리다.
+
+> **같은 절차가 반복되는 곳**: 식 (5)→(6)의 measurement probability도 이 부록과 완전히 동일한
+> Step 0~9를 따른다. $m_t$ 자리에 $C_t x_t$, $R_t$ 자리에 $Q_t$, 자유변수 자리에 $z_t$를 넣으면 된다.
