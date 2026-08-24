@@ -511,8 +511,7 @@ $$</div></p>
 <p><strong>(12) 대표점 근사와 $\eta$의 등장</strong> — 책 (4.10)</p>
 <p><strong>이제 앞서처럼 $p(x_t\mid u_t,x_{t-1})$를 $p(\hat x_{k,t}\mid u_t,\hat x_{i,t-1})$로 근사하면 다음 근사를 얻는다.</strong></p>
 <blockquote><p><strong>주목: 근사가 유효한 확률분포가 되도록 보장하기 위해 정규화자 $\eta$가 필요해진다.</strong> (책의 명시)</p></blockquote>
-<p>이중 적분에서 $\int_{\mathbf{x}_{k,t}}\int_{\mathbf{x}_{i,t-1}} 1\,dx_t\,dx_{t-1} =
-|\mathbf{x}_{k,t}|\,|\mathbf{x}_{i,t-1}|$이므로, $|\mathbf{x}_{i,t-1}|$이 앞의 $|\mathbf{x}_{i,t-1}|^{-1}$과 상쇄되고 <strong>$|\mathbf{x}_{k,t}|$만 남는다.</strong></p>
+<p>이중 적분에서 $\int_{\mathbf{x}_{k,t}}\int_{\mathbf{x}_{i,t-1}} 1\,dx_t\,dx_{t-1} = |\mathbf{x}_{k,t}|\,|\mathbf{x}_{i,t-1}|$이므로, $|\mathbf{x}_{i,t-1}|$이 앞의 $|\mathbf{x}_{i,t-1}|^{-1}$과 상쇄되고 <strong>$|\mathbf{x}_{k,t}|$만 남는다.</strong></p>
 <p><div class="mathblock">$$p(\mathbf{x}_{k,t}\mid u_t,\mathbf{x}_{i,t-1}) \approx \eta\,|\mathbf{x}_{k,t}|\,p(\hat x_{k,t}\mid u_t,\hat x_{i,t-1})$$</div></p>
 <p><strong>이것이 (6)이다.</strong> ✔</p>
 <p><strong>(7)과 대비되는 점</strong>: (8)에서는 부피가 완전히 상쇄되어 깔끔했는데, (12)에서는 <strong>$|\mathbf{x}_{k,t}|$가 살아남는다.</strong> 영역이 조건부 양쪽에 있어서 상쇄가 한쪽만 일어나기 때문이다.</p>
@@ -1317,7 +1316,7 @@ $$</div></p>
 <p><strong>(38) 가중치가 $\eta\,p(z_t\mid x_t)$가 되는 이유</strong> — 책 (4.34)</p>
 <p><div class="mathblock">$$w_t^{[m]} = \frac{\text{target distribution}}{\text{proposal distribution}}$$</div></p>
 <p>분자에 (36)의 최종 결과를, 분모에 (37)을 넣으면:</p>
-<p><div class="mathblock">$$= \frac{\eta\; p(z_t\mid x_t)\; \cancel{p(x_t\mid x_{t-1},u_t)}\; \cancel{p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}}{\cancel{p(x_t\mid x_{t-1},u_t)}\; \cancel{p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}} = \eta\; p(z_t\mid x_t)$$</div></p>
+<p><div class="mathblock">$$= \frac{\eta\; p(z_t\mid x_t)\; \overbrace{p(x_t\mid x_{t-1},u_t)\; p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}^{\text{분모와 동일}}}{\underbrace{p(x_t\mid x_{t-1},u_t)\; p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}_{\text{약분된다}}} = \eta\; p(z_t\mid x_t)$$</div></p>
 <p><strong>두 항이 통째로 약분되어 $\eta\,p(z_t\mid x_t)$만 남는다.</strong> 이것이 Table 4.3 라인 5의 정당화다. ✔</p>
 <blockquote><p><strong>왜 이렇게 깔끔한가</strong>: proposal(라인 4가 하는 일)이 target의 <strong>일부를 그대로 포함</strong>하고 있기 때문이다. target = proposal × (측정 항)이라는 구조라서, 나누면 측정 항만 남는다. <strong>모션 모델로 표집하고 측정 모델로 가중한다</strong>는 particle filter의 구조가 여기서 나온다.</p></blockquote>
 <p><strong>(39) Resampling이 target을 만든다</strong> — 책 (4.35)</p>
@@ -1763,7 +1762,12 @@ window.MathJax = {
     inlineMath: [['$', '$']],
     displayMath: [['$$', '$$']],
     processEscapes: true,
-    tags: 'none'
+    tags: 'none',
+    // 오프라인 번들에는 확장 코드가 없다. autoload 를 남겨두면 \cancel 같은
+    // 미포함 명령을 만났을 때 원격 fetch 를 시도하다 실패하고, 그 promise
+    // rejection 이 페이지의 '모든' 수식 렌더링을 중단시킨다.
+    // 빼두면 해당 수식만 붉은 오류로 표시되고 나머지는 정상 렌더링된다.
+    packages: {'[-]': ['autoload', 'require']}
   },
   options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] },
   svg: { fontCache: 'global' }

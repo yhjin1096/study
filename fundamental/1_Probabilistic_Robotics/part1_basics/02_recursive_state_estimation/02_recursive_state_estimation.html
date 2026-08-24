@@ -1599,7 +1599,12 @@ window.MathJax = {
     inlineMath: [['$', '$']],
     displayMath: [['$$', '$$']],
     processEscapes: true,
-    tags: 'none'
+    tags: 'none',
+    // 오프라인 번들에는 확장 코드가 없다. autoload 를 남겨두면 \cancel 같은
+    // 미포함 명령을 만났을 때 원격 fetch 를 시도하다 실패하고, 그 promise
+    // rejection 이 페이지의 '모든' 수식 렌더링을 중단시킨다.
+    // 빼두면 해당 수식만 붉은 오류로 표시되고 나머지는 정상 렌더링된다.
+    packages: {'[-]': ['autoload', 'require']}
   },
   options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] },
   svg: { fontCache: 'global' }

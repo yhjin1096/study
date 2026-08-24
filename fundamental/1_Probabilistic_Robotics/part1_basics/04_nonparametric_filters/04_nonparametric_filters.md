@@ -499,8 +499,8 @@ $\int_{\mathbf{x}_{i,t-1}} 1\,dx_{t-1} = |\mathbf{x}_{i,t-1}|$가 된다.
 
 > **주목: 근사가 유효한 확률분포가 되도록 보장하기 위해 정규화자 $\eta$가 필요해진다.** (책의 명시)
 
-이중 적분에서 $\int_{\mathbf{x}_{k,t}}\int_{\mathbf{x}_{i,t-1}} 1\,dx_t\,dx_{t-1} =
-|\mathbf{x}_{k,t}|\,|\mathbf{x}_{i,t-1}|$이므로, $|\mathbf{x}_{i,t-1}|$이 앞의 $|\mathbf{x}_{i,t-1}|^{-1}$과
+이중 적분에서
+$\int_{\mathbf{x}_{k,t}}\int_{\mathbf{x}_{i,t-1}} 1\,dx_t\,dx_{t-1} = |\mathbf{x}_{k,t}|\,|\mathbf{x}_{i,t-1}|$이므로, $|\mathbf{x}_{i,t-1}|$이 앞의 $|\mathbf{x}_{i,t-1}|^{-1}$과
 상쇄되고 **$|\mathbf{x}_{k,t}|$만 남는다.**
 
 $$p(\mathbf{x}_{k,t}\mid u_t,\mathbf{x}_{i,t-1}) \approx \eta\,|\mathbf{x}_{k,t}|\,p(\hat x_{k,t}\mid u_t,\hat x_{i,t-1})$$
@@ -1446,7 +1446,7 @@ $$w_t^{[m]} = \frac{\text{target distribution}}{\text{proposal distribution}}$$
 
 분자에 (36)의 최종 결과를, 분모에 (37)을 넣으면:
 
-$$= \frac{\eta\; p(z_t\mid x_t)\; \cancel{p(x_t\mid x_{t-1},u_t)}\; \cancel{p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}}{\cancel{p(x_t\mid x_{t-1},u_t)}\; \cancel{p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}} = \eta\; p(z_t\mid x_t)$$
+$$= \frac{\eta\; p(z_t\mid x_t)\; \overbrace{p(x_t\mid x_{t-1},u_t)\; p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}^{\text{분모와 동일}}}{\underbrace{p(x_t\mid x_{t-1},u_t)\; p(x_{0:t-1}\mid z_{1:t-1},u_{1:t-1})}_{\text{약분된다}}} = \eta\; p(z_t\mid x_t)$$
 
 **두 항이 통째로 약분되어 $\eta\,p(z_t\mid x_t)$만 남는다.** 이것이 Table 4.3 라인 5의 정당화다. ✔
 

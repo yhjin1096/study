@@ -898,8 +898,7 @@ $$</div></p>
 <p><strong>$L_t(x_t)$를 결정하기 — $x_{t-1}$이 정말 사라지는가</strong> — 책 (3.24)~(3.26)</p>
 <p>이제 $L_t(x_t)$를 결정하는 일이 남았는데, 이는 (12)에 정의된 $L_t$와 (위의) $L_t(x_{t-1},x_t)$의 <strong>차이</strong>다:</p>
 <p><div class="mathblock">$$L_t(x_t) = L_t - L_t(x_{t-1}, x_t)$$</div></p>
-<p><strong>$L_t(x_t)$가 정말로 $x_{t-1}$에 의존하지 않는지 빠르게 확인해보자.</strong> 이를 위해 $\Psi_t = (A_t^T R_t^{-1}A_t +
-\Sigma_{t-1}^{-1})^{-1}$을 다시 대입하고 위의 항들을 전개한다. (책은 $x_{t-1}$을 포함한 항에 밑줄을, $x_{t-1}$에 대해 이차인 항에 이중 밑줄을 그어 보여준다. 책 (3.25))</p>
+<p><strong>$L_t(x_t)$가 정말로 $x_{t-1}$에 의존하지 않는지 빠르게 확인해보자.</strong> 이를 위해 $\Psi_t = (A_t^T R_t^{-1}A_t + \Sigma_{t-1}^{-1})^{-1}$을 다시 대입하고 위의 항들을 전개한다. (책은 $x_{t-1}$을 포함한 항에 밑줄을, $x_{t-1}$에 대해 이차인 항에 이중 밑줄을 그어 보여준다. 책 (3.25))</p>
 <p>전개하면 $x_{t-1}$을 포함하는 항들은 다음 세 묶음이다:</p>
 <ul>
 <li>$\tfrac{1}{2}x_{t-1}^T A_t^T R_t^{-1} A_t x_{t-1}$ 와 $\tfrac{1}{2}x_{t-1}^T \Sigma_{t-1}^{-1} x_{t-1}$ (합쳐서 $\tfrac{1}{2}x_{t-1}^T(A_t^TR_t^{-1}A_t + \Sigma_{t-1}^{-1})x_{t-1}$)</li>
@@ -1319,8 +1318,7 @@ def ekf_step(mu, Sigma, u, z, g, h, jacobian_G, jacobian_H, R, Q):
 <h2 id="3-3-4-mathematical-derivation-of-the-ekf">3.3.4 Mathematical Derivation of the EKF</h2>
 <h3 id="1-개념적-이해-9">1. 개념적 이해</h3>
 <blockquote><p><strong>책의 안내</strong>: <strong>EKF의 수학적 유도는 3.2.4절 Kalman filter의 유도와 나란히 진행되며, 따라서 여기서는 개요만 스케치한다.</strong></p></blockquote>
-<p>즉 <strong>새로운 수학은 없다.</strong> 3.2.4절에서 $A_t x_{t-1} + B_t u_t$였던 자리에 $g(u_t,\mu_{t-1}) +
-G_t(x_{t-1}-\mu_{t-1})$을, $C_tx_t$였던 자리에 $h(\bar\mu_t)+H_t(x_t-\bar\mu_t)$를 넣고 그대로 따라가면 된다.</p>
+<p>즉 <strong>새로운 수학은 없다.</strong> 3.2.4절에서 $A_t x_{t-1} + B_t u_t$였던 자리에 $g(u_t,\mu_{t-1}) + G_t(x_{t-1}-\mu_{t-1})$을, $C_tx_t$였던 자리에 $h(\bar\mu_t)+H_t(x_t-\bar\mu_t)$를 넣고 그대로 따라가면 된다.</p>
 <p><strong>선형화 덕분에 지수부가 다시 이차식이 되었기 때문에</strong>, 3.2.4절의 모든 기교($L_t$ 분해, inversion lemma, 도함수로 평균·공분산 읽기)가 그대로 작동한다. <strong>이것이 선형화의 존재 이유다.</strong></p>
 <h3 id="2-수식유도-9">2. 수식/유도</h3>
 <h4 id="전체-유도-과정-먼저-한-번에-4">전체 유도 과정 (먼저 한 번에)</h4>
@@ -1757,8 +1755,7 @@ $$</div></p>
 <p><strong>각 sigma point $\mathcal{X}^{[i]}$에는 두 개의 가중치가 연관된다. 하나인 $w_m^{[i]}$는 평균을 계산할 때 쓰이고, 다른 하나인 $w_c^{[i]}$는 가우시안의 공분산을 복원할 때 쓰인다.</strong></p>
 <p><div class="mathblock">$$w_m^{[0]} = \frac{\lambda}{n+\lambda}, \qquad w_c^{[0]} = \frac{\lambda}{n+\lambda} + (1-\alpha^2+\beta)$$</div> <div class="mathblock">$$w_m^{[i]} = w_c^{[i]} = \frac{1}{2(n+\lambda)} \quad (i = 1,\ldots,2n)$$</div></p>
 <blockquote><p><strong>가중치가 왜 두 종류인가</strong>: 평균 복원과 공분산 복원은 다른 통계량이라, 중심점의 기여도를 각각 다르게 조정하는 편이 근사 정확도에 유리하다. 실제로 <strong>$i \ge 1$인 점들은 두 가중치가 같고, 중심점 $i=0$만 다르다.</strong> 차이는 $(1-\alpha^2+\beta)$ 항 하나뿐이다.</p>
-<p><strong>가중치 합 확인</strong>: $\dfrac{\lambda}{n+\lambda} + 2n \cdot \dfrac{1}{2(n+\lambda)}
-&gt; = \dfrac{\lambda+n}{n+\lambda} = 1$ ✔ — $w_m$의 합은 정확히 1이다.</p></blockquote>
+<p><strong>가중치 합 확인</strong>: $\dfrac{\lambda}{n+\lambda} + 2n \cdot \dfrac{1}{2(n+\lambda)} = \dfrac{\lambda+n}{n+\lambda} = 1$ ✔ — $w_m$의 합은 정확히 1이다.</p></blockquote>
 <p><strong>파라미터 $\beta$에 대해</strong> (책 p.66):</p>
 <blockquote><p><strong>파라미터 $\beta$는 가우시안 표현의 기저에 있는 분포에 대한 추가적인 (고차) 지식을 부호화하기 위해 선택될 수 있다. 만약 분포가 정확히 가우시안이라면 $\beta = 2$가 최적의 선택이다.</strong></p></blockquote>
 <p><strong>(59) Sigma point를 함수에 통과시키기</strong> — 책 (3.68)</p>
@@ -2947,7 +2944,12 @@ window.MathJax = {
     inlineMath: [['$', '$']],
     displayMath: [['$$', '$$']],
     processEscapes: true,
-    tags: 'none'
+    tags: 'none',
+    // 오프라인 번들에는 확장 코드가 없다. autoload 를 남겨두면 \cancel 같은
+    // 미포함 명령을 만났을 때 원격 fetch 를 시도하다 실패하고, 그 promise
+    // rejection 이 페이지의 '모든' 수식 렌더링을 중단시킨다.
+    // 빼두면 해당 수식만 붉은 오류로 표시되고 나머지는 정상 렌더링된다.
+    packages: {'[-]': ['autoload', 'require']}
   },
   options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] },
   svg: { fontCache: 'global' }

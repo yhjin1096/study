@@ -563,8 +563,8 @@ range를 짧게만 만든다는 앞의 논증이 여기 반영되어 있다.
 **(9) 혼합 가중치의 제약** — 책 p.157
 
 **이 네 가지 서로 다른 분포는 이제 파라미터 $z_{\text{hit}}$, $z_{\text{short}}$, $z_{\text{max}}$,
-$z_{\text{rand}}$ 로 정의되는 가중 평균으로 혼합되며, $z_{\text{hit}} + z_{\text{short}} +
-z_{\text{max}} + z_{\text{rand}} = 1$ 이다.** (책 p.157)
+$z_{\text{rand}}$ 로 정의되는 가중 평균으로 혼합되며,
+$z_{\text{hit}} + z_{\text{short}} + z_{\text{max}} + z_{\text{rand}} = 1$ 이다.** (책 p.157)
 
 > **표기 함정 — 반드시 짚고 갈 것**
 >
@@ -1403,8 +1403,7 @@ $$\text{dist} = \min_{x', y'} \left\{ \sqrt{(x_{z_t^k} - x')^2 + (y_{z_t^k} - y'
 **(4) 세 성분의 mixture** — 책 (6.34)
 
 **beam 기반 센서 모델과 마찬가지로, 원하는 확률 $p(z_t^k \mid x_t, m)$ 은 세 분포 모두를 통합한다:
-$z_{\text{hit}} \cdot p_{\text{hit}} + z_{\text{rand}} \cdot p_{\text{rand}} + z_{\text{max}} \cdot
-p_{\text{max}}$ — 익숙한 혼합 가중치 $z_{\text{hit}}$, $z_{\text{rand}}$, $z_{\text{max}}$ 를
+$z_{\text{hit}} \cdot p_{\text{hit}} + z_{\text{rand}} \cdot p_{\text{rand}} + z_{\text{max}} \cdot p_{\text{max}}$ — 익숙한 혼합 가중치 $z_{\text{hit}}$, $z_{\text{rand}}$, $z_{\text{max}}$ 를
 사용한다.** (책 p.171)
 
 **Figure 6.9b는 측정 빔을 따라 결과적으로 나오는 분포 $p(z_t^k \mid x_t, m)$ 의 예를 보여준다. 이 분포가
@@ -1449,8 +1448,8 @@ $p(z_t^k \mid x_t, m)$ 값을 곱한다. 라인 4는 센서 읽기가 max range 
 > $y$ 성분은 $y_{k,\text{sens}}\cos\theta + x_{k,\text{sens}}\sin\theta$ 가 된다.
 >
 > **라인 8에 $p_{\text{max}}$ 가 없는 것에 주목하라.** 라인 4에서 max-range를 이미 건너뛰었으므로
-> 남은 것은 $z_{\text{hit}}$ 항과 $z_{\text{random}}/z_{\max}$ (= $z_{\text{rand}} \cdot
-> p_{\text{rand}}$) 뿐이다. 즉 알고리즘은 식 (4)를 그대로 구현하되 max 항은 `if` 로 처리한다.
+> 남은 것은 $z_{\text{hit}}$ 항과 $z_{\text{random}}/z_{\max}$ (= $z_{\text{rand}} \cdot p_{\text{rand}}$) 뿐이다. 즉
+> 알고리즘은 식 (4)를 그대로 구현하되 max 항은 `if` 로 처리한다.
 
 **맵에서 최근접 이웃을 찾는 것(라인 7)이 알고리즘
 likelihood_field_range_finder_model에서 가장 비용이 큰 연산이다. 이 탐색을 빠르게 하려면 likelihood

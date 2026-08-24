@@ -464,8 +464,7 @@ canvas { display:block; width:100%; height:auto; border-radius:7px; background:v
 <p><strong>(8) $p_{\text{rand}}$ 의 정의</strong> — 책 (6.11) — 위 식 (8).</p>
 <p>구간 길이가 $z_{\max}$ 이므로 높이는 $1/z_{\max}$ 여야 적분이 1이 된다.</p>
 <p><strong>(9) 혼합 가중치의 제약</strong> — 책 p.157</p>
-<p><strong>이 네 가지 서로 다른 분포는 이제 파라미터 $z_{\text{hit}}$, $z_{\text{short}}$, $z_{\text{max}}$, $z_{\text{rand}}$ 로 정의되는 가중 평균으로 혼합되며, $z_{\text{hit}} + z_{\text{short}} +
-z_{\text{max}} + z_{\text{rand}} = 1$ 이다.</strong> (책 p.157)</p>
+<p><strong>이 네 가지 서로 다른 분포는 이제 파라미터 $z_{\text{hit}}$, $z_{\text{short}}$, $z_{\text{max}}$, $z_{\text{rand}}$ 로 정의되는 가중 평균으로 혼합되며, $z_{\text{hit}} + z_{\text{short}} + z_{\text{max}} + z_{\text{rand}} = 1$ 이다.</strong> (책 p.157)</p>
 <blockquote><p><strong>표기 함정 — 반드시 짚고 갈 것</strong></p>
 <p>$z_{\text{hit}}$ 와 $z_t^{k}$ 는 <strong>완전히 다른 것</strong>이다.</p>
 <div class="tablewrap"><table><thead><tr><th>기호</th><th>정체</th><th>값의 성격</th></tr></thead><tbody><tr><td>$z_t^k$</td><td>$k$ 번째 빔의 측정값</td><td>거리 (m)</td></tr><tr><td>$z_t^{k*}$</td><td>그 빔의 참 range</td><td>거리 (m)</td></tr><tr><td>$z_{\max}$</td><td>센서 최대 range</td><td>거리 (m)</td></tr><tr><td>$z_{\text{hit}},\, z_{\text{short}},\, z_{\text{rand}}$</td><td><strong>혼합 가중치</strong></td><td><strong>확률 (합 1)</strong></td></tr><tr><td>$z_{\text{max}}$</td><td><strong>혼합 가중치</strong></td><td><strong>확률</strong></td></tr></tbody></table></div>
@@ -1319,8 +1318,7 @@ for z in (305.0, 150.0, 500.0):
 <p>맵에서 <strong>점유된 모든 칸</strong> $\langle x', y' \rangle$ 을 후보로 놓고, 끝점까지의 유클리드 거리 중 <strong>최소값</strong>을 취한다. 이것이 정의이지 유도된 결과가 아니다.</p>
 <blockquote><p><strong>여기에 "벽 투시" 버그가 숨어 있다.</strong> $\min$ 은 <strong>어느 장애물인지 묻지 않는다.</strong> 끝점 근처에 장애물이 있기만 하면 되고, 그 장애물이 로봇에서 보이는지(중간에 벽이 가로막지 않는지)는 전혀 따지지 않는다. 6.4.2절이 <strong>"센서가 벽을 통과해 볼 수 있는 것처럼 취급한다. 이는 ray casting 연산이 최근접 이웃 함수로 대체되었기 때문이며, 이 함수는 어떤 점까지의 경로가 맵 안 장애물에 의해 가로막히는지 판단할 능력이 없다"</strong> (책 p.173)고 지적하는 바가 이것이다.</p></blockquote>
 <p><strong>(4) 세 성분의 mixture</strong> — 책 (6.34)</p>
-<p><strong>beam 기반 센서 모델과 마찬가지로, 원하는 확률 $p(z_t^k \mid x_t, m)$ 은 세 분포 모두를 통합한다: $z_{\text{hit}} \cdot p_{\text{hit}} + z_{\text{rand}} \cdot p_{\text{rand}} + z_{\text{max}} \cdot
-p_{\text{max}}$ — 익숙한 혼합 가중치 $z_{\text{hit}}$, $z_{\text{rand}}$, $z_{\text{max}}$ 를 사용한다.</strong> (책 p.171)</p>
+<p><strong>beam 기반 센서 모델과 마찬가지로, 원하는 확률 $p(z_t^k \mid x_t, m)$ 은 세 분포 모두를 통합한다: $z_{\text{hit}} \cdot p_{\text{hit}} + z_{\text{rand}} \cdot p_{\text{rand}} + z_{\text{max}} \cdot p_{\text{max}}$ — 익숙한 혼합 가중치 $z_{\text{hit}}$, $z_{\text{rand}}$, $z_{\text{max}}$ 를 사용한다.</strong> (책 p.171)</p>
 <p><strong>Figure 6.9b는 측정 빔을 따라 결과적으로 나오는 분포 $p(z_t^k \mid x_t, m)$ 의 예를 보여준다. 이 분포가 Figure 6.9a에 보인 $p_{\text{hit}}$ 와 분포 $p_{\max}$, $p_{\text{rand}}$ 를 결합함을 쉽게 알 수 있을 것이다. 혼합 파라미터 조정에 대해 우리가 말한 많은 것이 이 새 센서 모델로도 이전된다. 손으로 조정할 수도 있고 ML estimator로 학습할 수도 있다.</strong> (책 p.171)</p>
 <p><strong>Figure 6.8b처럼 전역 $x$-$y$ 좌표의 함수로서 장애물 검출의 likelihood를 묘사하는 표현을 </strong>likelihood field<strong>라 부른다.</strong> (책 p.171)</p>
 <h3 id="알고리즘-책-table-6-3">알고리즘 — 책 Table 6.3</h3>
@@ -1338,8 +1336,7 @@ p_{\text{max}}$ — 익숙한 혼합 가중치 $z_{\text{hit}}$, $z_{\text{rand}
 9:      return q</code></pre></div>
 <p><strong>Table 6.3은 likelihood field를 사용해 측정 확률을 계산하는 알고리즘을 제공한다. 독자는 이미 바깥 루프에 익숙할 것인데, 이는 서로 다른 센서 빔의 노이즈 사이 독립을 가정하고 개별 $p(z_t^k \mid x_t, m)$ 값을 곱한다. 라인 4는 센서 읽기가 max range 읽기인지 확인하며, 그 경우 그냥 무시된다. 라인 5부터 8까지가 흥미로운 경우를 다룬다: 여기서 $x$-$y$ 공간에서 가장 가까운 장애물까지의 거리가 계산되고(라인 7), 결과 likelihood가 라인 8에서 정규분포와 균등분포를 혼합해 얻어진다. 앞서처럼 함수 $\text{prob}(\text{dist}, \sigma_{\text{hit}})$ 은 표준편차 $\sigma_{\text{hit}}$ 의 영점 중심 Gaussian 아래에서 $\text{dist}$ 의 확률을 계산한다.</strong> (책 p.171~172)</p>
 <blockquote><p><strong>라인 5·6이 식 (1)을 풀어 쓴 것</strong>이다. 회전행렬을 성분별로 전개하면 $x$ 성분은 $x_{k,\text{sens}}\cos\theta - y_{k,\text{sens}}\sin\theta$, $y$ 성분은 $y_{k,\text{sens}}\cos\theta + x_{k,\text{sens}}\sin\theta$ 가 된다.</p>
-<p><strong>라인 8에 $p_{\text{max}}$ 가 없는 것에 주목하라.</strong> 라인 4에서 max-range를 이미 건너뛰었으므로 남은 것은 $z_{\text{hit}}$ 항과 $z_{\text{random}}/z_{\max}$ (= $z_{\text{rand}} \cdot
-&gt; p_{\text{rand}}$) 뿐이다. 즉 알고리즘은 식 (4)를 그대로 구현하되 max 항은 <code>if</code> 로 처리한다.</p></blockquote>
+<p><strong>라인 8에 $p_{\text{max}}$ 가 없는 것에 주목하라.</strong> 라인 4에서 max-range를 이미 건너뛰었으므로 남은 것은 $z_{\text{hit}}$ 항과 $z_{\text{random}}/z_{\max}$ (= $z_{\text{rand}} \cdot p_{\text{rand}}$) 뿐이다. 즉 알고리즘은 식 (4)를 그대로 구현하되 max 항은 <code>if</code> 로 처리한다.</p></blockquote>
 <p><strong>맵에서 최근접 이웃을 찾는 것(라인 7)이 알고리즘 likelihood_field_range_finder_model에서 가장 비용이 큰 연산이다. 이 탐색을 빠르게 하려면 likelihood field를 미리 계산해 두는 것이 유리하며, 그러면 측정 확률 계산이 좌표 변환에 이은 표 조회로 끝난다. 물론 이산 격자를 사용하면 조회 결과는 근사에 불과한데, 잘못된 장애물 좌표를 반환할 수 있기 때문이다. 그러나 확률 $p(z_t^k \mid x_t, m)$ 에 대한 영향은 적당히 거친 격자에서도 전형적으로 작다.</strong> (책 p.172)</p>
 <h3 id="3-예제실습-4">3. 예제/실습</h3>
 <h4 id="예제-끝점-투영을-손으로-계산">예제 — 끝점 투영을 손으로 계산</h4>
@@ -2013,7 +2010,12 @@ window.MathJax = {
     inlineMath: [['$', '$']],
     displayMath: [['$$', '$$']],
     processEscapes: true,
-    tags: 'none'
+    tags: 'none',
+    // 오프라인 번들에는 확장 코드가 없다. autoload 를 남겨두면 \cancel 같은
+    // 미포함 명령을 만났을 때 원격 fetch 를 시도하다 실패하고, 그 promise
+    // rejection 이 페이지의 '모든' 수식 렌더링을 중단시킨다.
+    // 빼두면 해당 수식만 붉은 오류로 표시되고 나머지는 정상 렌더링된다.
+    packages: {'[-]': ['autoload', 'require']}
   },
   options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] },
   svg: { fontCache: 'global' }
