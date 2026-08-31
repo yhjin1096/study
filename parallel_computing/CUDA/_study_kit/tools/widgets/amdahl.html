@@ -1,0 +1,178 @@
+<!--
+  Amdahl's Law — 병렬 비율 p 와 병렬 부분 speedup s 가 전체 speedup 에 미치는 영향.
+
+  대응: 책 1.3절 "Speeding up real applications" (p.9~10)
+  프리셋 버튼 3개가 책 본문의 세 수치 예를 그대로 재현한다.
+  readout 의 숫자를 노트의 예제 표와 대조할 수 있다.
+-->
+<div class="lab" id="w-amdahl">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Amdahl's Law — 병렬화의 천장</span>
+    <span class="lab-note">책 1.3절 (p.9) 의 수치 예를 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>전체 실행시간 중 <b>병렬화할 수 있는 비율 <code>p</code></b> 와,
+       <b>그 부분을 몇 배 빠르게 했는지 <code>s</code></b> 를 움직여 본다.
+       세로 점선은 <code>s → ∞</code> 일 때의 상한 <code>1/(1−p)</code> 이다.
+       <b><code>s</code> 를 아무리 키워도 곡선이 그 선을 넘지 못하는 것</b>이 Amdahl's Law 의 요점이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>병렬 비율 p</span><b id="am-v-p">30.0%</b></label>
+        <input type="range" id="am-s-p" min="0" max="99.9" step="0.1" value="30">
+      </div>
+      <div class="slider">
+        <label><span>병렬 부분 speedup s</span><b id="am-v-s">100×</b></label>
+        <input type="range" id="am-s-s" min="0" max="4" step="0.01" value="2">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="b1">책 예① p=30%, s=100</button>
+      <button data-act="b2">책 예② p=30%, s=∞</button>
+      <button data-act="b3">책 예③ p=99%, s=100</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="am-canvas" width="880" height="340"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>현재 p 의 곡선</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>다른 p 값들 (30·50·90·99·99.9%)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>상한 1/(1−p)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>현재 (s, speedup)</span>
+    </div>
+    <div class="readout" id="am-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('am-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('am-readout');
+  var REF = [30, 50, 90, 99, 99.9];          // 배경에 깔아 둘 p 값들 (%)
+  var SMAX = 1e4;                            // s 축 최대 (로그)
+
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function val(id) { return parseFloat(document.getElementById(id).value); }
+
+  // 슬라이더는 로그 눈금으로 다룬다: 0→1배, 4→10000배
+  function sliderToS(v) { return Math.pow(10, v); }
+  function sToSlider(s) { return Math.log10(s); }
+
+  // 전체 speedup — 책 1.3절의 정의 그대로
+  //   남은 시간 = (1-p) + p/s ,  speedup = 1 / 남은 시간
+  function speedup(p, s) { return 1 / ((1 - p) + p / s); }
+
+  function set(p, s) {
+    document.getElementById('am-s-p').value = p;
+    document.getElementById('am-s-s').value = sToSlider(s);
+    draw();
+  }
+
+  function draw() {
+    var pPct = val('am-s-p'), p = pPct / 100;
+    var s = sliderToS(val('am-s-s'));
+    var atInf = val('am-s-s') >= 4;          // 슬라이더 최댓값은 '사실상 무한'으로 취급
+    var cap = p < 1 ? 1 / (1 - p) : Infinity;
+    var cur = speedup(p, s);
+
+    document.getElementById('am-v-p').textContent = pPct.toFixed(1) + '%';
+    document.getElementById('am-v-s').textContent =
+      (s >= 1000 ? Math.round(s / 1000) * 1000 : Math.round(s)) + '×';
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 340;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 52, padR = 16, padT = 16, padB = 34;
+    var YMAX = 1000;                         // p=99.9% 의 상한이 1000 이라 여기에 맞춘다
+    function PX(x) { return padL + (W - padL - padR) * Math.log10(x) / Math.log10(SMAX); }
+    function PY(y) { return H - padB - (H - padB - padT) * Math.log10(Math.min(y, YMAX)) / Math.log10(YMAX); }
+
+    // 격자
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    [1, 10, 100, 1000, 1e4].forEach(function (t) {
+      ctx.beginPath(); ctx.moveTo(PX(t), padT); ctx.lineTo(PX(t), H - padB); ctx.stroke();
+    });
+    [1, 10, 100, 1000].forEach(function (t) {
+      ctx.beginPath(); ctx.moveTo(padL, PY(t)); ctx.lineTo(W - padR, PY(t)); ctx.stroke();
+    });
+
+    // 축
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB);
+    ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    [1, 10, 100, 1000, 1e4].forEach(function (t) {
+      ctx.fillText(t >= 1000 ? (t / 1000) + 'k×' : t + '×', PX(t), H - padB + 15);
+    });
+    ctx.fillText('병렬 부분 speedup  s  (로그)', (padL + W - padR) / 2, H - padB + 30);
+    ctx.textAlign = 'right';
+    [1, 10, 100, 1000].forEach(function (t) { ctx.fillText(t + '×', padL - 7, PY(t) + 4); });
+    ctx.save(); ctx.translate(13, (padT + H - padB) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.fillText('전체 speedup', 0, 0); ctx.restore();
+
+    // 배경 곡선들
+    ctx.lineWidth = 1.2;
+    REF.forEach(function (rp) {
+      if (Math.abs(rp - pPct) < 0.05) return;          // 현재 곡선과 겹치면 생략
+      var q = rp / 100;
+      ctx.strokeStyle = css('--ink-faint'); ctx.globalAlpha = 0.45; ctx.beginPath();
+      for (var i = 0; i <= 300; i++) {
+        var x = Math.pow(10, 4 * i / 300), y = speedup(q, x);
+        i ? ctx.lineTo(PX(x), PY(y)) : ctx.moveTo(PX(x), PY(y));
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+      ctx.fillText(rp + '%', W - padR - 34, PY(Math.min(1 / (1 - q), YMAX)) - 4);
+    });
+
+    // 상한선 1/(1-p)
+    if (isFinite(cap)) {
+      ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(padL, PY(cap)); ctx.lineTo(W - padR, PY(cap)); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 현재 p 의 곡선
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.4; ctx.beginPath();
+    for (var j = 0; j <= 400; j++) {
+      var xx = Math.pow(10, 4 * j / 400), yy = speedup(p, xx);
+      j ? ctx.lineTo(PX(xx), PY(yy)) : ctx.moveTo(PX(xx), PY(yy));
+    }
+    ctx.stroke();
+
+    // 현재 지점
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(s), PY(cur), 5, 0, 2 * Math.PI); ctx.fill();
+
+    // 숫자 — 노트의 예제 표와 대조할 수 있게 찍는다
+    var rest = (1 - p) + p / s;
+    out.innerHTML =
+      'p = <b>' + pPct.toFixed(1) + '%</b>' +
+      ' · s = <b>' + (atInf ? '∞ (사실상)' : Math.round(s) + '×') + '</b><br>' +
+      '남은 시간 = (1−p) + p/s = <b>' + (rest * 100).toFixed(2) + '%</b>' +
+      ' → 단축률 <b>' + ((1 - rest) * 100).toFixed(2) + '%</b><br>' +
+      '전체 speedup = 1 / ' + rest.toFixed(6) + ' = <b>' + cur.toFixed(2) + '×</b>' +
+      ' · 이론 상한 1/(1−p) = <b>' + (isFinite(cap) ? cap.toFixed(2) + '×' : '∞') + '</b>' +
+      ' (상한의 ' + (cur / cap * 100).toFixed(1) + '% 도달)';
+  }
+
+  document.querySelectorAll('#w-amdahl [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'b1') set(30, 100);
+      else if (a === 'b2') set(30, SMAX);
+      else if (a === 'b3') set(99, 100);
+      else set(30, 100);
+    });
+  });
+  ['am-s-p', 'am-s-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(30, 100);
+})();
+</script>

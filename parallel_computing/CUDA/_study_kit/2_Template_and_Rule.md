@@ -178,31 +178,77 @@ print(f"  Sigma_bar = {Sigma_bar}   (노트: [[0.198, ...]])")
 
 ## 절대 번역하지 않는 용어
 
-> **이 표는 스터디를 시작할 때 비어 있다.** 챕터를 쓰면서 마주치는 용어를 계속 추가한다.
-> 아래는 수리·통계 분야에서 대체로 통하는 출발점이다. 분야가 다르면 지우고 새로 채워라.
+> 이 스터디(GPU·병렬 컴퓨팅)의 표다. 챕터를 쓰면서 마주치는 용어를 계속 추가한다.
+> **판단 기준은 "한국어 교재에서 그 번역어가 실제로 통용되는가"** 이지, 번역이 가능한가가 아니다.
+> 이 분야는 실무 문헌이 거의 영어라, 음차(스레드·코어·캐시)조차 원어를 쓰는 편이 검색과
+> 원문 대조에 유리하다.
 
 | 쓸 것 | 쓰지 말 것 |
 |---|---|
-| unimodal / multi-modal / bimodal | 단봉 / 다봉 / 이봉 |
-| mode | 봉우리 (분포의 최빈값을 뜻할 때) |
-| marginalization | 주변화 |
-| prior / posterior / likelihood | (첫 등장 시 "사전 확률(prior)"처럼 병기 허용, 이후 영어) |
-| Jacobian | 야코비안 |
-| bijective mapping | 전단사 사상 |
-| point mass distribution | 점 질량 분포 |
+| thread | 스레드, 쓰레드, 실행 흐름 |
+| core | 코어 |
+| kernel | 커널 |
+| cache | 캐시 |
+| latency | 지연시간, 레이턴시 |
+| throughput | 처리량, 스루풋 |
+| memory bandwidth | 메모리 대역폭 |
+| synchronization / barrier | 동기화 / 장벽 |
+| atomic operation | 원자적 연산 |
+| sequential / parallel (수식어) | 순차적/병렬적 — **단, 명사구 "병렬 프로그래밍·병렬 실행"은 한국어가 통용되므로 허용** |
+| speedup | 속도 향상, 가속비 |
+| work efficiency | 작업 효율 |
+| coalescing | 병합, 유착 |
+| occupancy | 점유율 |
+| control divergence | 제어 분기, 분기 발산 |
+| tiling | 타일링 |
+| privatization | 사유화 |
+| scan / prefix sum | 스캔 / 접두사 합 |
+| embarrassingly parallel | 창피할 정도로 병렬적인 |
+| memory-bound / compute-bound | 메모리 바운드 / 연산 바운드 |
+| host / device | 호스트 / 디바이스 |
 
-**반면 아래는 한국어가 표준이므로 그대로 쓴다**: 공분산, 결합확률, 조건부확률, 정규분포, 확률변수,
-기댓값, 전확률 정리, 충분통계량, 곡률, 귀납법, 정방행렬, 편미분, 항등식, 정규화 상수.
+**반면 아래는 한국어가 표준이므로 그대로 쓴다**: 병렬 프로그래밍, 병렬 실행, 명령어,
+정밀도, 면적, 전력, 발열, 반도체, 클러스터(노드 집합), 자료구조, 지역성, 정규화.
 
-<!--
-  ── 여기부터 이 스터디에서 추가된 용어 ──────────────────────────
-  장을 끝낼 때마다 아래 형식으로 표를 이어 붙인다.
+**품사 구분** — 명사는 영어로 쓰되 동사·형용사형은 한국어가 자연스럽다.
 
-  ### N장에서 추가된 용어
+| 원문 | 노트에 쓸 것 | 쓰지 말 것 |
+|---|---|---|
+| 명사 `parallelization` | **병렬화** (통용됨) | 패러렐라이제이션 |
+| 동사 `parallelize` | **병렬화하다** | 패러렐라이즈하다 |
+| 명사 `synchronization` | **synchronization** | 동기화 |
+| 동사 `synchronize` | **동기화하다** | 싱크로나이즈하다 |
 
-  | 쓸 것 | 쓰지 말 것 |
-  |---|---|
-  |  |  |
+> `synchronization` 은 명사일 때 영어, 동사형일 때 한국어라는 뜻이다.
+> 경계가 헷갈리면 여기 한 줄을 더 적어 규칙을 굳힌다.
 
-  **N장에서 추가로 한국어를 쓰는 것**: …
--->
+### 1장에서 추가된 용어
+
+1장은 개괄이라 새 용어가 대량으로 들어왔다. 위 표의 항목 대부분이 1장에서 처음 나온 것이고,
+그중 1장에서만 쓰인 것은 아래와 같다.
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| multi-core / many-thread | 멀티코어 / 매니스레드 |
+| latency-oriented / throughput-oriented design | 지연 지향 / 처리량 지향 설계 |
+| installed base | 설치 기반, 보급률 |
+| form factor | 폼팩터 |
+| concurrency revolution | 동시성 혁명 |
+| computational thinking | 계산적 사고 |
+| domain decomposition | 영역 분할 |
+| performance portability | 성능 이식성 |
+| program counter / instruction pointer | 프로그램 카운터 / 명령 포인터 |
+| digital twin | 디지털 트윈 |
+
+**1장에서 추가로 한국어를 쓰는 것**: Amdahl's Law 는 고유명사라 영어 그대로 두되,
+"Amdahl's Law 의 상한"처럼 뒤에 붙는 말은 한국어로 쓴다.
+배수 표기의 경계 (1장을 쓰며 실제로 흔들려서 규칙으로 굳혔다):
+
+| 무엇인가 | 표기 | 예 |
+|---|---|---|
+| **성능 비교** — A가 B의 몇 배 빠른가/많은가 | **`×`** | `20×` speedup, FP16 이 FP64 의 `58.2×`, CPU 대비 `10×` memory bandwidth |
+| **자원량·배수 변화** — 무엇을 몇 배로 늘리는가 | **`배`** | 면적 2배, 전력 4배, 전류 2배, 연산 유닛 2배 |
+
+`20x`·`20배`(성능 비교일 때)는 쓰지 않는다. 헷갈리면 **"두 대상을 비교하는가,
+한 대상을 키우는가"** 를 묻는다. 검사는 `grep -E '[0-9](\.[0-9]+)?배'` 로 훑고
+남은 것이 전부 자원·변화인지 눈으로 확인한다.
