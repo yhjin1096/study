@@ -33,19 +33,30 @@
 > ```bash
 > cd "My_Book"
 > pdfinfo "ref/원본.pdf" | grep Pages                  # 총 쪽수를 눈으로 확인
-> pdftotext -f 30 -l 30 "ref/원본.pdf" - | head -3     # 이 PDF 쪽의 인쇄 쪽번호는?
 > python3 -c "import fitz; print(fitz.open('ref/원본.pdf')[0].rect)"   # 판형
 > python3 _study_kit/tools/kit_config.py               # 채운 값이 이렇게 읽히는지 확인
 > ```
 >
-> **페이지 오프셋을 추측하면 반드시 사고가 난다.** 앞·중간·뒤 세 곳에서 검증하고 적는다.
-> 이유는 [`3_Pitfalls.md`](3_Pitfalls.md) A1·A2.
+> **페이지 오프셋을 추측하면 반드시 사고가 난다.** 그리고 **표본 몇 개로 확인하는 것도
+> 충분하지 않다** — 오프셋이 중간에 바뀌는 책이 있고, 앞쪽만 보면 일정해 보인다.
+> `kit.conf` 의 `page_offset` 주석에 전수 조사 스니펫이 있으니 그대로 돌려서 적는다.
+> 구간별로 다르면 `page_offset = 28@29-209, 27@210-314` 형식으로 쓸 수 있다.
+> 이유와 교차 검증 방법은 [`3_Pitfalls.md`](3_Pitfalls.md) A1·A2·**A10**.
 >
 > ### 3. 목차를 만든다
 >
 > [`0_Contents.md`](0_Contents.md)의 틀에 학습 범위의 절 구성과 **책 쪽번호**를 옮겨 적는다.
 > 이 파일이 이후 모든 작업의 기준이다 — 폴더 번호, 노트 구조, 참조 검사가 전부 여기를 본다.
-> 다 적은 뒤 그 파일 아래쪽 "목차 검증" 스니펫으로 쪽번호를 대조한다.
+>
+> 손으로 옮겨 적으면 반드시 오타가 난다. 인쇄된 Contents 쪽을 `pdftotext -layout` 으로
+> 뽑아 파싱하는 편이 빠르고 정확하다. 단 **텍스트 레이어의 철자를 그대로 믿지 마라**
+> (하이픈이 사라지고 합자가 깨진다 — `3_Pitfalls.md` A13).
+>
+> 다 적은 뒤 반드시 대조한다. 여기서 오타를 잡아 두지 않으면 이후 전 챕터가 그 위에 쌓인다.
+>
+> ```bash
+> python3 _study_kit/tools/check_toc.py
+> ```
 >
 > ### 4. 이 README의 제목과 아래 "스터디 개요"를 채우고, 이 안내 블록을 지운다
 
@@ -72,11 +83,11 @@
 
 ```bash
 # ① 원문 정독 — 반드시 PDF를 직접 열어 확인하며 쓴다 (기억에 의존 금지)
-pdftotext -layout -f <시작> -l <끝> "ref/원본.pdf" /tmp/ch.txt
+pdftotext -layout -f <PDF 시작> -l <PDF 끝> "ref/원본.pdf" /tmp/ch.txt
 
-# ② 그림·표 추출
-python3 _study_kit/tools/extract_figures.py --chapter 6 --pages 170-207 --list
-python3 _study_kit/tools/extract_figures.py --chapter 6 --pages 170-207 \
+# ② 그림·표 추출 — 책 쪽번호로 지정한다 (PDF 쪽 환산은 도구가 한다)
+python3 _study_kit/tools/extract_figures.py --chapter 6 --book-pages 123-155 --list
+python3 _study_kit/tools/extract_figures.py --chapter 6 --book-pages 123-155 \
     --out part1_xxx/06_chapter/images --names _study_kit/tools/figure_names/ch6.txt
 
 # ③ 노트 작성 — 2_Template_and_Rule.md 의 구조와 규칙을 따른다
@@ -88,6 +99,7 @@ python3 _study_kit/tools/build_html.py part1_xxx/06_chapter/06_chapter.md
 
 # ⑥ 검증 — 아래 세 가지는 실제로 오류가 나왔던 항목이다
 python3 _study_kit/tools/check_refs.py 06   # 그림·표·쪽번호·절 참조
+python3 _study_kit/tools/check_toc.py       # 목차 쪽번호가 원본과 맞는가
 #   본문의 손계산을 코드로 재계산해 대조   ← 오류가 가장 많이 나오는 곳
 #   위젯을 헤드리스 브라우저로 열어 확인   ← 조작까지 해 봐야 한다
 ```
@@ -108,7 +120,8 @@ My_Book/                           ← 스터디 루트 (여기서 명령을 실
 │       ├── build_html.py          md → self-contained html
 │       ├── extract_figures.py     PDF에서 Figure/Table 크롭 추출
 │       ├── check_refs.py          노트의 참조를 원문과 대조
-│       ├── kit_config.py          kit.conf 로더 (스크립트들이 공유)
+│       ├── check_toc.py           0_Contents.md 의 쪽번호를 원문과 대조
+│       ├── kit_config.py          kit.conf 로더 (구간별 오프셋 환산 포함)
 │       ├── figure_names/chN.txt   챕터별 그림 파일명 매핑 (추출 재현용)
 │       ├── vendor/tex-svg.js      MathJax (외부 폰트 불필요)
 │       └── widgets/*.html         Canvas 인터랙티브 위젯

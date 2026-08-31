@@ -37,6 +37,8 @@ kit.conf 형식 (key = value, '#' 이후는 주석):
     clip_x       = 155-522           # 본문 컬럼의 좌우 경계 (pt)
     header_y     = 52                # 페이지 머리글 아래 (pt)
     body_x       = 186-488           # 이 폭을 모두 덮는 줄은 본문 문단으로 판정 (pt)
+    heading_size = 11.5              # 절 제목의 최소 글자 크기 (pt) — check_toc.py
+    heading_gap  = 8                 # 제목 줄을 잇는 세로 간격 한계 (pt) — check_toc.py
 """
 import glob
 import os
@@ -53,6 +55,8 @@ DEFAULTS = {
     "clip_x": (155.0, 522.0),
     "header_y": 52.0,
     "body_x": (186.0, 488.0),
+    "heading_size": 11.5,  # check_toc.py — 이보다 큰 글자만 '절 제목'으로 본다
+    "heading_gap": 8.0,    # check_toc.py — 이보다 벌어지면 다른 제목 덩어리
 }
 
 
@@ -177,7 +181,7 @@ def load(root=None):
                 cfg["page_offset"] = cfg["offsets"][0][2]
             elif k == "last_chapter":
                 cfg[k] = int(v)
-            elif k in ("header_y",):
+            elif k in ("header_y", "heading_size", "heading_gap"):
                 cfg[k] = float(v)
             elif k == "book_pages":
                 cfg[k] = _pair(v, int)

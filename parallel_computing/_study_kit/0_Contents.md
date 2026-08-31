@@ -58,34 +58,32 @@
 ## 목차 검증
 
 목차를 다 적은 뒤 아래를 돌려 쪽번호가 실제와 맞는지 확인한다.
-(`kit.conf`의 `page_offset`이 먼저 정확해야 한다.)
 
-```python
-import fitz, re, sys
-sys.path.insert(0, 'tools'); import kit_config
-cfg = kit_config.load(); doc = fitz.open(cfg['pdf']); off = cfg['page_offset']
-
-toc = []
-for line in open('0_Contents.md', encoding='utf-8'):
-    m = re.match(r'\s*-\s*(\d+\.\d+(?:\.\d+)?)\s+(.+?)\s*\((\d+)\)\s*$', line)
-    if m: toc.append((m.group(1), m.group(2), int(m.group(3))))
-    m2 = re.match(r'###\s*(\d+)장\.\s*(.+?)\s*\(p\.(\d+)\)', line)
-    if m2: toc.append((m2.group(1), m2.group(2), int(m2.group(3))))
-
-bad = 0
-for sec, title, bookp in toc:
-    ok = False
-    for probe in (bookp + off, bookp + off + 1):        # 절이 다음 쪽으로 밀리는 경우 허용
-        if not (1 <= probe <= doc.page_count): continue
-        for blk in doc[probe-1].get_text("dict")["blocks"]:
-            if blk.get("type") != 0: continue
-            for ln in blk["lines"]:
-                f = ln["spans"][0]
-                s = "".join(x["text"] for x in ln["spans"]).strip()
-                if "Bold" in f["font"] and f["size"] > 10.5 and s.startswith(sec):
-                    ok = True
-        if ok: break
-    if not ok:
-        print(f"  [불일치] {sec} {title[:40]} — 책 p{bookp}"); bad += 1
-print(f"\n불일치 {bad}건 / {len(toc)}건")
+```bash
+python3 _study_kit/tools/check_toc.py             # 불일치만 출력
+python3 _study_kit/tools/check_toc.py --verbose   # 맞은 항목까지 전부
 ```
+
+각 항목의 책 쪽번호를 (`kit.conf` 의 `page_offset` 으로, 구간별이어도) PDF 쪽으로 환산한 뒤,
+그 쪽이나 다음 쪽에 그 절 제목이 **제목으로 조판돼 있는지** 확인한다.
+머리글에도 절 제목이 반복 인쇄되는 판형이 많아 글자 크기와 세로 위치로 걸러 낸다.
+
+검사가 인식하는 형식은 위 틀 그대로다.
+
+```
+### 6장. Performance considerations (p.123)
+- 6.1 Global memory access coalescing (124)
+- 6.1.1 하위 절도 된다 (125)
+### 부록 A. Numerical considerations (p.583)
+- A.1 Floating-point data representation (583)
+```
+
+**전부 불일치로 나온다면** 쪽번호가 아니라 제목 판정 기준이 안 맞는 것이다.
+절이 시작되는 쪽을 하나 골라 조사하고 `kit.conf` 의 `heading_size` · `header_y` 를 고친다.
+
+```bash
+python3 _study_kit/tools/check_toc.py --survey <PDF쪽>
+#   '제목' 으로 표시된 줄이 실제 절 제목과 일치하도록 값을 맞춘다
+```
+
+`page_offset` 이 틀려도 전부 불일치가 난다. 그쪽이 먼저 정확해야 한다 — `3_Pitfalls.md` A1·A10.

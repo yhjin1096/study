@@ -97,8 +97,9 @@ def caption_regex(chapter):
       flat    스타일 : "Figure 3:"   (문서 전체 연속 번호)  — LaTeX article 에 흔하다
     """
     if CAPTION_STYLE == "flat":
-        return re.compile(r"^(Figure|Table)\s*(\d+)\s*[:.]?$")
-    return re.compile(r"^(Figure|Table)\s*(%s)\.(\d+)$" % (chapter if chapter else r"\d+"))
+        return re.compile(r"^(Figure|Table)\s*(\d+)\s*[:.]?$", re.I)
+    part = re.escape(str(chapter)) if chapter else r"\d+|[A-Z]"
+    return re.compile(r"^(Figure|Table)\s*(%s)\.(\d+)$" % part, re.I)
 
 
 def find_captions(page, chapter):
@@ -124,6 +125,12 @@ def find_captions(page, chapter):
             for line in blk["lines"]:
                 head = ""
                 for sp in line["spans"]:
+                    # 공백만 있는 span 은 폰트를 따지지 않고 통과시킨다.
+                    # 이 책은 "FIGURE" 와 "6.6" 사이의 공백만 Helvetica(비볼드)로
+                    # 조판해서, 여기서 끊으면 라벨이 "FIGURE" 로 잘린다.
+                    if not sp["text"].strip():
+                        head += sp["text"]
+                        continue
                     if "Bold" not in sp["font"]:
                         break
                     head += sp["text"]
@@ -141,7 +148,7 @@ def find_captions(page, chapter):
         return sorted(hits.items(), key=lambda kv: kv[1])
 
     # 볼드가 아닌 책 — 줄 전체를 보고 "라벨 + 구분자 + 설명" 형태인지로 판정한다
-    line_re = re.compile(r"^(Figure|Table)\s*(\d+)(?:\.(\d+))?\s*[:.]\s+\S")
+    line_re = re.compile(r"^(Figure|Table)\s*(\d+)(?:\.(\d+))?\s*[:.]\s+\S", re.I)
     for (x0, y0, x1, y1), txt in text_lines(page):
         m = line_re.match(txt)
         if not m:
@@ -149,19 +156,28 @@ def find_captions(page, chapter):
         if CAPTION_STYLE == "chapter":
             if not m.group(3) or (chapter and m.group(2) != str(chapter)):
                 continue
-            label = "%s %s.%s" % (m.group(1), m.group(2), m.group(3))
+            label = "%s %s.%s" % (_kind(m), m.group(2), m.group(3))
         else:
             if m.group(3):                      # flat 인데 점 번호면 다른 규약이다
                 continue
-            label = "%s %s" % (m.group(1), m.group(2))
+            label = "%s %s" % (_kind(m), m.group(2))
         hits.setdefault(label, y0)
     return sorted(hits.items(), key=lambda kv: kv[1])
 
 
+def _kind(m):
+    """책의 조판 표기(FIGURE/Figure/figure)에 상관없이 'Figure'/'Table' 로 통일한다.
+
+    이 책(PMPP 5e)은 캡션을 'FIGURE 6.6' 처럼 전부 대문자로 조판한다.
+    파일명과 노트의 참조 표기가 흔들리지 않도록 여기서 한 번에 정규화한다.
+    """
+    return m.group(1).capitalize()
+
+
 def _label_of(m):
     if CAPTION_STYLE == "flat":
-        return "%s %s" % (m.group(1), m.group(2))
-    return "%s %s.%s" % (m.group(1), m.group(2), m.group(3))
+        return "%s %s" % (_kind(m), m.group(2))
+    return "%s %s.%s" % (_kind(m), m.group(2), m.group(3))
 
 
 def region_floor(lines, label, cap_y0, caption_re):
@@ -171,7 +187,7 @@ def region_floor(lines, label, cap_y0, caption_re):
     for i, ((x0, y0, x1, y1), txt) in enumerate(above):
         if PSEUDOCODE_RE.match(txt):
             continue            # 알고리즘 의사코드 줄("1: Algorithm …")은 본문이 아니라 표의 일부다
-        is_prev_caption = caption_re.match(txt) and not txt.startswith(label)
+        is_prev_caption = caption_re.match(txt) and not txt.upper().startswith(label.upper())
         is_body_line = x0 <= BODY_X0 and x1 >= BODY_X1
         if not (is_prev_caption or is_body_line):
             continue
@@ -219,7 +235,7 @@ def load_names(path):
 
 def extract(page, label, cap_y0, chapter, out_path):
     # "앞선 캡션"을 알아보기 위한 느슨한 정규식 (스타일 무관)
-    caption_re = re.compile(r"^(Figure|Table)\s*\d+")
+    caption_re = re.compile(r"^(Figure|Table)\s*\d+", re.I)
     lines = text_lines(page)
     floor = region_floor(lines, label, cap_y0, caption_re)
 
@@ -245,25 +261,70 @@ def main():
         description="책 PDF에서 챕터의 Figure/Table을 크롭 추출한다.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__)
-    ap.add_argument("--chapter", type=int,
-                    help="챕터 번호 (예: 6). caption_style=chapter 일 때 필수, "
+    ap.add_argument("--chapter",
+                    help="챕터 번호 (예: 6). 부록은 글자로 준다 (예: A). "
+                         "caption_style=chapter 일 때 필수, "
                          "flat 이면 생략한다 (그림 번호에 장 번호가 없으므로)")
-    ap.add_argument("--pages", required=True,
+    ap.add_argument("--pages",
                     help="PDF 페이지 범위 (예: 170-207). 책 쪽번호가 아니다 — kit.conf 의 page_offset 참조")
+    ap.add_argument("--book-pages",
+                    help="책에 인쇄된 쪽 범위 (예: 123-155). kit.conf 의 page_offset 으로 "
+                         "PDF 쪽으로 환산한다. 오프셋이 구간마다 다른 책에서 특히 안전하다")
     ap.add_argument("--out", help="출력 디렉터리 (--list 가 아니면 필수)")
     ap.add_argument("--pdf", default=DEFAULT_PDF, help="원본 PDF 경로")
     ap.add_argument("--names", help="'Figure 6.1 = fig6_1_설명' 형식의 이름 매핑 파일")
     ap.add_argument("--only", action="append",
                     help="이 라벨만 처리 (예: --only 'Figure 6.9'). 여러 번 지정 가능")
     ap.add_argument("--list", action="store_true", help="추출하지 않고 발견된 캡션만 나열")
+    ap.add_argument("--clip", metavar="X0,Y0,X1,Y1",
+                    help="캡션 자동 탐지를 건너뛰고 이 영역을 직접 잘라낸다 (pt). "
+                         "캡션이 없는 그림이나, 캡션이 그림 '위'에 오는 표에 쓴다. "
+                         "--page 와 --name 이 함께 필요하다")
+    ap.add_argument("--page", type=int, help="--clip 과 함께 쓰는 PDF 쪽번호")
+    ap.add_argument("--name", help="--clip 과 함께 쓰는 출력 파일명 (확장자 없이)")
     args = ap.parse_args()
 
+    if args.clip:
+        if not (args.page and args.name and args.out):
+            ap.error("--clip 에는 --page · --name · --out 이 모두 필요하다")
+        try:
+            x0, y0, x1, y1 = (float(v) for v in args.clip.split(","))
+        except ValueError:
+            ap.error("--clip 형식은 'X0,Y0,X1,Y1' 이어야 한다 (예: 163,132,342,268)")
+        doc = fitz.open(args.pdf)
+        os.makedirs(args.out, exist_ok=True)
+        out_path = os.path.join(args.out, args.name + ".png")
+        pix = doc[args.page - 1].get_pixmap(matrix=fitz.Matrix(ZOOM, ZOOM),
+                                            clip=fitz.Rect(x0, y0, x1, y1))
+        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        box = trim(img)
+        if box is None:
+            sys.exit("그 영역에 내용이 없다: %s" % args.clip)
+        img = img.crop(box)
+        img.save(out_path)
+        print("  PDF p%d  %s  %dx%dpx  -> %s"
+              % (args.page, args.clip, img.size[0], img.size[1], args.name + ".png"))
+        return 0
+
+    if bool(args.pages) == bool(args.book_pages):
+        ap.error("--pages 와 --book-pages 중 정확히 하나를 쓰라")
+    if args.book_pages:
+        m = re.match(r"^(\d+)-(\d+)$", args.book_pages)
+        if not m:
+            ap.error("--book-pages 형식은 'A-B' 여야 한다 (예: 123-155)")
+        a, b = kit_config.book_range_to_pdf(int(m.group(1)), int(m.group(2)), CFG)
+        print("책 %s-%s 쪽  →  PDF %d-%d 쪽" % (m.group(1), m.group(2), a, b))
+        args.pages = "%d-%d" % (a, b)
     if not args.list and not args.out:
         ap.error("--out 이 필요하다 (또는 --list 를 쓰라)")
     if CAPTION_STYLE == "chapter" and args.chapter is None:
         ap.error("caption_style=chapter 이므로 --chapter 가 필요하다 "
                  "(장 번호 없는 'Figure 3' 형식이면 kit.conf 에서 caption_style = flat)")
 
+    if args.chapter and not re.fullmatch(r"\d+|[A-Za-z]", args.chapter):
+        ap.error("--chapter 는 숫자(6) 또는 부록 글자(A) 여야 한다: %r" % args.chapter)
+    if args.chapter:
+        args.chapter = args.chapter.upper() if args.chapter.isalpha() else args.chapter
     m = re.match(r"^(\d+)-(\d+)$", args.pages)
     if not m:
         ap.error("--pages 형식은 'A-B' 여야 한다 (예: 170-207)")
@@ -309,7 +370,9 @@ def main():
               "  · 'Figure 3: 설명' 처럼 장 번호가 없으면  caption_style = flat\n"
               "  · 캡션이 볼드가 아니면(LaTeX article 등)  caption_bold  = no\n"
               "(--pages 는 책 쪽번호가 아니라 PDF 페이지 번호다. "
-              "kit.conf 의 page_offset = %d 기준으로 환산하라.)" % CFG["page_offset"])
+              "kit.conf 의 page_offset 으로 환산하거나 --book-pages 를 쓰라.\n"
+              " 현재 오프셋: %s)" % ", ".join(
+                  "PDF %d-%d 은 +%d" % (lo, hi, off) for lo, hi, off in CFG["offsets"]))
     elif not args.list:
         print("총 %d개 중 %d개 추출%s" % (found, found - failed,
                                           (", %d개 실패" % failed) if failed else ""))

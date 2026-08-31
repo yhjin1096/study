@@ -7,6 +7,7 @@
 | 수식 | MathJax `tex-svg` (`tools/vendor/tex-svg.js`) | LaTeX 문법으로 작성. SVG 출력이라 **외부 폰트 파일이 필요 없어** 단일 HTML에 인라인 가능 |
 | 이미지 | `tools/extract_figures.py` (PyMuPDF + PIL) | 원본 PDF에서 챕터의 Figure/Table을 찾아 크롭 → 챕터 `images/`에 저장 후 base64로 인라인 |
 | 점검 | `tools/check_refs.py` | 노트의 그림·표·쪽번호·절 참조를 원문과 대조 |
+| 점검 | `tools/check_toc.py` | `0_Contents.md`의 절 번호·쪽번호를 원문과 대조 |
 | 인터랙티브 시각화 | Canvas + 순수 JavaScript (`tools/widgets/*.html`) | 슬라이더로 파라미터를 바꾸며 알고리즘을 눈으로 확인 |
 | 결과물 | **로컬 self-contained HTML 파일** | 챕터 폴더에 `.html` 1개. 수식 엔진·이미지·위젯 전부 인라인되어 오프라인으로 열림 |
 
@@ -15,7 +16,7 @@
 ```
 원본 PDF (ref/)
         │
-        ├── python3 _study_kit/tools/extract_figures.py --chapter N --pages A-B --out <챕터>/images
+        ├── python3 _study_kit/tools/extract_figures.py --chapter N --book-pages A-B --out <챕터>/images
         ▼
 챕터 .md (원본, 손으로 작성)
    +  images/*.png (PDF에서 추출)
@@ -26,7 +27,7 @@
         ▼
 챕터 .html (단일 파일, 브라우저로 바로 열기)
         │
-        └── python3 _study_kit/tools/check_refs.py   +  헤드리스 렌더링 확인
+        └── python3 _study_kit/tools/check_refs.py  ·  check_toc.py  +  헤드리스 렌더링 확인
 ```
 
 ## 사전 준비 (한 번만)
@@ -74,27 +75,31 @@ caption_bold  = yes         # 캡션 라벨이 TradeGothic-Bold 8.7pt
 clip_x        = 82-461      # 판형 540x666pt. 홀짝쪽 여백이 뒤집혀 있어 합집합
 header_y      = 45          # 머리글이 y=29 한 줄
 body_x        = 120-423     # 본문 문단 판정 — 홀짝쪽의 교집합
+heading_size  = 11.5        # 절 제목 13.4pt · 머리글 11.0pt 사이
+heading_gap   = 8           # 두 줄로 넘어가는 절 제목을 잇는다
 brand         = PMPP 5e
 booktitle     = Programming Massively Parallel Processors — 스터디 노트
 ```
 
-### `page_offset` 이 구간마다 다른 경우
+### `page_offset` — 스칼라와 구간별
 
-`page_offset` 은 **스칼라 하나**로도, **구간별 목록**으로도 쓸 수 있다.
+오프셋은 **하나로도, 구간별로도** 적을 수 있다.
 
 ```
-page_offset = 28                          # 책 전체가 한 오프셋
+page_offset = 21                          # 책 전체가 한 오프셋
 page_offset = 28@29-209, 27@210-314       # PDF 쪽 구간마다 다른 오프셋
 ```
 
-구간은 **PDF 쪽번호** 기준이다. 이 책처럼 장 사이의 빈 쪽이 PDF 에서 빠져 있으면
-뒤로 갈수록 오프셋이 줄어드는데, 스칼라 하나로 적으면 책 뒷부분이 통째로 어긋난다.
+구간은 **PDF 쪽번호** 기준이다. 장 사이의 빈 쪽이 PDF 에서 빠져 있는 책은 뒤로 갈수록
+오프셋이 줄어드는데, 스칼라 하나로 적으면 책 뒷부분이 통째로 어긋난다.
+**표본 몇 개로는 못 잡는다** — 조사법과 교차 검증은 `kit.conf` 주석과 `3_Pitfalls.md` A10.
 
 환산은 손으로 하지 말고 도구에 맡긴다.
 
 ```bash
+# 책 쪽 ↔ PDF 쪽
 python3 -c "import sys; sys.path.insert(0,'_study_kit/tools'); import kit_config as k; \
-            print(k.book_to_pdf(513), k.pdf_to_book(537))"
+            print(k.book_to_pdf(123), k.pdf_to_book(151))"
 ```
 
 > **`caption_style`·`caption_bold` 를 먼저 맞춰라.** 이 둘이 틀리면 `--list` 가 아무것도 못 찾는다.
@@ -123,21 +128,40 @@ python3 _study_kit/tools/extract_figures.py --chapter 6 --pages 170-207 \
 
 - **`--book-pages` 를 쓰라.** 책에 인쇄된 쪽번호로 지정하면 도구가 `page_offset`
   (구간별이어도) 을 적용해 PDF 쪽으로 환산하고, 환산 결과를 출력한다.
-  `--pages` 는 PDF 쪽번호를 직접 주는 옛 방식이고, 둘 중 하나만 쓴다
+  `--pages` 는 PDF 쪽번호를 직접 주는 방식이고, 둘 중 하나만 쓴다
+
+```bash
+python3 _study_kit/tools/extract_figures.py --chapter 6 --book-pages 123-155 --list
+#   책 123-155 쪽  →  PDF 151-183 쪽
+```
+
+- **부록 그림**은 장 번호가 글자인 경우가 많다 (`Figure A.1`). `--chapter A` 처럼 준다
 - `--names`를 생략하면 `fig6_1.png`, `table6_2.png` 같은 기본 이름을 쓴다.
   챕터별 매핑 파일을 `tools/figure_names/`에 남겨 두면 언제든 같은 결과를 다시 만들 수 있다
 - **캡션이 없는 그림**(연습문제 삽화 등)이나 **캡션이 그림 위에 있는 표**는
-  자동 탐지로 잡히지 않는다. `--clip` 으로 직접 영역을 지정하고,
-  좌표는 매핑 파일 하단에 주석으로 남겨 다시 만들 수 있게 해 둔다
+  자동 탐지로 잡히지 않는다. 이 스크립트는 캡션을 *아래* 경계로 삼아 위쪽을 잘라내므로,
+  캡션이 위에 있으면 "내용 없음"으로 실패한다. 그럴 때는 `--clip` 으로 직접 지정한다
 
 ```bash
-# 이 책에서 유일하게 자동 추출이 안 되는 항목 (캡션이 표 위에 있다)
+# 이 책에서 자동 추출이 안 되는 유일한 항목 (책 전체에서 Table 은 이것 하나뿐이고,
+# 캡션이 표 위에 있어 "캡션 위쪽을 자르는" 기본 방식이 실패한다)
 python3 _study_kit/tools/extract_figures.py \
     --clip 163,132,342,268 --page 498 --name table19_1 \
     --out part3_advanced/19_cnn/images
 ```
 
-- **부록 그림**은 장 번호가 글자다. `--chapter A` 처럼 준다
+  좌표는 그리기 객체의 bbox 로 찾는다:
+
+```python
+import fitz
+p = fitz.open(PDF)[<PDF쪽>-1]
+rs = [fitz.Rect(d["rect"]) for d in p.get_drawings()]
+rs = [r for r in rs if r.y0 > <위경계> and r.y1 < <아래경계>]
+print(min(r.x0 for r in rs), min(r.y0 for r in rs),
+      max(r.x1 for r in rs), max(r.y1 for r in rs))
+```
+
+  **쓴 좌표는 매핑 파일 하단에 주석으로 남긴다.** 그래야 다시 만들 수 있다
 
 > **왜 PyMuPDF인가** — 일부 페이지가 통짜 스캔 이미지인 PDF가 흔한데, 그러면 페이지 안 객체 bbox를
 > 그림 영역으로 신뢰할 수 없다. 그래서 이 스크립트는 **캡션 위치로 영역을 좁힌 뒤 픽셀 단위로
@@ -173,14 +197,14 @@ python3 _study_kit/tools/check_refs.py 06 07      # 특정 노트만
 - **[목차에 없는 절]** — `0_Contents.md`에 없는 절 번호. 오타이거나 존재하지 않는 절이다
 - **· [학습 범위 밖 참조]** — `last_chapter` 이후 장 참조. 문제가 아니라 정보다
 
-노트에 쓰는 라벨 표기는 **`Figure 6.6` · `Table 19.1` 로 통일한다.** 이 책은 본문에
-`FIGURE 6.6` 처럼 전부 대문자로 조판돼 있지만, 도구가 수집할 때 이 표기로 정규화하므로
-노트도 같은 표기를 써야 대조가 된다. 부록은 `Figure A.3` 형식이다.
+**노트의 라벨 표기는 `Figure 6.6` · `Table 6.2` 로 통일한다.** 책이 `FIGURE 6.6` 처럼
+다른 표기로 조판돼 있어도 도구가 수집할 때 이 형태로 정규화하므로, 노트도 같은 표기를
+써야 대조가 된다. 부록은 `Figure A.3` 형식이다.
 
 ## 목차 점검
 
 `0_Contents.md` 의 절 번호와 쪽번호가 원본과 맞는지 대조한다. 목차를 손으로 옮겨 적으면
-반드시 오타가 나므로, 목차를 고칠 때마다 돌린다.
+반드시 오타가 나므로, **목차를 만든 직후와 고칠 때마다** 돌린다.
 
 ```bash
 python3 _study_kit/tools/check_toc.py             # 불일치만 출력
@@ -188,9 +212,25 @@ python3 _study_kit/tools/check_toc.py --verbose   # 맞은 항목까지 전부
 ```
 
 각 항목의 책 쪽번호를 (구간별 오프셋을 적용해) PDF 쪽으로 환산한 뒤, 그 쪽이나 다음 쪽에
-그 절 제목이 **제목으로 조판돼 있는지** 확인한다. 머리글에 같은 제목이 반복되므로
-글자 크기와 세로 위치로 걸러 낸다. 다른 책에 쓸 때는 스크립트 맨 위의
-`HEADING_MIN_SIZE` · `HEADING_MIN_Y` 를 다시 재야 한다.
+그 절 제목이 **제목으로 조판돼 있는지** 확인한다. 머리글에도 절 제목이 반복 인쇄되는
+판형이 많아 글자 크기와 세로 위치로 걸러 낸다.
+
+전부 불일치로 나온다면 판정 기준이 안 맞는 것이다. 절이 시작되는 쪽을 하나 골라 조사하고
+`kit.conf` 의 `heading_size` · `header_y` 를 고친다.
+
+```bash
+python3 _study_kit/tools/check_toc.py --survey <PDF쪽>
+#   '제목' 으로 표시된 줄이 실제 절 제목과 일치하도록 값을 맞춘다
+```
+
+이 검사는 `0_Contents.md` 가 다음 형식일 때 동작한다 (템플릿이 이미 그 형식이다).
+
+```
+### 6장. Performance considerations (p.123)
+- 6.1 Global memory access coalescing (124)
+### 부록 A. Numerical considerations (p.583)
+- A.1 Floating-point data representation (583)
+```
 
 ## 빌드 결과 확인
 

@@ -57,8 +57,9 @@ def real_captions():
     found = set()
 
     if CAPTION_BOLD:
-        label_re = (re.compile(r"^(Figure|Table)\s*(\d+)\s*[:.]?$") if CAPTION_STYLE == "flat"
-                    else re.compile(r"^(Figure|Table)\s*(\d+)\.(\d+)$"))
+        label_re = (re.compile(r"^(Figure|Table)\s*(\d+)\s*[:.]?$", re.I)
+                    if CAPTION_STYLE == "flat"
+                    else re.compile(r"^(Figure|Table)\s*(\d+|[A-Z])\.(\d+)$", re.I))
         for pno in range(doc.page_count):
             frags = []
             for blk in doc[pno].get_text("dict")["blocks"]:
@@ -67,6 +68,12 @@ def real_captions():
                 for line in blk["lines"]:
                     head = ""
                     for sp in line["spans"]:
+                        # 공백만 있는 span 은 폰트를 따지지 않고 통과시킨다.
+                        # 이 책은 "FIGURE" 와 "6.6" 사이의 공백만 Helvetica(비볼드)로
+                        # 조판해서, 여기서 끊으면 라벨이 "FIGURE" 로 잘린다.
+                        if not sp["text"].strip():
+                            head += sp["text"]
+                            continue
                         if "Bold" not in sp["font"]:
                             break
                         head += sp["text"]
@@ -83,7 +90,7 @@ def real_captions():
                         break
     else:
         # 볼드가 아닌 책 — "라벨 + 구분자 + 설명" 형태의 줄로 판정
-        line_re = re.compile(r"^(Figure|Table)\s*(\d+)(?:\.(\d+))?\s*[:.]\s+\S")
+        line_re = re.compile(r"^(Figure|Table)\s*(\d+|[A-Z])(?:\.(\d+))?\s*[:.]\s+\S", re.I)
         for pno in range(doc.page_count):
             for blk in doc[pno].get_text("dict")["blocks"]:
                 if blk.get("type") != 0:
@@ -94,24 +101,31 @@ def real_captions():
                     if not m:
                         continue
                     if CAPTION_STYLE == "chapter" and m.group(3):
-                        found.add("%s %s.%s" % (m.group(1), m.group(2), m.group(3)))
+                        found.add("%s %s.%s" % (_kind(m), m.group(2), m.group(3)))
                     elif CAPTION_STYLE == "flat" and not m.group(3):
-                        found.add("%s %s" % (m.group(1), m.group(2)))
+                        found.add("%s %s" % (_kind(m), m.group(2)))
     doc.close()
     return found
 
 
+def _kind(m):
+    """책의 조판 표기(FIGURE/Figure)에 상관없이 'Figure'/'Table' 로 통일한다.
+    노트에는 늘 'Figure 6.6' 표기로 쓰고, 이 함수가 PDF 쪽 표기를 거기에 맞춘다."""
+    return m.group(1).capitalize()
+
+
 def _label(m):
     if CAPTION_STYLE == "flat":
-        return "%s %s" % (m.group(1), m.group(2))
-    return "%s %s.%s" % (m.group(1), m.group(2), m.group(3))
+        return "%s %s" % (_kind(m), m.group(2))
+    return "%s %s.%s" % (_kind(m), m.group(2), m.group(3))
 
 
 def toc_sections():
     """0_Contents.md 에서 절 번호를 수집."""
     txt = open(os.path.join(KIT, "0_Contents.md"), encoding="utf-8").read()
-    secs = set(re.findall(r"^\s*-?\s*(\d+\.\d+(?:\.\d+)?)\s", txt, re.M))
+    secs = set(re.findall(r"^\s*-?\s*((?:\d+|[A-Z])\.\d+(?:\.\d+)?)\s", txt, re.M))
     secs |= set(re.findall(r"###\s*(\d+)장", txt))
+    secs |= set(re.findall(r"###\s*부록\s*([A-Z])", txt))          # 부록은 'A' 로 등록
     return secs
 
 
@@ -126,9 +140,9 @@ def main():
     print(f"PDF 캡션 {len(caps)}개 · 목차 절 {len(secs)}개 수집\n")
 
     ref_fig = (re.compile(r"\b(Figure|Table)\s+(\d+)(?!\.\d)") if CAPTION_STYLE == "flat"
-               else re.compile(r"\b(Figure|Table)\s+(\d+\.\d+)"))
+               else re.compile(r"\b(Figure|Table)\s+((?:\d+|[A-Z])\.\d+)"))
     ref_pg = re.compile(r"책 p\.(\d+)")
-    ref_sec = re.compile(r"(\d+\.\d+(?:\.\d+)?)\s*절")
+    ref_sec = re.compile(r"((?:\d+|[A-Z])\.\d+(?:\.\d+)?)\s*절")
 
     problems = info = 0
     for path in sorted(glob.glob(os.path.join(ROOT, "part*", "*", "*.md"))):
@@ -151,7 +165,8 @@ def main():
         for s in sorted(set(ref_sec.findall(txt))):
             if s in secs:
                 continue
-            ch = int(s.split(".")[0])
+            head = s.split(".")[0]
+            ch = int(head) if head.isdigit() else 0     # 부록은 학습 범위 검사 대상이 아니다
             cnt = len(re.findall(re.escape(s) + r"\s*절", txt))
             if ch > STUDY_MAX_CH:
                 notes.append(f"[학습 범위 밖 참조] {s}절 ({cnt}회)")
