@@ -1,0 +1,17 @@
+# 8장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 8 --book-pages 183-199 \
+#         --out part2_patterns/08_stencil/images \
+#         --names _study_kit/tools/figure_names/ch8.txt
+
+Figure 8.1  = fig8_1_discretization
+Figure 8.2  = fig8_2_1d_stencils
+Figure 8.3  = fig8_3_2d_3d_stencils
+Figure 8.4  = fig8_4_2d_grid_sweep
+Figure 8.5  = fig8_5_boundary_condition
+Figure 8.6  = fig8_6_basic_kernel
+Figure 8.7  = fig8_7_input_output_tile
+Figure 8.8  = fig8_8_tiled_kernel
+Figure 8.9  = fig8_9_coarsening_z
+Figure 8.10 = fig8_10_coarsening_kernel
+Figure 8.11 = fig8_11_plane_rotation
+Figure 8.12 = fig8_12_register_tiling_kernel

@@ -462,3 +462,49 @@ print(f"  Sigma_bar = {Sigma_bar}   (노트: [[0.198, ...]])")
 **`배` / `×` 경계 — "몇 배 차이"도 비교다.** "이상적 값과 25× 차이", "장난감 예의 4×"
 처럼 **두 값을 견주는 것은 `×`** 다. "shared memory 사용량이 2배" 처럼
 **한 대상을 키우는 것만 `배`** 다 (4·6장에서 정한 것과 같다).
+
+
+### 8장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| stencil / stencil sweep | 스텐실 / 스텐실 스윕 |
+| order (stencil 의) | 차수 — **단, "도함수의 차수"는 한국어** (아래 참조) |
+| grid point | 격자점 (**격자 = grid 와 겹쳐 혼동된다**) |
+| structured / unstructured grid | 정형 / 비정형 격자 |
+| regular grid | 규칙 격자 |
+| finite difference (method) | 유한차분(법) — **단, "finite difference 근사"처럼 수식어로는 영어** |
+| finite-element / finite-volume method | 유한요소법 / 유한체적법 |
+| boundary condition | 경계 조건 (**단, 일반 서술의 "경계"·"경계 cell" 은 한국어 허용**) |
+| input tile / output tile / active part | 입력 타일 / 출력 타일 / 활성부 |
+| register tiling | 레지스터 타일링 |
+| coarsening factor | 조립화 인자 |
+| plane (입력 tile 의 x-y 평면) | **평면은 한국어를 쓴다** — 수학 일반 명사다 |
+| fidelity | **충실도(fidelity)** 로 첫 등장 병기 후 한국어 |
+
+**8장에서 정한 경계 — `grid` 가 두 뜻으로 쓰인다**
+
+이 장에서 `grid` 는 **CUDA 의 thread grid** 와 **수치해석의 계산 격자** 두 가지를 가리킨다.
+책도 둘 다 `grid` 로 쓴다. 노트에서는 **둘 다 `grid` 로 두되, 수식어로 구별한다.**
+
+| 쓸 것 | 뜻 |
+|---|---|
+| `grid` / `thread grid` (2장 문맥) | CUDA 의 block 집합 |
+| `grid point` · "입력 grid" · "출력 grid" | 수치해석의 계산 격자 |
+
+**"격자"라는 한국어는 쓰지 않는다** — 어느 쪽인지 더 흐려지기 때문이다.
+`structured grid`·`regular grid` 같은 복합어도 영어로 둔다.
+
+**8장에서 추가로 한국어를 쓰는 것**: **미분방정식**·**편미분방정식**·**도함수**·**이산화**·
+**수치해석**·**근사**·**오차**·**정밀도**·**평면**·**정육면체**는 한국어 수학·수치해석 교재에서
+표준이므로 한국어를 쓴다. `discretization` 은 처음 등장할 때 `이산 표현(discrete
+representation)` 으로 병기한다.
+
+**`sparse` 는 "성긴"으로 쓴다.** 이 장에서 `sparse` 는 자료구조 용어(sparse matrix)가 아니라
+"stencil 패턴에 점이 듬성듬성하다"는 형용사다. 첫 등장에 `성긴(sparse)` 로 병기하고
+그 뒤로는 한국어만 쓴다. **자료구조로서의 `sparse matrix` 는 영어로 둔다** (14장에서 다시 나온다).
+
+**`배` / `×` 경계 — 8장에서 나온 사례.**
+- "double 은 memory 를 **두 배**로 먹는다", "shared memory 소요가 **2배**" → **한 대상을 키움 → `배`**
+- "(b)보다 **2.37×** 많다", "기본 kernel 의 0.41 보다 **2.4×** 낫다",
+  "3D order 3 에서는 **18.5×** 차이" → **두 대상 비교 → `×`**
