@@ -1,0 +1,146 @@
+<!--
+  Shared memory bank conflict — thread 32개가 stride 간격으로 접근할 때 어느 bank 에 몰리는가.
+
+  대응: 책 6.4절 (p.139~141) 의 corner turning 예와 padding · 연습문제 5 (p.155)
+  프리셋 버튼이 연습문제 5의 stride 값 7개를 그대로 재현하므로 readout 을 노트의 표와
+  대조할 수 있다. bank 수는 32, bank 폭은 4 B 로 고정했다 (책 p.139 의 전형적 구성).
+-->
+<div class="lab" id="w-bc">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Shared memory bank conflict</span>
+    <span class="lab-note">책 6.4절 (p.140) · 연습문제 5 (p.155) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>warp 의 thread 32개가 <code>a[threadIdx.x * stride]</code> 로 접근한다.
+       shared memory 는 4 B 씩 <b>32개 bank 에 번갈아</b> 놓이므로
+       thread <code>t</code> 가 닿는 bank 는 <code>(t × stride) mod 32</code> 다.
+       <b>같은 bank 에 둘 이상 몰리면 하드웨어가 직렬화</b>한다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>stride (4 B 단위)</span><b id="bc-v-s">32</b></label>
+        <input type="range" id="bc-s-s" min="1" max="40" step="1" value="32">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="p32">corner turning · 패딩 없음 (32)</button>
+      <button data-act="p33">패딩 후 (33)</button>
+      <button data-act="e31">연습 b: 31</button>
+      <button data-act="e24">c: 24</button>
+      <button data-act="e16">d: 16</button>
+      <button data-act="e12">e: 12</button>
+      <button data-act="e8">f: 8</button>
+      <button data-act="e7">g: 7</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="bc-canvas" width="880" height="250"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>thread</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>안 쓰이는 bank</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>충돌하는 bank (몰린 수만큼 직렬화)</span>
+    </div>
+    <div class="readout" id="bc-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('bc-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('bc-readout');
+  var NB = 32, NT = 32;                    // bank 수 · warp 의 thread 수
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+  function set(s) { document.getElementById('bc-s-s').value = s; draw(); }
+
+  function draw() {
+    var stride = +document.getElementById('bc-s-s').value;
+    document.getElementById('bc-v-s').textContent = stride;
+
+    var bankOf = [], count = new Array(NB).fill(0);
+    for (var t = 0; t < NT; t++) {
+      var b = (t * stride) % NB;
+      bankOf.push(b); count[b]++;
+    }
+    var used = count.filter(function (c) { return c > 0; }).length;
+    var maxDeg = Math.max.apply(null, count);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 250;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '10px system-ui, sans-serif';
+
+    var padL = 10, padR = 10, cellW = (W - padL - padR) / NB;
+    var tY = 30, bY = 175, cellH = 22;
+
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('thread 0 … 31', padL, 16);
+    ctx.fillText('bank 0 … 31', padL, bY + cellH + 15);
+
+    // 연결선 — 충돌하는 것만 강조
+    for (var t2 = 0; t2 < NT; t2++) {
+      var b2 = bankOf[t2], conflict = count[b2] > 1;
+      ctx.strokeStyle = conflict ? css('--accent') : css('--correct');
+      ctx.globalAlpha = conflict ? 0.55 : 0.30;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padL + (t2 + 0.5) * cellW, tY + cellH);
+      ctx.lineTo(padL + (b2 + 0.5) * cellW, bY);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // thread 칸
+    for (var t3 = 0; t3 < NT; t3++) {
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.6;
+      ctx.fillRect(padL + t3 * cellW + 0.5, tY, cellW - 1, cellH);
+      ctx.globalAlpha = 1;
+      if (cellW > 16) {
+        ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+        ctx.fillText(t3, padL + (t3 + 0.5) * cellW, tY + 15);
+      }
+    }
+
+    // bank 칸 — 몰린 수를 위에 적는다
+    for (var b3 = 0; b3 < NB; b3++) {
+      var n = count[b3];
+      ctx.fillStyle = n > 1 ? css('--accent') : (n === 1 ? css('--correct') : css('--ink-faint'));
+      ctx.globalAlpha = n === 0 ? 0.18 : 0.75;
+      ctx.fillRect(padL + b3 * cellW + 0.5, bY, cellW - 1, cellH);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+      if (cellW > 16) {
+        ctx.fillStyle = css('--ink');
+        ctx.fillText(b3, padL + (b3 + 0.5) * cellW, bY + 15);
+      }
+      if (n > 1) {                       // 충돌 차수
+        ctx.fillStyle = css('--accent');
+        ctx.fillText('×' + n, padL + (b3 + 0.5) * cellW, bY - 5);
+      }
+    }
+
+    var g = gcd(stride, NB);
+    out.innerHTML =
+      'stride = <b>' + stride + '</b> → bank = (t × ' + stride + ') mod 32'
+      + ' · gcd(' + stride + ', 32) = <b>' + g + '</b><br>'
+      + '쓰이는 bank <b>' + used + '</b>개 / 32'
+      + ' · 각 bank 에 <b>' + maxDeg + '</b>개씩 몰림'
+      + ' → <b>' + (maxDeg === 1 ? '충돌 없음 (1회에 처리)' : maxDeg + '-way 충돌 · ' + maxDeg + '회로 직렬화')
+      + '</b><br>'
+      + '규칙: 쓰이는 bank 수 = 32 / gcd(stride, 32) · 충돌 차수 = gcd(stride, 32)';
+  }
+
+  document.querySelectorAll('#w-bc [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var m = { p32: 32, p33: 33, e31: 31, e24: 24, e16: 16, e12: 12, e8: 8, e7: 7 };
+      set(m[b.dataset.act] || 32);
+    });
+  });
+  document.getElementById('bc-s-s').addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+  set(32);
+})();
+</script>

@@ -1,0 +1,221 @@
+<!--
+  2D thread-to-data 매핑 — row/col 계산, 경계 검사, row-major 선형화.
+
+  대응: 책 3.2절 Figure 3.2 (p.49) · Figure 3.4 line 06~10 (p.53) · Figure 3.5 의 네 영역 (p.54)
+  프리셋 "책 예 62×76" 이 본문 수치(20 block · 64×80 thread · 네 영역 256/192/224/168)를
+  그대로 재현하므로 readout 을 노트의 표와 대조할 수 있다.
+  칸에 마우스를 올리면 그 thread 의 blockIdx·threadIdx·선형 index 를 보여준다.
+-->
+<div class="lab" id="w-g2d">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">2D 매핑과 네 가지 block</span>
+    <span class="lab-note">Figure 3.2 · Figure 3.5 를 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>이미지 크기 <code>n</code>(세로) × <code>m</code>(가로)와 block 크기를 바꿔 본다.
+       굵은 선이 block 경계이고, <b>흐린 칸이 <code>if (col&lt;m &amp;&amp; row&lt;n)</code> 에 걸려
+       노는 thread</b> 다. 각 block 에 ①~④ 로 표시된 것이 Figure 3.5 의 네 경우다.
+       칸에 마우스를 올리면 그 thread 의 좌표와 선형 index 가 아래에 나온다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>이미지 세로 n</span><b id="g2-v-n">62</b></label>
+        <input type="range" id="g2-s-n" min="1" max="96" step="1" value="62">
+      </div>
+      <div class="slider">
+        <label><span>이미지 가로 m</span><b id="g2-v-m">76</b></label>
+        <input type="range" id="g2-s-m" min="1" max="128" step="1" value="76">
+      </div>
+      <div class="slider">
+        <label><span>block 크기 (정사각)</span><b id="g2-v-b">16</b></label>
+        <input type="range" id="g2-s-b" min="2" max="32" step="1" value="16">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="p1">책 예 62×76, block 16</button>
+      <button data-act="p2">딱 맞는 경우 64×80, 16</button>
+      <button data-act="p3">matmul 예 4×4, block 2</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="g2-canvas" width="880" height="380"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>일하는 thread</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>노는 thread</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>마우스가 가리키는 thread</span>
+    </div>
+    <div class="readout" id="g2-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('g2-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('g2-readout');
+  var hover = null;                       // {row, col} — 마우스가 가리키는 thread
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function v(id) { return +document.getElementById(id).value; }
+
+  function set(n, m, b) {
+    document.getElementById('g2-s-n').value = n;
+    document.getElementById('g2-s-m').value = m;
+    document.getElementById('g2-s-b').value = b;
+    hover = null;
+    draw();
+  }
+
+  // 현재 기하 정보를 한 곳에서 계산한다 (draw 와 마우스 처리기가 공유)
+  function geom() {
+    var n = v('g2-s-n'), m = v('g2-s-m'), bs = v('g2-s-b');
+    var by = Math.ceil(n / bs), bx = Math.ceil(m / bs);   // block 수
+    var ty = by * bs, tx = bx * bs;                       // thread 수
+    var W = cv.clientWidth, padT = 22, padB = 8;
+    // 세로가 대개 제약이 된다. 남는 가로 공간은 그림을 가운데로 밀어 처리한다.
+    var cell = Math.min((W - 16) / tx, 360 / ty);
+    var padL = Math.max(8, (W - tx * cell) / 2);
+    return { n: n, m: m, bs: bs, by: by, bx: bx, ty: ty, tx: tx,
+             W: W, padL: padL, padT: padT, cell: cell,
+             H: Math.round(padT + ty * cell + padB + 16) };
+  }
+
+  function draw() {
+    var g = geom();
+    document.getElementById('g2-v-n').textContent = g.n;
+    document.getElementById('g2-v-m').textContent = g.m;
+    document.getElementById('g2-v-b').textContent = g.bs;
+
+    var dpr = window.devicePixelRatio || 1;
+    cv.style.height = g.H + 'px';
+    if (cv.width !== g.W * dpr || cv.height !== g.H * dpr) {
+      cv.width = g.W * dpr; cv.height = g.H * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, g.W, g.H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('gridDim (' + g.bx + ', ' + g.by + ')  ×  blockDim (' + g.bs + ', ' + g.bs + ')'
+                 + '  →  thread ' + g.ty + ' × ' + g.tx, 8, 14);
+
+    // thread 칸 — 이미지 안이면 일하는 것, 밖이면 노는 것
+    for (var r = 0; r < g.ty; r++) {
+      for (var c = 0; c < g.tx; c++) {
+        var active = (r < g.n && c < g.m);
+        ctx.fillStyle = active ? css('--correct') : css('--ink-faint');
+        ctx.globalAlpha = active ? 0.55 : 0.20;
+        ctx.fillRect(g.padL + c * g.cell, g.padT + r * g.cell,
+                     Math.max(g.cell - 0.6, 0.5), Math.max(g.cell - 0.6, 0.5));
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 마우스가 가리키는 thread
+    if (hover && hover.r < g.ty && hover.c < g.tx) {
+      ctx.fillStyle = css('--accent');
+      ctx.fillRect(g.padL + hover.c * g.cell, g.padT + hover.r * g.cell,
+                   Math.max(g.cell - 0.6, 0.5), Math.max(g.cell - 0.6, 0.5));
+    }
+
+    // block 경계 + 네 경우 라벨
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.4;
+    for (var byi = 0; byi <= g.by; byi++) {
+      ctx.beginPath();
+      ctx.moveTo(g.padL, g.padT + byi * g.bs * g.cell);
+      ctx.lineTo(g.padL + g.tx * g.cell, g.padT + byi * g.bs * g.cell);
+      ctx.stroke();
+    }
+    for (var bxi = 0; bxi <= g.bx; bxi++) {
+      ctx.beginPath();
+      ctx.moveTo(g.padL + bxi * g.bs * g.cell, g.padT);
+      ctx.lineTo(g.padL + bxi * g.bs * g.cell, g.padT + g.ty * g.cell);
+      ctx.stroke();
+    }
+
+    // 블록마다 ①~④ 를 찍는다 (칸이 충분히 클 때만)
+    if (g.bs * g.cell > 22) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      var MARK = ['①', '②', '③', '④'];
+      for (var yb = 0; yb < g.by; yb++) {
+        for (var xb = 0; xb < g.bx; xb++) {
+          var fullY = (yb + 1) * g.bs <= g.n, fullX = (xb + 1) * g.bs <= g.m;
+          var kind = fullY && fullX ? 0 : (fullY ? 1 : (fullX ? 2 : 3));
+          ctx.fillStyle = css('--ink');
+          ctx.fillText(MARK[kind],
+                       g.padL + (xb + 0.5) * g.bs * g.cell,
+                       g.padT + (yb + 0.5) * g.bs * g.cell);
+        }
+      }
+      ctx.textBaseline = 'alphabetic'; ctx.font = '11px system-ui, sans-serif';
+    }
+
+    // ── 숫자 ──────────────────────────────────────────────
+    // 네 경우별 block 수와 block 하나가 일하는 thread 수
+    var fy = Math.floor(g.n / g.bs), fx = Math.floor(g.m / g.bs);   // 꽉 찬 block 행·열 수
+    var py = g.n % g.bs, px = g.m % g.bs;                           // 자투리
+    var cases = [
+      ['①', fy * fx, g.bs * g.bs],
+      ['②', px ? fy : 0, px * g.bs],
+      ['③', py ? fx : 0, g.bs * py],
+      ['④', (px && py) ? 1 : 0, px * py]
+    ];
+    var sum = cases.reduce(function (a, x) { return a + x[1] * x[2]; }, 0);
+    var txt = cases.filter(function (x) { return x[1]; })
+      .map(function (x) {
+        return x[0] + ' block ' + x[1] + '개 × ' + x[2] + ' thread';
+      }).join(' · ');
+
+    var hv = '';
+    if (hover && hover.r < g.ty && hover.c < g.tx) {
+      var r0 = hover.r, c0 = hover.c;
+      var ok = (r0 < g.n && c0 < g.m);
+      hv = '<br>가리킨 thread — blockIdx (' + Math.floor(c0 / g.bs) + ', ' + Math.floor(r0 / g.bs) + ')'
+         + ' · threadIdx (' + (c0 % g.bs) + ', ' + (r0 % g.bs) + ')'
+         + ' → row = <b>' + r0 + '</b>, col = <b>' + c0 + '</b> · '
+         + (ok ? 'row*m+col = ' + r0 + '×' + g.m + '+' + c0 + ' = <b>' + (r0 * g.m + c0) + '</b>'
+               : '<b>범위 밖 — if 에 걸려 논다</b>');
+    }
+
+    out.innerHTML =
+      '이미지 ' + g.n + ' × ' + g.m + ' (= ' + (g.n * g.m).toLocaleString() + ' pixel)'
+      + ' · block ' + g.bs + '×' + g.bs + '<br>'
+      + 'block 수 = ceil(n/bs) × ceil(m/bs) = ' + g.by + ' × ' + g.bx
+      + ' = <b>' + (g.by * g.bx).toLocaleString() + '</b>'
+      + ' → thread ' + g.ty + ' × ' + g.tx + ' = <b>' + (g.ty * g.tx).toLocaleString() + '</b>'
+      + ' (노는 thread ' + (g.ty * g.tx - g.n * g.m).toLocaleString() + ')<br>'
+      + txt + '<br>'
+      + '일하는 thread 합계 = <b>' + sum.toLocaleString() + '</b>'
+      + ' = n×m = ' + (g.n * g.m).toLocaleString()
+      + (sum === g.n * g.m ? ' ✓' : ' ✗')
+      + hv;
+  }
+
+  cv.addEventListener('mousemove', function (e) {
+    var g = geom(), b = cv.getBoundingClientRect();
+    var c = Math.floor((e.clientX - b.left - g.padL) / g.cell);
+    var r = Math.floor((e.clientY - b.top - g.padT) / g.cell);
+    var nh = (r >= 0 && c >= 0 && r < g.ty && c < g.tx) ? { r: r, c: c } : null;
+    if ((nh && (!hover || hover.r !== nh.r || hover.c !== nh.c)) || (!nh && hover)) {
+      hover = nh; draw();
+    }
+  });
+  cv.addEventListener('mouseleave', function () { hover = null; draw(); });
+
+  document.querySelectorAll('#w-g2d [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'p1') set(62, 76, 16);
+      else if (a === 'p2') set(64, 80, 16);
+      else if (a === 'p3') set(4, 4, 2);
+      else set(62, 76, 16);
+    });
+  });
+  ['g2-s-n', 'g2-s-m', 'g2-s-b'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { hover = null; draw(); });
+  });
+  window.addEventListener('resize', draw);
+  set(62, 76, 16);
+})();
+</script>

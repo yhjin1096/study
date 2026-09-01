@@ -1,0 +1,165 @@
+<!--
+  Roofline — arithmetic intensity 가 memory-bound / compute-bound 를 가른다.
+
+  대응: 책 5.1절 "The Roofline Model" 사이드바 (p.95~96) · 5.1절과 5.4절의 모든 수치 예
+  TILE_WIDTH 슬라이더가 tiling 으로 ratio 가 0.25 × T 로 올라가는 것을 그대로 재현하므로,
+  readout 의 숫자를 노트의 표(0.25 → 8 FLOP/B, 0.84 → 26.8 TFLOPS)와 대조할 수 있다.
+-->
+<div class="lab" id="w-rl">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Roofline — tiling 이 지붕을 타고 올라간다</span>
+    <span class="lab-note">책 5.1절 사이드바 (p.95) · 5.4절 (p.111) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>가로축은 <b>arithmetic intensity</b>(FLOP/B), 세로축은 도달 가능한
+       <b>throughput</b>(TFLOPS)이다. 꺾인 지붕선이 하드웨어 한계로,
+       왼쪽 빗변은 <b>memory bandwidth</b>가, 오른쪽 평지는 <b>peak 연산 성능</b>이 정한다.
+       <code>TILE_WIDTH</code> 를 키우면 matmul 의 점이 <b>빗변을 타고 오른쪽 위로</b> 올라간다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>TILE_WIDTH</span><b id="rl-v-t">16</b></label>
+        <input type="range" id="rl-s-t" min="1" max="64" step="1" value="16">
+      </div>
+      <div class="slider">
+        <label><span>peak 연산 (TFLOPS)</span><b id="rl-v-c">66.9</b></label>
+        <input type="range" id="rl-s-c" min="10" max="200" step="0.1" value="66.9">
+      </div>
+      <div class="slider">
+        <label><span>peak bandwidth (TB/s)</span><b id="rl-v-b">3.35</b></label>
+        <input type="range" id="rl-s-b" min="0.5" max="10" step="0.05" value="3.35">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="t1">tiling 없음 (T=1)</button>
+      <button data-act="t32">TILE_WIDTH 32</button>
+      <button data-act="ridge">지붕이 꺾이는 T</button>
+      <button class="ghost" data-act="reset">H100 기본값</button>
+    </div>
+
+    <canvas id="rl-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink)"></i>하드웨어 지붕</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>고정 예 (vecAdd · 이상적 matmul)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>현재 tiled matmul</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>지붕이 꺾이는 지점</span>
+    </div>
+    <div class="readout" id="rl-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('rl-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('rl-readout');
+  var XMIN = 0.05, XMAX = 500, YMIN = 0.05, YMAX = 200;   // 로그 축 범위
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function v(id) { return +document.getElementById(id).value; }
+
+  function set(t, c, b) {
+    document.getElementById('rl-s-t').value = t;
+    if (c) document.getElementById('rl-s-c').value = c;
+    if (b) document.getElementById('rl-s-b').value = b;
+    draw();
+  }
+
+  function draw() {
+    var T = v('rl-s-t'), PC = v('rl-s-c'), PB = v('rl-s-b');
+    document.getElementById('rl-v-t').textContent = T;
+    document.getElementById('rl-v-c').textContent = PC.toFixed(1);
+    document.getElementById('rl-v-b').textContent = PB.toFixed(2);
+
+    var ridge = PC / PB;                 // 지붕이 꺾이는 arithmetic intensity
+    // 책 3.11 kernel 은 0.25 FLOP/B. tiling 은 이를 TILE_WIDTH 배로 올린다 (책 5.4절)
+    var I = 0.25 * T;
+    function roof(x) { return Math.min(PC, PB * x); }
+    var att = roof(I);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    var padL = 56, padR = 16, padT = 18, padB = 40;
+    function PX(x) { return padL + (W - padL - padR) * (Math.log10(x) - Math.log10(XMIN)) / (Math.log10(XMAX) - Math.log10(XMIN)); }
+    function PY(y) { return H - padB - (H - padT - padB) * (Math.log10(y) - Math.log10(YMIN)) / (Math.log10(YMAX) - Math.log10(YMIN)); }
+
+    // 격자 + 눈금
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    var XT = [0.1, 1, 10, 100], YT = [0.1, 1, 10, 100];
+    XT.forEach(function (x) { ctx.beginPath(); ctx.moveTo(PX(x), padT); ctx.lineTo(PX(x), H - padB); ctx.stroke(); });
+    YT.forEach(function (y) { ctx.beginPath(); ctx.moveTo(padL, PY(y)); ctx.lineTo(W - padR, PY(y)); ctx.stroke(); });
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    XT.forEach(function (x) { ctx.fillText(x, PX(x), H - padB + 14); });
+    ctx.fillText('arithmetic intensity  (FLOP/B, 로그)', (padL + W - padR) / 2, H - padB + 30);
+    ctx.textAlign = 'right';
+    YT.forEach(function (y) { ctx.fillText(y, padL - 6, PY(y) + 4); });
+    ctx.save(); ctx.translate(14, (padT + H - padB) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.fillText('throughput (TFLOPS)', 0, 0); ctx.restore();
+
+    // 지붕
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.4; ctx.beginPath();
+    ctx.moveTo(PX(XMIN), PY(Math.max(roof(XMIN), YMIN)));
+    ctx.lineTo(PX(ridge), PY(PC));
+    ctx.lineTo(PX(XMAX), PY(PC));
+    ctx.stroke();
+
+    // 지붕이 꺾이는 지점
+    ctx.strokeStyle = css('--predict'); ctx.lineWidth = 1.4; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(PX(ridge), H - padB); ctx.lineTo(PX(ridge), PY(PC)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--predict'); ctx.textAlign = 'center';
+    ctx.fillText(ridge.toFixed(1), PX(ridge), PY(PC) - 8);
+
+    // 고정 참고점 — 책의 예
+    var REF = [
+      [1 / 12, 'vecAdd 0.083'],
+      [1024 / 6, '이상적 matmul (N=1024)']
+    ];
+    REF.forEach(function (r) {
+      var x = r[0], y = roof(x);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.beginPath(); ctx.arc(PX(x), PY(y), 4, 0, 2 * Math.PI); ctx.fill();
+      ctx.textAlign = x < ridge ? 'left' : 'right';
+      ctx.fillText(r[1], PX(x) + (x < ridge ? 6 : -6), PY(y) - 7);
+    });
+
+    // 현재 tiled matmul
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(I), PY(att), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillText('T=' + T + ' → ' + I.toFixed(2) + ' FLOP/B', PX(I) + 8, PY(att) + 14);
+
+    var bound = I < ridge ? 'memory-bound' : 'compute-bound';
+    out.innerHTML =
+      '하드웨어: peak <b>' + PC.toFixed(1) + ' TFLOPS</b> · bandwidth <b>' + PB.toFixed(2) + ' TB/s</b>'
+      + ' → 지붕이 꺾이는 지점 = ' + PC.toFixed(1) + '/' + PB.toFixed(2)
+      + ' = <b>' + ridge.toFixed(1) + ' FLOP/B</b><br>'
+      + 'TILE_WIDTH = <b>' + T + '</b> → ratio = 0.25 × ' + T + ' = <b>' + I.toFixed(2) + ' FLOP/B</b>'
+      + ' → <b>' + bound + '</b><br>'
+      + '도달 가능 throughput = min(' + PC.toFixed(1) + ', ' + PB.toFixed(2) + ' × ' + I.toFixed(2) + ')'
+      + ' = <b>' + att.toFixed(2) + ' TFLOPS</b>'
+      + ' · peak 의 <b>' + (att / PC * 100).toFixed(1) + '%</b>';
+  }
+
+  document.querySelectorAll('#w-rl [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act, PC = v('rl-s-c'), PB = v('rl-s-b');
+      if (a === 't1') set(1);
+      else if (a === 't32') set(32);
+      else if (a === 'ridge') set(Math.min(64, Math.max(1, Math.ceil(PC / PB / 0.25))));
+      else set(16, 66.9, 3.35);
+    });
+  });
+  ['rl-s-t', 'rl-s-c', 'rl-s-b'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(16, 66.9, 3.35);
+})();
+</script>

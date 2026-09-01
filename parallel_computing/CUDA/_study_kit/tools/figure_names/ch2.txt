@@ -1,0 +1,24 @@
+# 2장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 2 --book-pages 21-44 \
+#         --out part1_fundamentals/02_data_parallel/images \
+#         --names _study_kit/tools/figure_names/ch2.txt
+
+Figure 2.1  = fig2_1_color_to_grayscale
+Figure 2.2  = fig2_2_data_parallelism
+Figure 2.3  = fig2_3_cuda_execution
+Figure 2.4  = fig2_4_sequential_vecadd
+Figure 2.5  = fig2_5_vecadd_outline
+Figure 2.6  = fig2_6_api_malloc_free
+Figure 2.7  = fig2_7_api_memcpy
+Figure 2.8  = fig2_8_vecadd_complete
+Figure 2.9  = fig2_9_grid_blocks_threads
+Figure 2.10 = fig2_10_vecadd_kernel
+Figure 2.11 = fig2_11_function_qualifiers
+Figure 2.12 = fig2_12_host_code_with_launch
+Figure 2.13 = fig2_13_kernel_call_statement
+Figure 2.14 = fig2_14_compilation
+Figure 2.15 = fig2_15_exercise9_code
+
+# Figure 2.15 는 자동 크롭이 위쪽 연습문제 텍스트까지 물어서 직접 지정했다.
+# (연습문제 목록 항목이 '본문 문단' 판정 폭을 채우지 않아 위 경계가 잡히지 않는다)
+#   fig2_15_exercise9_code   PDF p.70, clip=(120, 356, 456, 448)   Exercise 9 의 코드 박스

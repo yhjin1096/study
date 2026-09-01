@@ -19,11 +19,11 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 장 | 노트 | 그림 | 위젯 |
 |---|---|---|---|
 | 1장 Introduction | ✅ | ✅ 2개 + Figure P.1 | ✅ amdahl |
-| 2장 Heterogeneous data-parallel computing | ⬜ | — | — |
-| 3장 Multidimensional grids and data | ⬜ | — | — |
-| 4장 Compute architecture and scheduling | ⬜ | — | — |
-| 5장 Memory architecture and data locality | ⬜ | — | — |
-| 6장 Performance considerations | ⬜ | — | — |
+| 2장 Heterogeneous data-parallel computing | ✅ | ✅ 15개 | ✅ thread-index |
+| 3장 Multidimensional grids and data | ✅ | ✅ 13개 | ✅ grid-2d |
+| 4장 Compute architecture and scheduling | ✅ | ✅ 10개 | ✅ occupancy |
+| 5장 Memory architecture and data locality | ✅ | ✅ 14개 | ✅ roofline |
+| 6장 Performance considerations | ✅ | ✅ 13개 | ✅ bank-conflict |
 | 7장 Convolution | ⬜ | — | — |
 | 8장 Stencil computation | ⬜ | — | — |
 | 9장 Histogram | ⬜ | — | — |

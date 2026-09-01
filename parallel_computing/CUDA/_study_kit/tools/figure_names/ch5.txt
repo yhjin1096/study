@@ -1,0 +1,19 @@
+# 5장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 5 --book-pages 93-122 \
+#         --out part1_fundamentals/05_memory_locality/images \
+#         --names _study_kit/tools/figure_names/ch5.txt
+
+Figure 5.1  = fig5_1_memory_model
+Figure 5.2  = fig5_2_memory_vs_registers
+Figure 5.3  = fig5_3_shared_vs_registers
+Figure 5.4  = fig5_4_variable_qualifiers
+Figure 5.5  = fig5_5_small_matmul
+Figure 5.6  = fig5_6_block00_accesses
+Figure 5.7  = fig5_7_tiling_m_n
+Figure 5.8  = fig5_8_execution_phases
+Figure 5.9  = fig5_9_tiled_kernel
+Figure 5.10 = fig5_10_index_calculation
+Figure 5.11 = fig5_11_edge_phase1
+Figure 5.12 = fig5_12_edge_phase0
+Figure 5.13 = fig5_13_boundary_checks
+Figure 5.14 = fig5_14_dynamic_shared

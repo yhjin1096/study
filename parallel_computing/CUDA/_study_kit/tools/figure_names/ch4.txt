@@ -1,0 +1,15 @@
+# 4장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 4 --book-pages 67-92 \
+#         --out part1_fundamentals/04_compute_architecture/images \
+#         --names _study_kit/tools/figure_names/ch4.txt
+
+Figure 4.1  = fig4_1_gpu_architecture
+Figure 4.2  = fig4_2_block_to_sm
+Figure 4.3  = fig4_3_barrier_timing
+Figure 4.4  = fig4_4_incorrect_syncthreads
+Figure 4.5  = fig4_5_transparent_scalability
+Figure 4.6  = fig4_6_blocks_into_warps
+Figure 4.7  = fig4_7_2d_linear_layout
+Figure 4.8  = fig4_8_processing_blocks
+Figure 4.9  = fig4_9_divergence_ifelse
+Figure 4.10 = fig4_10_divergence_forloop

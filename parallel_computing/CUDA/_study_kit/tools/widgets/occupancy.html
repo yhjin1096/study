@@ -1,0 +1,192 @@
+<!--
+  Occupancy 계산기 — thread slot · block slot · register 세 제약 중 무엇이 발목을 잡는가.
+
+  대응: 책 4.7절 (p.85~86) 의 모든 수치 예 · 연습문제 6·7·8 (p.91~92)
+  프리셋 버튼이 책의 예를 그대로 재현하므로 readout 을 노트의 표와 대조할 수 있다.
+  위 곡선은 block 크기에 따른 occupancy 로, 책이 말하는 "performance cliff" 와
+  톱니 모양(나누어떨어지지 않는 크기에서 슬롯이 남는 것)이 한눈에 보인다.
+-->
+<div class="lab" id="w-occ">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Occupancy — 무엇이 발목을 잡는가</span>
+    <span class="lab-note">책 4.7절 (p.85~86) 의 수치 예를 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>block 크기와 thread 당 register 수를 바꿔 본다. occupancy 는
+       <b>세 제약(thread slot · block slot · register) 중 가장 빡빡한 것</b>이 정한다.
+       위 곡선은 지금 register 수에서 block 크기만 바꿨을 때의 occupancy 이고,
+       아래 막대는 각 제약이 허용하는 block 수다. <b>가장 짧은 막대가 범인</b>이다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>block 크기 (thread)</span><b id="oc-v-b">512</b></label>
+        <input type="range" id="oc-s-b" min="32" max="1024" step="32" value="512">
+      </div>
+      <div class="slider">
+        <label><span>thread 당 register</span><b id="oc-v-r">31</b></label>
+        <input type="range" id="oc-s-r" min="8" max="128" step="1" value="31">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="cliff">performance cliff (31→33 reg)</button>
+      <button data-act="b32">block 32 → 50%</button>
+      <button data-act="b768">block 768 → 75%</button>
+      <button data-act="e6">연습문제 6 (1536T/4B)</button>
+      <button data-act="e7">연습문제 7 (2048T/64B)</button>
+      <button class="ghost" data-act="reset">H100 기본값</button>
+    </div>
+
+    <canvas id="oc-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>thread slot 제약</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>block slot 제약</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>register 제약 · 현재 지점</span>
+    </div>
+    <div class="readout" id="oc-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('oc-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('oc-readout');
+  // 하드웨어 한계 — 기본값은 Hopper H100 (책 4.7절)
+  var HW = { maxT: 2048, maxB: 32, maxR: 65536, name: 'H100' };
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function v(id) { return +document.getElementById(id).value; }
+
+  // 세 제약이 각각 허용하는 block 수 → 가장 작은 것이 실제 block 수
+  function calc(bs, reg) {
+    var byT = Math.floor(HW.maxT / bs);
+    var byB = HW.maxB;
+    var byR = HW.maxR ? Math.floor(HW.maxR / (bs * reg)) : Infinity;
+    var blocks = Math.min(byT, byB, byR);
+    var th = blocks * bs;
+    var lim = [];
+    if (blocks === byT) lim.push('thread slot');
+    if (blocks === byB) lim.push('block slot');
+    if (byR !== Infinity && blocks === byR) lim.push('register');
+    return { byT: byT, byB: byB, byR: byR, blocks: blocks, th: th,
+             occ: th / HW.maxT, lim: lim };
+  }
+
+  function set(bs, reg, hw) {
+    if (hw) HW = hw;
+    document.getElementById('oc-s-b').value = bs;
+    document.getElementById('oc-s-r').value = reg;
+    draw();
+  }
+
+  function draw() {
+    var bs = v('oc-s-b'), reg = v('oc-s-r');
+    document.getElementById('oc-v-b').textContent = bs;
+    document.getElementById('oc-v-r').textContent = reg;
+    var c = calc(bs, reg);
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 위: block 크기별 occupancy 곡선 ────────────────────
+    var padL = 46, padR = 14, padT = 26, chartH = 170;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('block 크기별 occupancy  (' + HW.name + ' · register ' + reg + '/thread 고정)', 8, 14);
+
+    function PX(b) { return padL + (W - padL - padR) * (b - 32) / (1024 - 32); }
+    function PY(o) { return padT + chartH * (1 - o); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (o) {
+      ctx.beginPath(); ctx.moveTo(padL, PY(o)); ctx.lineTo(W - padR, PY(o)); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText((o * 100) + '%', padL - 6, PY(o) + 4);
+    });
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + chartH);
+    ctx.lineTo(W - padR, padT + chartH); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    [32, 256, 512, 768, 1024].forEach(function (b) {
+      ctx.fillText(b, PX(b), padT + chartH + 15);
+    });
+
+    // 곡선 — block 크기는 32 의 배수만 의미가 있으므로 점으로 잇는다
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2; ctx.beginPath();
+    for (var b = 32, first = true; b <= 1024; b += 32) {
+      var o = calc(b, reg).occ;
+      first ? (ctx.moveTo(PX(b), PY(o)), first = false) : ctx.lineTo(PX(b), PY(o));
+    }
+    ctx.stroke();
+
+    // 현재 지점
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(bs), PY(c.occ), 5, 0, 2 * Math.PI); ctx.fill();
+
+    // ── 아래: 세 제약 막대 ────────────────────────────────
+    var by = padT + chartH + 34, barH = 18, gap = 8;
+    var maxBar = Math.max(c.byT, c.byB, isFinite(c.byR) ? c.byR : 0, 1);
+    var bars = [
+      ['thread slot  ' + HW.maxT + '/' + bs, c.byT, '--correct'],
+      ['block slot   ' + HW.maxB, c.byB, '--predict'],
+      ['register     ' + HW.maxR.toLocaleString() + '/(' + bs + '×' + reg + ')',
+       isFinite(c.byR) ? c.byR : 0, '--accent']
+    ];
+    ctx.textAlign = 'left';
+    bars.forEach(function (bar, k) {
+      var y = by + k * (barH + gap);
+      ctx.fillStyle = css('--ink-soft');
+      ctx.fillText(bar[0], 8, y + barH - 5);
+      var x0 = 210, w = (W - x0 - 60) * bar[1] / maxBar;
+      ctx.fillStyle = css(bar[2]);
+      ctx.globalAlpha = (bar[1] === c.blocks) ? 0.9 : 0.35;      // 범인만 진하게
+      ctx.fillRect(x0, y, Math.max(w, 1), barH);
+      ctx.globalAlpha = 1;
+      // 막대가 길어 라벨이 캔버스를 넘치면 막대 안쪽에 오른쪽 정렬로 넣는다
+      var label = 'block ' + bar[1] + '개' + (bar[1] === c.blocks ? '  ← 제약' : '');
+      var lw = ctx.measureText(label).width;
+      ctx.fillStyle = css('--ink');
+      if (x0 + Math.max(w, 1) + 6 + lw > W - 6) {
+        ctx.textAlign = 'right';
+        ctx.fillText(label, x0 + Math.max(w, 1) - 6, y + barH - 5);
+        ctx.textAlign = 'left';
+      } else {
+        ctx.fillText(label, x0 + Math.max(w, 1) + 6, y + barH - 5);
+      }
+    });
+
+    out.innerHTML =
+      HW.name + ' — thread ' + HW.maxT + '/SM · block ' + HW.maxB + '/SM · register '
+      + HW.maxR.toLocaleString() + '/SM<br>'
+      + 'block ' + bs + ' thread · register ' + reg + '/thread<br>'
+      + '허용 block 수: thread slot <b>' + c.byT + '</b> · block slot <b>' + c.byB
+      + '</b> · register <b>' + (isFinite(c.byR) ? c.byR : '∞') + '</b>'
+      + ' → 실제 <b>' + c.blocks + '</b> block<br>'
+      + 'SM 의 thread = ' + c.blocks + ' × ' + bs + ' = <b>' + c.th.toLocaleString() + '</b>'
+      + ' / ' + HW.maxT.toLocaleString()
+      + ' → occupancy <b>' + (c.occ * 100).toFixed(1) + '%</b>'
+      + '  · 제약: <b>' + c.lim.join(' + ') + '</b><br>'
+      + 'register 사용 ' + (c.th * reg).toLocaleString() + ' / ' + HW.maxR.toLocaleString();
+  }
+
+  var H100 = { maxT: 2048, maxB: 32, maxR: 65536, name: 'H100' };
+  document.querySelectorAll('#w-occ [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'cliff') set(512, 33, H100);          // 책 p.86 — 31 이면 100%, 33 이면 75%
+      else if (a === 'b32') set(32, 31, H100);        // 책 p.85 — block slot 이 막는다
+      else if (a === 'b768') set(768, 31, H100);      // 책 p.86 — 나누어떨어지지 않는다
+      else if (a === 'e6') set(512, 8, { maxT: 1536, maxB: 4, maxR: 65536, name: '연습문제 6' });
+      else if (a === 'e7') set(64, 8, { maxT: 2048, maxB: 64, maxR: 65536, name: '연습문제 7' });
+      else set(512, 31, H100);
+    });
+  });
+  ['oc-s-b', 'oc-s-r'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(512, 31, H100);
+})();
+</script>

@@ -252,3 +252,179 @@ print(f"  Sigma_bar = {Sigma_bar}   (노트: [[0.198, ...]])")
 `20x`·`20배`(성능 비교일 때)는 쓰지 않는다. 헷갈리면 **"두 대상을 비교하는가,
 한 대상을 키우는가"** 를 묻는다. 검사는 `grep -E '[0-9](\.[0-9]+)?배'` 로 훑고
 남은 것이 전부 자원·변화인지 눈으로 확인한다.
+
+
+### 2장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| grid / block / thread block | 격자 / 블록 / 스레드 블록 |
+| host / device | 호스트 / 디바이스, 주인 / 장치 |
+| device global memory (global memory) | 디바이스 전역 메모리 |
+| SPMD (Single-Program Multiple-Data) | 단일 프로그램 다중 데이터 |
+| execution configuration parameter | 실행 구성 매개변수 |
+| built-in variable | 내장 변수 |
+| loop parallelism | 루프 병렬성 |
+| data parallelism / task parallelism | 데이터 병렬성 / 작업 병렬성 |
+| task decomposition | 작업 분해 |
+| scalability | 확장성 |
+| kernel / device function / host function | 커널 / 디바이스 함수 / 호스트 함수 |
+| qualifier keyword | 한정자 키워드 |
+| PTX / NVCC | (약어이므로 그대로) |
+| ceiling division | 올림 나눗셈 |
+
+**2장에서 추가로 한국어를 쓰는 것**: **포인터**·**역참조**는 한국어 C/C++ 교재에서
+완전히 통용되므로 한국어를 쓴다 (`pointer`·`dereference` 로 쓰지 않는다).
+`allocate`/`free` 도 **할당**/**해제**로 쓴다. `launch` 는 명사·동사 모두 **launch** 로 두되
+("grid 를 launch 한다") 조사만 붙인다 — "발사·시작"은 뜻이 흐려진다.
+
+**코드 식별자는 절대 번역하거나 띄어쓰지 않는다.** `blockIdx.x`, `threadIdx.x`, `blockDim.x`,
+`cudaMalloc`, `cudaMemcpyHostToDevice`, `__global__` 은 백틱으로 감싸 원문 그대로 쓴다.
+
+
+### 3장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| row-major / column-major | 행 우선 / 열 우선 |
+| linearize / flatten | 선형화 / 평탄화 — **단, 동사·서술로 풀어 쓸 때는 한국어 허용** (아래 참조) |
+| memory space | 메모리 공간 |
+| inner product / dot product | 내적 — 단 수식 설명에서는 병기 가능 |
+| tile / tiling | 타일 / 타일링 |
+| patch | 패치 |
+| radius (patch 의) | 반지름 — patch 문맥에서는 radius |
+| stride | 보폭, 간격 |
+| BLAS / Level-1·2·3 | (약어이므로 그대로) |
+
+**3장에서 추가로 한국어를 쓰는 것**: **선형대수**, **행렬**, **벡터**, **분해**(LU 분해),
+**전치**(transpose 의 명사형은 transpose 를 쓰되 "전치하다"는 한국어)는 한국어 수학 교재에서
+표준이므로 한국어를 쓴다. `linearize`·`flatten` 도 **명사로는 영어**(`linearization`)보다
+**"선형화"·"평탄화"가 통용**되므로 한국어를 쓰되, 처음 등장할 때 `선형화(linearize)` 로 병기한다.
+
+**차원 순서는 반드시 명시한다.** 이 책은 `dim3(x, y, z)`(코드)와 `(z, y, x)`(그림·데이터)의
+순서가 반대다. 노트에서 크기를 적을 때는 **"세로 n × 가로 m"** 처럼 축을 말로 붙여
+어느 순서인지 읽는 사람이 헷갈리지 않게 한다.
+
+
+### 4장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| SM (Streaming Multiprocessor) / streaming processor | 스트리밍 멀티프로세서 / CUDA 코어 |
+| GPC (GPU Processing Cluster) | (약어 그대로) |
+| warp / warp-level primitive | 워프 |
+| processing block | 처리 블록 |
+| SIMD / SIMT / SISD / MISD / MIMD | (약어 그대로) |
+| control divergence / divergent warp | 제어 분기, 분기 발산 |
+| barrier synchronization | 배리어 동기화 |
+| transparent scalability | 투명한 확장성 |
+| wave / tail effect | 웨이브 / 꼬리 효과 |
+| occupancy | 점유율 |
+| latency tolerance / latency hiding | 지연 감내 / 지연 은닉 |
+| fine-grained multithreading | 세밀 멀티스레딩 |
+| zero-overhead thread scheduling | 무오버헤드 스케줄링 |
+| context switching | 문맥 전환 |
+| intrinsic function (intrinsic) | 내장 함수 |
+| register spilling | 레지스터 스필링 |
+| performance cliff | 성능 절벽 |
+| compute capability | 연산 능력 |
+| thread block cluster / distributed shared memory | 스레드 블록 클러스터 / 분산 공유 메모리 |
+| oversubscription | 초과 구독 |
+| branch prediction | 분기 예측 |
+| bandwidth | 대역폭 |
+
+**4장에서 정한 경계 — `barrier synchronization` 과 "동기화"**
+
+`barrier synchronization` 은 **고유한 기법 이름**이므로 영어로 쓴다.
+반면 일반 명사·동사로서의 **"동기화"·"동기화하다"는 한국어**를 쓴다 — 한국어 CS 문헌에서
+완전히 통용되고, "synchronization 제약"보다 "동기화 제약"이 훨씬 읽기 좋다.
+
+| 쓸 것 | 예 |
+|---|---|
+| `barrier synchronization` | "block 전체 barrier synchronization" |
+| 동기화 (일반 명사) | "block 간 동기화 제약", "동기화 함수" |
+| 동기화하다 (동사) | "block 끼리 동기화하지 않는다" |
+
+같은 원리로 `__syncthreads()`·`__syncwarp()` 같은 **코드 식별자는 백틱으로 원문 그대로** 쓴다.
+
+**개수 비교도 `×` 다.** 1장에서 "성능 비교는 `×`, 자원·배수 변화는 `배`"로 정했는데,
+**"A 가 B 의 몇 배 많은가"라는 개수 비교도 성능 비교 쪽**이다
+(예: "thread 2048개는 streaming processor 128개의 `16×`"). "2배로 늘린다"처럼
+한 대상을 키우는 것만 `배` 다.
+
+
+### 5장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| compute-to-global-memory-access ratio | 연산 대 메모리 접근 비 |
+| arithmetic intensity / computational intensity | 산술 강도 / 연산 강도 |
+| roofline (model) | 지붕선 모델 |
+| speed-of-light 분석 | 광속 분석 |
+| shared memory / distributed shared memory | 공유 메모리 / 분산 공유 메모리 |
+| constant memory / local memory | 상수 메모리 / 지역 메모리 |
+| register file | 레지스터 파일 |
+| scratchpad memory | 스크래치패드 메모리 |
+| scope / lifetime | 유효 범위 / 수명 |
+| tile / tiling / register tiling | 타일 / 타일링 |
+| strip-mining | 스트립 마이닝 |
+| locality | 지역성 |
+| read-after-write / write-after-read | 쓰기 후 읽기 / 읽기 후 쓰기 |
+| true dependence / false dependence | 참 의존 / 거짓 의존 |
+
+**5장에서 정한 경계 — `bandwidth` · `cache` · `throughput` 은 영어**
+
+`대역폭`·`캐시`·`처리량`도 한국어에서 통용되기는 한다. 그러나 이 책에서는 거의 언제나
+**복합 기술용어의 일부**로 나타나고(`peak memory bandwidth`, `on-chip cache`,
+`computational throughput`), 1~4장에서 이미 영어로 일관돼 있다. **그 관례를 따른다.**
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| bandwidth / memory bandwidth | 대역폭 / 메모리 대역폭 |
+| cache (동사형은 "cache 된다") | 캐시 / 캐시된다 |
+| throughput | 처리량 |
+
+**단, 비유 속의 일상어는 한국어를 쓴다.** 5.3절의 "큰 벽을 작은 **타일**로 덮는다"는
+물리적 타일을 가리키는 비유이므로 한국어가 맞다. 기술 개념으로서의 `tile`·`tiling` 과
+구분되도록 문맥으로 드러낸다.
+
+**이 스터디의 세 갈래를 정리하면**
+
+| 갈래 | 예 | 근거 |
+|---|---|---|
+| **영어를 쓴다** | thread, block, warp, kernel, tile, occupancy, bandwidth, cache, throughput | 복합 기술용어의 일부로 쓰이고 한국어 번역이 흔들린다 |
+| **한국어를 쓴다** | 포인터, 역참조, 동기화(일반), 선형대수, 행렬, 할당, 해제 | 한국어 교재에서 완전히 표준이다 |
+| **고유 이름은 영어** | `barrier synchronization`, Amdahl's Law, `__syncthreads()` | 기법·정리·식별자의 이름 |
+
+
+### 6장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| coalescing / coalesced / uncoalesced | 병합 / 유착 |
+| corner turning | 코너 터닝 |
+| DRAM burst / cache line (cache block) | 버스트 / 캐시 라인 |
+| bank / channel / bank conflict | 뱅크 / 채널 / 뱅크 충돌 |
+| interleaved data distribution | 인터리브 분배 |
+| DDR (double data rate) / HBM | (약어 그대로) |
+| sense amplifier / bit line | 감지 증폭기 / 비트 선 |
+| vector load / vector store | 벡터 로드 / 벡터 저장 |
+| padding | 패딩 |
+| stride | 보폭, 간격 |
+| thread coarsening / coarsening factor / coarsening loop | 스레드 조립화 |
+| loop unrolling / unrolling factor | 루프 펼치기 |
+| instruction scheduling | 명령 스케줄링 |
+| double buffering | 이중 버퍼링 |
+| privatization | 사유화 |
+| bottleneck | 병목 (단, "병목" 은 일상어로 통용되므로 서술문에서는 허용) |
+| packing | 패킹 |
+| AoS / SoA (array of structures / structure of arrays) | (약어 그대로) |
+
+**6장에서 추가로 한국어를 쓰는 것**: **정렬**(alignment), **혼잡**(congestion),
+**직렬화**(serialize)는 한국어가 자연스럽다. `alignment` 는 처음 등장할 때
+`정렬(alignment)` 로 병기한다.
+
+**`배` / `×` 경계의 추가 사례.** 6장에는 셋이 다 나온다.
+- `16 GB/s 채널이 0.76 GB/s` → 비교가 아니라 값이므로 그대로
+- `이용률이 잠재적으로 두 배` · `shared memory 사용량이 2배` → **한 대상을 키우는 것 → `배`**
+- `thread 2048개는 SP 128개의 16×` (4장) → **두 대상의 개수 비교 → `×`**

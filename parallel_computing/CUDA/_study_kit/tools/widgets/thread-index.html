@@ -1,0 +1,179 @@
+<!--
+  Thread index mapping — i = blockIdx.x * blockDim.x + threadIdx.x 와 경계 검사 if(i<n).
+
+  대응: 책 2.5절 Figure 2.9 (p.33) · Figure 2.10 line 05~06 (p.35) · 2.6절 ceil 계산 (p.38)
+  프리셋 버튼이 본문 예와 연습문제 4·9 를 그대로 재현하므로, readout 숫자를
+  노트의 답과 대조할 수 있다.
+-->
+<div class="lab" id="w-tidx">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">thread index 매핑과 경계 검사</span>
+    <span class="lab-note">Figure 2.9 · Figure 2.10 을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>vector 길이 <code>n</code> 과 block 크기 <code>blockDim.x</code> 를 바꿔 본다.
+       위쪽은 grid 전체의 block 배치이고, 아래쪽은 <b>마지막 block 을 확대</b>한 것이다.
+       마지막 block 에서 <code>i &ge; n</code> 인 thread 가 <b>놀게 되는 것</b>이
+       <code>if (i &lt; n)</code> 이 필요한 이유다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>vector 길이 n</span><b id="tx-v-n">1000</b></label>
+        <input type="range" id="tx-s-n" min="1" max="4096" step="1" value="1000">
+      </div>
+      <div class="slider">
+        <label><span>blockDim.x</span><b id="tx-v-b">256</b></label>
+        <input type="range" id="tx-s-b" min="32" max="1024" step="32" value="256">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="p1">본문 예 n=1000, 256</button>
+      <button data-act="p2">본문 예 n=100, 32</button>
+      <button data-act="p3">연습문제 4 n=8000, 1024</button>
+      <button data-act="p4">연습문제 9 N=200000, 128</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="tx-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>일하는 thread (i &lt; n)</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>노는 thread (i &ge; n)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>마지막 block</span>
+    </div>
+    <div class="readout" id="tx-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('tx-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('tx-readout');
+  var NMAX = 4096;                      // 슬라이더 한계. 프리셋은 이보다 큰 값도 넣는다
+  var nOver = null;                     // 슬라이더 범위를 넘는 프리셋 값 (200000 등)
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function nVal() { return nOver !== null ? nOver : +document.getElementById('tx-s-n').value; }
+  function bVal() { return +document.getElementById('tx-s-b').value; }
+
+  function set(n, b) {
+    nOver = n > NMAX ? n : null;
+    document.getElementById('tx-s-n').value = Math.min(n, NMAX);
+    document.getElementById('tx-s-b').value = b;
+    draw();
+  }
+
+  function draw() {
+    var n = nVal(), bs = bVal();
+    var nb = Math.ceil(n / bs);                 // 책 2.6절: ceil(n / blockDim.x)
+    var total = nb * bs, idle = total - n;
+    var lastActive = n - (nb - 1) * bs;         // 마지막 block 에서 일하는 thread 수
+
+    document.getElementById('tx-v-n').textContent = n.toLocaleString();
+    document.getElementById('tx-v-b').textContent = bs;
+
+    // 마지막 block 을 몇 줄로 그릴지 먼저 정하고, 그에 맞춰 캔버스 높이를 잡는다.
+    // (고정 높이로 두면 blockDim 이 작을 때 아래쪽이 크게 비어 보인다)
+    var cols0 = Math.min(bs, 64), rows0 = Math.ceil(bs / cols0);
+    var cellH0 = Math.min(20, 150 / rows0);
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth;
+    var H = Math.round(92 + 14 + rows0 * cellH0 + 30);
+    cv.style.height = H + 'px';
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    var padL = 14, padR = 14;
+    // ── 위: grid 의 block 배치 ────────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('grid — block ' + nb.toLocaleString() + '개', padL, 16);
+
+    var showN = Math.min(nb, 24);               // 너무 많으면 앞부분만 그리고 … 로 줄인다
+    var gw = W - padL - padR, gy = 26, gh = 34;
+    var cw = gw / showN;
+    for (var k = 0; k < showN; k++) {
+      var isLast = (k === showN - 1) && (showN === nb);
+      var trunc = (showN < nb) && (k === showN - 1);
+      ctx.fillStyle = isLast ? css('--accent') : css('--correct');
+      ctx.globalAlpha = isLast ? 0.85 : 0.55;
+      ctx.fillRect(padL + k * cw + 1, gy, Math.max(cw - 2, 1), gh);
+      ctx.globalAlpha = 1;
+      if (trunc) {                              // 잘렸음을 표시
+        ctx.fillStyle = css('--ground');
+        ctx.fillRect(padL + k * cw + 1, gy, Math.max(cw - 2, 1), gh);
+        ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+        ctx.fillText('…', padL + k * cw + cw / 2, gy + gh / 2 + 4);
+      } else if (cw > 26) {
+        ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+        ctx.fillText(k, padL + k * cw + cw / 2, gy + gh / 2 + 4);
+      }
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.strokeRect(padL, gy, gw, gh);
+
+    // ── 아래: 마지막 block 확대 ──────────────────────────────
+    var by = 92;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('마지막 block (blockIdx.x = ' + (nb - 1).toLocaleString() + ') 확대 — '
+                 + 'threadIdx.x 0 … ' + (bs - 1), padL, by);
+
+    var cols = cols0, rows = rows0;             // 한 줄에 최대 64칸
+    var cellW = (W - padL - padR) / cols, cellH = cellH0;
+    for (var t = 0; t < bs; t++) {
+      var r = Math.floor(t / cols), c = t % cols;
+      var gi = (nb - 1) * bs + t;               // 이 thread 의 전역 index i
+      var active = gi < n;
+      ctx.fillStyle = active ? css('--correct') : css('--ink-faint');
+      ctx.globalAlpha = active ? 0.7 : 0.28;
+      ctx.fillRect(padL + c * cellW + 0.5, by + 10 + r * cellH,
+                   Math.max(cellW - 1, 1), Math.max(cellH - 1, 1));
+      ctx.globalAlpha = 1;
+    }
+    // 경계선 — i = n 이 되는 지점
+    if (lastActive > 0 && lastActive < bs) {
+      var cr = Math.floor(lastActive / cols), cc = lastActive % cols;
+      ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padL + cc * cellW, by + 10 + cr * cellH);
+      ctx.lineTo(padL + cc * cellW, by + 10 + (cr + 1) * cellH);
+      ctx.stroke();
+    }
+
+    // 마지막 block 의 첫/끝 전역 index 를 적어 준다
+    var y2 = by + 14 + rows * cellH + 14;
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+    ctx.fillText('i = ' + ((nb - 1) * bs).toLocaleString(), padL, y2);
+    ctx.textAlign = 'right';
+    ctx.fillText('i = ' + (nb * bs - 1).toLocaleString(), W - padR, y2);
+
+    out.innerHTML =
+      'n = <b>' + n.toLocaleString() + '</b> · blockDim.x = <b>' + bs + '</b><br>' +
+      'block 수 = ceil(n / blockDim.x) = <b>' + nb.toLocaleString() + '</b>' +
+      ' → grid 의 thread = ' + nb.toLocaleString() + ' × ' + bs +
+      ' = <b>' + total.toLocaleString() + '</b><br>' +
+      'i &lt; n 을 통과해 일하는 thread = <b>' + n.toLocaleString() + '</b>' +
+      ' · 노는 thread = <b>' + idle.toLocaleString() + '</b>' +
+      ' (마지막 block 에서 ' + lastActive.toLocaleString() + '/' + bs + ' 만 일한다)';
+  }
+
+  document.querySelectorAll('#w-tidx [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'p1') set(1000, 256);
+      else if (a === 'p2') set(100, 32);
+      else if (a === 'p3') set(8000, 1024);
+      else if (a === 'p4') set(200000, 128);
+      else set(1000, 256);
+    });
+  });
+  ['tx-s-n', 'tx-s-b'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      nOver = null;                      // 슬라이더를 만지면 프리셋 override 를 푼다
+      draw();
+    });
+  });
+  window.addEventListener('resize', draw);
+  set(1000, 256);
+})();
+</script>

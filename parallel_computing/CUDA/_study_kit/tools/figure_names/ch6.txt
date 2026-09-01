@@ -1,0 +1,18 @@
+# 6장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 6 --book-pages 123-156 \
+#         --out part1_fundamentals/06_performance/images \
+#         --names _study_kit/tools/figure_names/ch6.txt
+
+Figure 6.1  = fig6_1_row_major_linear
+Figure 6.2  = fig6_2_coalesced
+Figure 6.3  = fig6_3_uncoalesced
+Figure 6.4  = fig6_4_corner_turning
+Figure 6.5  = fig6_5_traffic_congestion
+Figure 6.6  = fig6_6_carpool_schedule
+Figure 6.7  = fig6_7_channels_banks
+Figure 6.8  = fig6_8_banking_utilization
+Figure 6.9  = fig6_9_interleaved_distribution
+Figure 6.10 = fig6_10_small_matmul
+Figure 6.11 = fig6_11_m_elements_per_phase
+Figure 6.12 = fig6_12_vector_load_kernel
+Figure 6.13 = fig6_13_optimization_checklist

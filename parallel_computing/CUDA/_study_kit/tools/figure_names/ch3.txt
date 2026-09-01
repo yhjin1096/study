@@ -1,0 +1,18 @@
+# 3장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 3 --book-pages 45-66 \
+#         --out part1_fundamentals/03_multidim_grids/images \
+#         --names _study_kit/tools/figure_names/ch3.txt
+
+Figure 3.1  = fig3_1_grid_organization
+Figure 3.2  = fig3_2_2d_grid_on_picture
+Figure 3.3  = fig3_3_row_major_layout
+Figure 3.4  = fig3_4_grayscale_kernel
+Figure 3.5  = fig3_5_four_block_cases
+Figure 3.6  = fig3_6_original_vs_blurred
+Figure 3.7  = fig3_7_patch_average
+Figure 3.8  = fig3_8_blur_kernel
+Figure 3.9  = fig3_9_boundary_cases
+Figure 3.10 = fig3_10_matmul_tiling
+Figure 3.11 = fig3_11_matmul_kernel
+Figure 3.12 = fig3_12_matmul_small_example
+Figure 3.13 = fig3_13_block_actions
