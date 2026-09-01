@@ -428,3 +428,37 @@ print(f"  Sigma_bar = {Sigma_bar}   (노트: [[0.198, ...]])")
 - `16 GB/s 채널이 0.76 GB/s` → 비교가 아니라 값이므로 그대로
 - `이용률이 잠재적으로 두 배` · `shared memory 사용량이 2배` → **한 대상을 키우는 것 → `배`**
 - `thread 2048개는 SP 128개의 16×` (4장) → **두 대상의 개수 비교 → `×`**
+
+
+### 7장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| convolution | 합성곱, 컨볼루션 |
+| convolution filter | 필터, 합성곱 커널 (**아래 이름 충돌 주의**) |
+| filter radius / filter dimension | 필터 반지름 / 필터 차원 |
+| halo cell / ghost cell | 헤일로 셀 / 고스트 셀 |
+| input tile / output tile | 입력 타일 / 출력 타일 |
+| constant memory / constant cache | 상수 메모리 / 상수 캐시 |
+| arithmetic intensity | 산술 강도 |
+| inner product | 내적 (수식 설명에서는 병기 가능) |
+| edge clamp / circular (ghost 처리 방식) | (그대로) |
+
+**7장에서 정한 경계 — `convolution kernel` 은 쓰지 않는다**
+
+책이 명시적으로 경고하는 이름 충돌이다 (책 p.160). 가중치 배열을 흔히
+**convolution kernel** 이라 부르는데 **CUDA 의 kernel 함수와 겹친다.**
+책은 이를 피해 **`convolution filter`** 로만 부르고, 이 스터디도 그 규약을 따른다.
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| convolution filter, filter 배열 | convolution kernel |
+| kernel (= CUDA `__global__` 함수) | (다른 뜻으로 쓰지 않는다) |
+
+**첫 등장 병기는 그대로 허용한다.** `radius(반지름)` 처럼 영어 용어에 한국어 뜻을 괄호로
+한 번 붙이는 것은 `2_Template_and_Rule.md` 의 섹션 1 규칙대로 계속 쓴다.
+두 번째부터는 영어만 쓴다.
+
+**`배` / `×` 경계 — "몇 배 차이"도 비교다.** "이상적 값과 25× 차이", "장난감 예의 4×"
+처럼 **두 값을 견주는 것은 `×`** 다. "shared memory 사용량이 2배" 처럼
+**한 대상을 키우는 것만 `배`** 다 (4·6장에서 정한 것과 같다).

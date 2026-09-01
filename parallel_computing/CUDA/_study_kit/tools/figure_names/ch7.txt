@@ -1,0 +1,20 @@
+# 7장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 7 --book-pages 159-182 \
+#         --out part2_patterns/07_convolution/images \
+#         --names _study_kit/tools/figure_names/ch7.txt
+
+Figure 7.1  = fig7_1_1d_inside
+Figure 7.2  = fig7_2_1d_y3
+Figure 7.3  = fig7_3_1d_boundary
+Figure 7.4  = fig7_4_2d_example
+Figure 7.5  = fig7_5_2d_boundary
+Figure 7.6  = fig7_6_thread_organization
+Figure 7.7  = fig7_7_basic_kernel
+Figure 7.8  = fig7_8_memory_model
+Figure 7.9  = fig7_9_constant_kernel
+Figure 7.10 = fig7_10_cache_hierarchy
+Figure 7.11 = fig7_11_input_output_tile
+Figure 7.12 = fig7_12_tiled_kernel
+Figure 7.13 = fig7_13_active_threads
+Figure 7.14 = fig7_14_intensity_chart
+Figure 7.15 = fig7_15_halo_cache_kernel

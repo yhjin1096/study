@@ -1,0 +1,175 @@
+<!--
+  Convolution tiling — 입력 tile 이 출력 tile 보다 halo 만큼 커지는 것과, 그것이 arithmetic
+  intensity 에 미치는 영향.
+
+  대응: 책 7.5절 Figure 7.11 (p.173) · Figure 7.13 (p.175) · Figure 7.14 (p.177)
+  프리셋 "책 예" 가 t=28, m=5 → 5.42 FLOP/B (책 p.177) 를 그대로 재현한다.
+  이상적 값 m²/4 (7.3절) 를 점선으로 함께 그려 tiling 이 그 값에 얼마나 근접하는지 보여준다.
+-->
+<div class="lab" id="w-ct">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">Halo 와 arithmetic intensity</span>
+    <span class="lab-note">책 Figure 7.11 · 7.14 (p.173, 177) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>출력 tile 한 변 <code>t</code> 와 filter 한 변 <code>m</code> 을 바꿔 본다.
+       왼쪽은 <b>입력 tile = 출력 tile + halo</b> 그림이고, 오른쪽은 그때의
+       arithmetic intensity 다. 점선은 <b>이상적 값 m²/4</b> (7.3절) 이고,
+       <b><code>t</code> 가 커질수록 실제 값이 그 점선에 다가간다.</b></p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>출력 tile 한 변 t</span><b id="ct-v-t">28</b></label>
+        <input type="range" id="ct-s-t" min="2" max="64" step="1" value="28">
+      </div>
+      <div class="slider">
+        <label><span>filter 한 변 m (홀수)</span><b id="ct-v-m">5</b></label>
+        <input type="range" id="ct-s-m" min="1" max="11" step="1" value="2">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="book">책 예 t=28, m=5</button>
+      <button data-act="toy">Figure 7.11 장난감 t=4, m=5</button>
+      <button data-act="f713">Figure 7.13 t=6, m=3</button>
+      <button data-act="big">t=64, m=9</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="ct-canvas" width="880" height="300"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>출력 tile (활성 thread)</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>halo (적재만 하고 계산은 안 함)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>현재 지점 · 이상적 m²/4</span>
+    </div>
+    <div class="readout" id="ct-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('ct-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('ct-readout');
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  // filter 는 홀수여야 하므로 슬라이더 값 k 를 m = 2k+1 로 읽는다
+  function mOf() { return 2 * (+document.getElementById('ct-s-m').value) + 1; }
+  function tOf() { return +document.getElementById('ct-s-t').value; }
+
+  // 책 7.5절의 식: (t²·m²·2) / (((t+m-1)² + t²)·4)
+  function ai(t, m) { return (t * t * m * m * 2) / ((Math.pow(t + m - 1, 2) + t * t) * 4); }
+
+  function set(t, m) {
+    document.getElementById('ct-s-t').value = t;
+    document.getElementById('ct-s-m').value = (m - 1) / 2;
+    draw();
+  }
+
+  function draw() {
+    var t = tOf(), m = mOf(), r = (m - 1) / 2, it = t + m - 1;
+    document.getElementById('ct-v-t').textContent = t;
+    document.getElementById('ct-v-m').textContent = m;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 300;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 왼쪽: tile 그림 ──────────────────────────────────
+    var boxW = Math.min(250, W * 0.32), padT = 26;
+    var cx = 12, cell = Math.min((boxW) / it, 220 / it);
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('입력 tile ' + it + '×' + it + '  ⊃  출력 tile ' + t + '×' + t, cx, 16);
+
+    for (var y = 0; y < it; y++) {
+      for (var x = 0; x < it; x++) {
+        var inner = (x >= r && x < r + t && y >= r && y < r + t);
+        ctx.fillStyle = inner ? css('--correct') : css('--predict');
+        ctx.globalAlpha = inner ? 0.6 : 0.35;
+        ctx.fillRect(cx + x * cell, padT + y * cell,
+                     Math.max(cell - 0.6, 0.5), Math.max(cell - 0.6, 0.5));
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.6;
+    ctx.strokeRect(cx + r * cell, padT + r * cell, t * cell, t * cell);
+
+    // ── 오른쪽: t 에 따른 arithmetic intensity 곡선 ──────
+    var gx = cx + boxW + 54, gy = padT, gw = W - gx - 16, gh = 200;
+    var TMAX = 64, ideal = m * m / 4;
+    var ymax = Math.max(ideal * 1.15, 1);
+
+    function PX(v) { return gx + gw * (v - 2) / (TMAX - 2); }
+    function PY(v) { return gy + gh * (1 - v / ymax); }
+
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var k = 0; k <= 4; k++) {
+      var yv = ymax * k / 4;
+      ctx.beginPath(); ctx.moveTo(gx, PY(yv)); ctx.lineTo(gx + gw, PY(yv)); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText(yv.toFixed(1), gx - 5, PY(yv) + 4);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh);
+    ctx.lineTo(gx + gw, gy + gh); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    [2, 16, 32, 48, 64].forEach(function (v) { ctx.fillText(v, PX(v), gy + gh + 14); });
+    ctx.fillText('출력 tile 한 변 t', gx + gw / 2, gy + gh + 30);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = css('--ink-soft');
+    ctx.fillText('arithmetic intensity (FLOP/B) · filter ' + m + '×' + m, gx, 16);
+
+    // 이상적 값 (점선)
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(gx, PY(ideal)); ctx.lineTo(gx + gw, PY(ideal)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--accent'); ctx.textAlign = 'right';
+    ctx.fillText('이상적 m²/4 = ' + ideal.toFixed(2), gx + gw - 4, PY(ideal) - 5);
+
+    // 실제 곡선
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2.2; ctx.beginPath();
+    for (var tt = 2, first = true; tt <= TMAX; tt++) {
+      var v = ai(tt, m);
+      first ? (ctx.moveTo(PX(tt), PY(v)), first = false) : ctx.lineTo(PX(tt), PY(v));
+    }
+    ctx.stroke();
+
+    var cur = ai(t, m);
+    ctx.fillStyle = css('--accent');
+    ctx.beginPath(); ctx.arc(PX(t), PY(cur), 5, 0, 2 * Math.PI); ctx.fill();
+
+    // ── 숫자 ──────────────────────────────────────────
+    var thr712 = it * it, thr715 = t * t;
+    var over = thr712 > 1024;
+    out.innerHTML =
+      '출력 tile <b>' + t + '×' + t + '</b> = ' + (t * t) + ' · filter <b>' + m + '×' + m
+      + '</b> (r=' + r + ') → 입력 tile <b>' + it + '×' + it + '</b> = ' + (it * it)
+      + ' · 비 <b>' + (it * it / (t * t)).toFixed(2) + '×</b><br>'
+      + 'arithmetic intensity = ' + t + '²·' + m + '²·2 / ((' + it + '² + ' + t + '²)·4)'
+      + ' = <b>' + cur.toFixed(2) + ' FLOP/B</b>'
+      + ' · 이상적 ' + ideal.toFixed(2) + ' 의 <b>' + (cur / ideal * 100).toFixed(0) + '%</b><br>'
+      + 'Fig 7.12 방식(block = 입력 tile): thread <b>' + thr712 + '</b>/block'
+      + (over ? ' <b>← 1024 초과, launch 불가</b>' : '')
+      + ' · shared <b>' + (thr712 * 4).toLocaleString() + ' B</b><br>'
+      + 'Fig 7.15 방식(block = 출력 tile, halo 는 cache): thread <b>' + thr715 + '</b>/block'
+      + ' · shared <b>' + (thr715 * 4).toLocaleString() + ' B</b>';
+  }
+
+  document.querySelectorAll('#w-ct [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'book') set(28, 5);
+      else if (a === 'toy') set(4, 5);
+      else if (a === 'f713') set(6, 3);
+      else if (a === 'big') set(64, 9);
+      else set(28, 5);
+    });
+  });
+  ['ct-s-t', 'ct-s-m'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(28, 5);
+})();
+</script>

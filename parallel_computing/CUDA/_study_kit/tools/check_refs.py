@@ -162,6 +162,23 @@ def main():
             if not (BOOK_PAGE_MIN <= pg <= BOOK_PAGE_MAX):
                 bad.append(f"[페이지 범위 밖] 책 p.{pg}")
 
+        # 이미지 참조 — 파일이 실제로 있는가, 그리고 markdown 이 깨지지 않는가
+        for line in txt.splitlines():
+            if not line.lstrip().startswith("!["):
+                continue
+            m = re.match(r"!\[(.*?)\]\((\S+?)\)\s*$", line.strip())
+            if not m:
+                # alt 텍스트에 대괄호가 있으면 markdown 이 이미지로 인식하지 못하고
+                # 원문이 그대로 출력된다. 빌드는 성공하므로 조용히 그림 하나가 사라진다.
+                bad.append(f"[이미지 문법 깨짐] {line.strip()[:70]}")
+                continue
+            alt, rel = m.group(1), m.group(2)
+            if "[" in alt or "]" in alt:
+                bad.append(f"[alt 에 대괄호] {alt[:60]}")
+            img = os.path.join(os.path.dirname(path), rel)
+            if not os.path.exists(img):
+                bad.append(f"[없는 이미지 파일] {rel}")
+
         for s in sorted(set(ref_sec.findall(txt))):
             if s in secs:
                 continue
