@@ -26,7 +26,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 6장 Performance considerations | ✅ | ✅ 13개 | ✅ bank-conflict |
 | 7장 Convolution | ✅ | ✅ 15개 | ✅ conv-tile |
 | 8장 Stencil computation | ✅ | ✅ 12개 | ✅ stencil-ai |
-| 9장 Histogram | ⬜ | — | — |
+| 9장 Histogram | ✅ | ✅ 15개 | ✅ atomic-contention |
 | 10장 Reduction | ⬜ | — | — |
 | 11장 Scan | ⬜ | — | — |
 | 12장 Filter | ⬜ | — | — |

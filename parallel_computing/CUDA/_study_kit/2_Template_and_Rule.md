@@ -508,3 +508,51 @@ representation)` 으로 병기한다.
 - "double 은 memory 를 **두 배**로 먹는다", "shared memory 소요가 **2배**" → **한 대상을 키움 → `배`**
 - "(b)보다 **2.37×** 많다", "기본 kernel 의 0.41 보다 **2.4×** 낫다",
   "3D order 3 에서는 **18.5×** 차이" → **두 대상 비교 → `×`**
+
+
+### 9장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| histogram | 히스토그램, 도수분포 |
+| bin | 빈, 구간통 (**단, "값 구간"은 한국어 허용**) |
+| atomic operation | 원자적 연산, 원자 연산 |
+| `atomic_ref` / `fetch_add` / `thread_scope` | (코드 식별자 — 백틱으로 원문 그대로) |
+| memory order / `memory_order_relaxed` | 메모리 순서 |
+| race condition | 경쟁 상태, 경합 상태 |
+| read-modify-write | 읽기-수정-쓰기 |
+| owner-computes rule | 소유자 계산 규칙 |
+| output interference | 출력 간섭 |
+| privatization | 사유화, 개인화 |
+| private copy / public copy | 개인 사본 / 공용 사본 — **단 "사본"은 한국어 허용** |
+| contention | 경쟁 (**"경쟁"은 한국어가 자연스러워 허용**, 아래 참조) |
+| contiguous / interleaved partitioning | 연속 분할 / 교차 분할 |
+| feature (데이터의) | 특징 — **단, "feature extraction"은 통째로 영어** |
+| last-level cache | 최종 단계 캐시 |
+| lost update | 갱신 손실 |
+
+**9장에서 정한 경계 — `contention` 은 "경쟁"으로 쓴다**
+
+`bandwidth`·`cache`·`throughput` 은 영어로 두기로 했는데(5장) `contention` 은 왜 다른가.
+이 낱말은 **복합 기술용어의 일부로 쓰이지 않고** 언제나 서술문 안에서
+"경쟁이 심하다"·"경쟁을 줄인다"처럼 **평범한 동사·형용사와 함께** 나오기 때문이다.
+"contention 이 심하다"보다 **"경쟁이 심하다"가 훨씬 읽힌다.**
+
+| 쓸 것 | 예 |
+|---|---|
+| 경쟁 / 경쟁이 심하다 / 경쟁을 줄인다 | "가장 붐비는 bin 의 경쟁", "경쟁을 block 안으로 한정한다" |
+| `output interference` | 이 장이 도입한 **고유한 개념 이름**이므로 영어 |
+| `race condition` | 마찬가지로 고유한 개념 이름 |
+
+같은 원리로 **`atomic operation` 은 영어**다 — 기법의 이름이고
+`atomicAdd`·`cuda::atomic_ref` 같은 식별자와 직결된다.
+
+**9장에서 추가로 한국어를 쓰는 것**: **사본**, **복제**, **병합**, **초기화**, **직렬화**,
+**빈도**, **분포**, **편향**, **경계 검사**는 한국어가 표준이다.
+`merge` 는 이 장에서 **병합**으로 쓰되, **13장의 패턴 이름 `merge` 는 영어**로 둔다
+(같은 낱말이 일반 동작과 패턴 이름 두 뜻으로 쓰인다 — 8장의 `grid` 와 같은 구도다).
+
+**`배` / `×` 경계 — 9장에서 나온 사례.**
+- "bin 을 4개로 줄이면 같은 bin 을 노리는 thread 가 **64×** 로 늘어난다",
+  "2.5 M 의 딱 **2×**", "**6×** 이득", "peak 대비 **12,800×** 낮다" → **두 설정·두 값의 비교 → `×`**
+- "throughput 이 **4배**가 되는가" → **같은 양이 몇 곱절이 되는가 → `배`**

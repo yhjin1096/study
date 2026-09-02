@@ -1,0 +1,20 @@
+# 9장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 9 --book-pages 201-220 \
+#         --out part2_patterns/09_histogram/images \
+#         --names _study_kit/tools/figure_names/ch9.txt
+
+Figure 9.1  = fig9_1_image_histogram
+Figure 9.2  = fig9_2_sequential_c
+Figure 9.3  = fig9_3_basic_parallel
+Figure 9.4  = fig9_4_race_condition
+Figure 9.5  = fig9_5_race_thread2_first
+Figure 9.6  = fig9_6_atomic_kernel
+Figure 9.7  = fig9_7_atomic_throughput
+Figure 9.8  = fig9_8_private_copies
+Figure 9.9  = fig9_9_private_global_kernel
+Figure 9.10 = fig9_10_private_shared_kernel
+Figure 9.11 = fig9_11_contiguous_partitioning
+Figure 9.12 = fig9_12_contiguous_kernel
+Figure 9.13 = fig9_13_interleaved_partitioning
+Figure 9.14 = fig9_14_interleaved_kernel
+Figure 9.15 = fig9_15_thread_level_kernel

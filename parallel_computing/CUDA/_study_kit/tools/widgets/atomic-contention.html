@@ -1,0 +1,234 @@
+<!--
+  Atomic contention — 9.3절의 T ≤ 1/(p_max · 2L) 을 눈으로 본다.
+
+  대응: 책 9.3절 (p.209~211) · 9.4절 (p.211~214) · Figure 9.1 (p.202)
+  프리셋이 책의 숫자를 그대로 재현한다.
+    같은 주소 하나        2.5 M atomic/s  (책 p.210)
+    256 bin 균등          640 M atomic/s  (책 p.210)
+    Figure 9.1 나무 이미지  p_max = 32/64 = 0.5 → 5 M atomic/s (직접 유도)
+  왼쪽은 bin 분포(가장 붐비는 bin 이 병목), 오른쪽은 네 kernel 의 실효 throughput.
+  점선은 같은 memory 시스템의 peak 32 G elem/s (책 p.210) — atomic 이 언제
+  병목에서 벗어나는지 보여 준다.
+-->
+<div class="lab" id="w-ac">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">경쟁이 atomic throughput 을 정한다</span>
+    <span class="lab-note">책 9.3절 (p.210) 의 2.5 M · 640 M 재현</span>
+  </div>
+  <div class="lab-body">
+    <p><b>bin 수</b>·<b>분포의 편향</b>·<b>private 사본 수</b>(= block 수)를 바꿔 본다.
+       왼쪽은 bin 분포이고 <b>가장 붐비는 bin</b>(강조)이 병목이다. 오른쪽은
+       <code>T = 사본수 / (p_max · 2L)</code> 로 계산한 네 kernel 의
+       실효 throughput 이다(로그 눈금). <b>편향 슬라이더를 0 으로 두면 bin 수가
+       곧 이득이지만, 오른쪽으로 밀면 bin 을 아무리 늘려도 소용없어진다.</b></p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>bin 수 B</span><b id="ac-v-b">256</b></label>
+        <input type="range" id="ac-s-b" min="1" max="256" step="1" value="256">
+      </div>
+      <div class="slider">
+        <label><span>분포 편향 (0 = 균등)</span><b id="ac-v-s">0.00</b></label>
+        <input type="range" id="ac-s-s" min="0" max="100" step="1" value="0">
+      </div>
+      <div class="slider">
+        <label><span>private 사본 수 (block 수)</span><b id="ac-v-c">1</b></label>
+        <input type="range" id="ac-s-c" min="0" max="10" step="1" value="0">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="one">같은 주소 하나 (2.5 M)</button>
+      <button data-act="uni">256 bin 균등 (640 M)</button>
+      <button data-act="tree">Figure 9.1 나무 이미지</button>
+      <button data-act="priv">Fig 9.10 사본 512개</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="ac-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>bin 별 비중</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>가장 붐비는 bin = 병목</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>privatization 적용</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>peak 32 G elem/s</span>
+    </div>
+    <div class="readout" id="ac-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('ac-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('ac-readout');
+
+  var CLK = 1e9;          // 1 GHz              (책 p.209)
+  var L_DRAM = 200;       // cycle              (책 p.209)
+  var L_L2 = 20;          // cycle, 수십 cycle  (책 p.211)
+  var L_SH = 2;           // cycle, 몇 cycle    (책 p.213)
+  var PEAK = 32e9;        // 32 G elem/s        (책 p.210)
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function bOf() { return +document.getElementById('ac-s-b').value; }
+  function sOf() { return +document.getElementById('ac-s-s').value / 100; }
+  function cOf() { return Math.pow(2, +document.getElementById('ac-s-c').value); }
+
+  // Zipf 형 분포: p_i ∝ (i+1)^(-z), z = 3s. s=0 이면 균등.
+  function dist(B, s) {
+    var z = 3 * s, p = [], sum = 0, i;
+    for (i = 0; i < B; i++) { var v = Math.pow(i + 1, -z); p.push(v); sum += v; }
+    for (i = 0; i < B; i++) p[i] /= sum;
+    return p;
+  }
+  // 책 9.3절 (5): T = 사본수 / (p_max · 2L)
+  function thr(pmax, latCycles, copies) { return copies * CLK / (pmax * 2 * latCycles); }
+
+  function set(B, s, cExp) {
+    document.getElementById('ac-s-b').value = B;
+    document.getElementById('ac-s-s').value = Math.round(s * 100);
+    document.getElementById('ac-s-c').value = cExp;
+    draw();
+  }
+
+  function draw() {
+    var B = bOf(), s = sOf(), copies = cOf();
+    document.getElementById('ac-v-b').textContent = B;
+    document.getElementById('ac-v-s').textContent = s.toFixed(2);
+    document.getElementById('ac-v-c').textContent = copies;
+
+    var p = dist(B, s), pmax = p[0];
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    var gy = 30, gh = 230;
+
+    // ── 왼쪽: bin 분포 ────────────────────────────────
+    var dx = 46, dw = Math.min(300, W * 0.34);
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('bin 별 비중 pᵢ  (bin ' + B + '개)', 4, 16);
+
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(dx, gy); ctx.lineTo(dx, gy + gh);
+    ctx.lineTo(dx + dw, gy + gh); ctx.stroke();
+
+    var dmax = Math.max(pmax, 1e-9);
+    for (var k = 0; k <= 4; k++) {
+      var yv = dmax * k / 4, yy = gy + gh * (1 - k / 4);
+      ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(dx, yy); ctx.lineTo(dx + dw, yy); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText((yv * 100).toFixed(1) + '%', dx - 5, yy + 4);
+    }
+    var bw = dw / B;
+    for (var i = 0; i < B; i++) {
+      var h = gh * p[i] / dmax;
+      ctx.fillStyle = (i === 0) ? css('--accent') : css('--predict');
+      ctx.globalAlpha = (i === 0) ? 0.95 : 0.6;
+      ctx.fillRect(dx + i * bw, gy + gh - h, Math.max(bw - 0.5, 0.7), h);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('bin index (내림차순 정렬)', dx + dw / 2, gy + gh + 28);
+    ctx.textAlign = 'right'; ctx.fillStyle = css('--accent');
+    ctx.fillText('p_max = ' + (pmax * 100).toFixed(1) + '%', dx + dw - 2, gy + 12);
+
+    // ── 오른쪽: throughput 막대 (로그) ────────────────
+    var gx = dx + dw + 74, gw = W - gx - 14;
+    var bars = [
+      { k: 'Fig 9.6',  n: 'DRAM 200cyc',  v: thr(pmax, L_DRAM, 1),      c: '--ink-faint' },
+      { k: 'Fig 9.6',  n: 'L2 20cyc',     v: thr(pmax, L_L2, 1),        c: '--predict' },
+      { k: 'Fig 9.9',  n: 'L2 · 사본 ' + copies,  v: thr(pmax, L_L2, copies), c: '--correct' },
+      { k: 'Fig 9.10', n: 'shared 2cyc · 사본 ' + copies, v: thr(pmax, L_SH, copies), c: '--correct' }
+    ];
+    var LO = 1e6, HI = 1e12;                       // 로그 눈금 범위
+    function BY(v) {
+      var t = (Math.log10(Math.max(v, LO)) - Math.log10(LO)) / (Math.log10(HI) - Math.log10(LO));
+      return gy + gh * (1 - Math.min(t, 1));
+    }
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('실효 atomic throughput (로그 눈금)', gx - 34, 16);
+    for (var e = 6; e <= 12; e++) {
+      var yy2 = BY(Math.pow(10, e));
+      ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(gx, yy2); ctx.lineTo(gx + gw, yy2); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText(['1M', '10M', '100M', '1G', '10G', '100G', '1T'][e - 6], gx - 5, yy2 + 4);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh);
+    ctx.lineTo(gx + gw, gy + gh); ctx.stroke();
+
+    // peak 32 G elem/s
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(gx, BY(PEAK)); ctx.lineTo(gx + gw, BY(PEAK)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+    ctx.fillText('peak 32 G elem/s', gx + 4, BY(PEAK) - 5);
+
+    var slot = gw / bars.length, wid = Math.min(48, slot * 0.5);
+    bars.forEach(function (b, i) {
+      var cx = gx + slot * (i + 0.5), y0 = BY(b.v);
+      var over = b.v > PEAK;
+      ctx.fillStyle = css(b.c);
+      ctx.globalAlpha = over ? 0.35 : 0.85;
+      ctx.fillRect(cx - wid / 2, y0, wid, gy + gh - y0);
+      ctx.globalAlpha = 1;
+      if (over) {  // peak 를 넘으면 atomic 이 더는 병목이 아니다
+        ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1;
+        ctx.strokeRect(cx - wid / 2, y0, wid, gy + gh - y0);
+      }
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+      ctx.fillText(fmt(b.v), cx, y0 - 5);
+      ctx.fillStyle = css('--ink-soft');
+      ctx.fillText(b.k, cx, gy + gh + 15);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.fillText(b.n, cx, gy + gh + 28);
+    });
+
+    // ── 숫자 ─────────────────────────────────────────
+    var base = thr(pmax, L_DRAM, 1), sh = thr(pmax, L_SH, copies);
+    out.innerHTML =
+      'bin <b>' + B + '</b>개 · 편향 <b>' + s.toFixed(2) + '</b> → '
+      + 'p<sub>max</sub> = <b>' + (pmax * 100).toFixed(2) + '%</b>'
+      + ' · 실효 병렬도 1/p<sub>max</sub> = <b>' + (1 / pmax).toFixed(1) + '</b>'
+      + (s === 0 ? ' (균등이므로 bin 수와 같다)' : ' (bin 수 ' + B + ' 보다 작다)') + '<br>'
+      + 'T = 사본수 / (p<sub>max</sub> · 2L) — '
+      + '<b>Fig 9.6</b> DRAM <b>' + fmt(base) + '</b>'
+      + ' · L2 <b>' + fmt(thr(pmax, L_L2, 1)) + '</b>'
+      + ' · <b>Fig 9.9</b> <b>' + fmt(thr(pmax, L_L2, copies)) + '</b>'
+      + ' · <b>Fig 9.10</b> <b>' + fmt(sh) + '</b><br>'
+      + 'Fig 9.6(DRAM) 대비 Fig 9.10 은 <b>' + (sh / base).toFixed(0) + '×</b>'
+      + (sh > PEAK
+         ? ' — <b>peak 32 G elem/s 를 넘었다. atomic 은 더 이상 병목이 아니고 memory bandwidth 가 병목이다.</b>'
+         : ' — 아직 peak 32 G elem/s 에 못 미친다. atomic 이 여전히 병목이다.') + '<br>'
+      + '병합 비용: block 당 최대 <b>' + B + '</b>번의 device scope atomic'
+      + ' · 전체 최대 <b>' + (copies * B).toLocaleString() + '</b>번 (9.8절 연습 5)';
+  }
+
+  function fmt(v) {
+    if (v >= 1e12) return (v / 1e12).toFixed(1) + ' T';
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + ' G';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' M';
+    return v.toFixed(0);
+  }
+
+  document.querySelectorAll('#w-ac [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'one') set(1, 0, 0);            // bin 하나 = 같은 주소 하나
+      else if (a === 'uni') set(256, 0, 0);
+      else if (a === 'tree') set(4, 0.36, 0);   // p_max ≈ 0.5 (Figure 9.1)
+      else if (a === 'priv') set(256, 0.36, 9); // 사본 512개
+      else set(256, 0, 0);
+    });
+  });
+  ['ac-s-b', 'ac-s-s', 'ac-s-c'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(256, 0, 0);
+})();
+</script>
