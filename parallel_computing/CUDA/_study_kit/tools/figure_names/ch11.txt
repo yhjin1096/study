@@ -1,0 +1,25 @@
+# 11장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 11 --book-pages 251-288 \
+#         --out part2_patterns/11_scan/images \
+#         --names _study_kit/tools/figure_names/ch11.txt
+
+Figure 11.1  = fig11_1_sequential_scan
+Figure 11.2  = fig11_2_kogge_stone
+Figure 11.3  = fig11_3_kogge_stone_kernel
+Figure 11.4  = fig11_4_double_buffering
+Figure 11.5  = fig11_5_double_buffer_kernel
+Figure 11.6  = fig11_6_scan_scan_add
+Figure 11.7  = fig11_7_block_to_warp
+Figure 11.8  = fig11_8_warp_scan_device
+Figure 11.9  = fig11_9_block_scan_device
+Figure 11.10 = fig11_10_block_kernel
+Figure 11.11 = fig11_11_coarsening
+Figure 11.12 = fig11_12_coarsening_kernel
+Figure 11.13 = fig11_13_register_tiling_kernel
+Figure 11.14 = fig11_14_global_scan_scan_add
+Figure 11.15 = fig11_15_reduce_scan_scan
+Figure 11.16 = fig11_16_interblock_methods
+Figure 11.17 = fig11_17_single_lookback
+Figure 11.18 = fig11_18_single_kernel_scan
+Figure 11.19 = fig11_19_brent_kung
+Figure 11.20 = fig11_20_reverse_tree_states

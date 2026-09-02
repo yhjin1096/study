@@ -28,7 +28,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 8장 Stencil computation | ✅ | ✅ 12개 | ✅ stencil-ai |
 | 9장 Histogram | ✅ | ✅ 15개 | ✅ atomic-contention |
 | 10장 Reduction | ✅ | ✅ 21개 + 연습 삽화 1개 | ✅ reduction-efficiency |
-| 11장 Scan | ⬜ | — | — |
+| 11장 Scan | ✅ | ✅ 20개 | ✅ scan-work-span |
 | 12장 Filter | ⬜ | — | — |
 | 13장 Merge | ⬜ | — | — |
 | 14장 Sorting | ⬜ | — | — |

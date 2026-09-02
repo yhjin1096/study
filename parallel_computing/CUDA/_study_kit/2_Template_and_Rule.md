@@ -607,3 +607,57 @@ representation)` 으로 병기한다.
 - "coalesced 대비 **2×** 의 transaction", "효율 **2.25×** 개선", "요청 **3.9×** 감소",
   "**$2048\times$** 차이" → **두 대상·두 설정의 비교 → `×`**
 - 10장 본문에는 `배` 를 쓸 자리가 없었다 — 이 장의 숫자는 전부 **비교**다.
+
+
+### 11장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| scan / inclusive scan / exclusive scan | 스캔 / 포함 스캔 / 배타 스캔 |
+| prefix sum | 접두사 합, 누적합 |
+| Kogge-Stone / Brent-Kung | (고유명사 — 그대로) |
+| adder (design) | 덧셈기 — **회로 문맥에서는 "덧셈기" 허용** (아래 참조) |
+| work complexity / work efficiency / work-efficient | 작업 복잡도 / 작업 효율 |
+| span | 스팬, 폭, 깊이 |
+| scan-scan-add / reduce-scan-scan (분해) | (그대로) |
+| double-buffering | 이중 버퍼링 |
+| unidirectional synchronization | 단방향 동기화 — **한국어를 쓴다** (아래 참조) |
+| single lookback / multiple lookback / decoupled lookback | 단일 되돌아보기 / 분리 되돌아보기 |
+| memory order / acquire · release semantics | 메모리 순서 / 획득·해제 의미 |
+| block counter / dynamic block index assignment | (풀어서 서술) |
+| segment / subsegment | **구획 / 부분구획** (10장 규약 그대로) |
+| warp shuffle up (`__shfl_up_sync`) | (코드 식별자 — 백틱 그대로) |
+| lane index | 레인 인덱스 |
+| register tile / `#pragma unroll` | (코드 식별자 — 백틱 그대로) |
+
+**11장에서 정한 경계 — `unidirectional synchronization` 은 "단방향 동기화"**
+
+4장에서 **`barrier synchronization` 은 고유한 기법 이름이라 영어**로 정했다.
+그런데 `unidirectional synchronization` 은 다르다 —
+**`barrier` 처럼 굳어진 이름이 아니라 "방향이 한쪽뿐인 동기화"라는 서술적 표현**이고,
+이 책이 그 자리에서 정의해 쓰는 말이다.
+**서술적 표현은 한국어가 읽힌다.**
+
+| 쓸 것 | 근거 |
+|---|---|
+| `barrier synchronization` (영어) | 굳어진 기법 이름. `__syncthreads()` 와 직결 |
+| **단방향 동기화** (한국어) | 서술적 표현. "동기화"는 4장에서 이미 한국어로 정했다 |
+| `grid 전체 barrier` | 위 둘의 조합 — `barrier` 만 영어 |
+
+**`acquire`·`release` 는 영어**로 둔다. `cuda::memory_order_acquire` 라는
+**코드 식별자와 직결**되고, "획득 의미·해제 의미" 는 통용되지 않는다.
+서술할 때는 **"acquire 의미"·"release-acquire 짝"** 처럼 영어 낱말에 조사를 붙인다.
+
+**11장에서 추가로 한국어를 쓰는 것**: **절단점**, **부분합**, **점화식**, **덧셈기**,
+**되돌아보기**(설명할 때), **국면**(phase), **배포**(distribute), **음영**(shade) 은 한국어다.
+`phase` 는 **"국면"** 으로 쓴다 — reduction 국면 / reverse 국면.
+(`stage` 는 **"단계"** 로 쓴다. 둘을 구분해 두면 11.4·11.9절의 3-stage 분해와
+11.10절의 2-phase 알고리즘이 헷갈리지 않는다.)
+
+**`stride` 는 계속 영어다** (3·6·10장). 11.7절의 bank conflict 논의에서
+"보폭" 이라 쓰고 싶어지지만 규칙대로 `stride` 를 쓴다.
+
+**`배` / `×` 경계 — 11장에서 나온 사례.**
+- "순차의 **8~9×**", "**56.9×** 감소", "**$3.2\times$ 에서 $15.1\times$ 로**",
+  "scan 은 그보다도 **13×** 낮다" → **두 값의 비교 → `×`**
+- 11장 본문에도 `배` 를 쓸 자리가 없었다 — 10장과 마찬가지로 전부 **비교**다.

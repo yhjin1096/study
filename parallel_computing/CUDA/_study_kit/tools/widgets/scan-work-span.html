@@ -1,0 +1,243 @@
+<!--
+  Scan — work efficiency 와 step 수의 맞바꿈.
+
+  대응: 책 11.2절 (p.254) · 11.5절 (p.265~267) · 11.6절 (p.269~270) · 11.10절 (p.284)
+  프리셋이 책의 숫자를 그대로 재현한다.
+    N=512  KS work / 순차 = 8~9×              (책 p.266)
+    N=512  span 감소 N/log2N = 56.9×          (책 p.266)
+    N=1024, P=32  KS steps 320 → 3.2× 감소    (책 p.266)
+    같은 조건에 coarsening 을 걸면 68 step → 15.1× (책 11.6절 식으로 직접 계산)
+  오른쪽 세로 점선이 책이 말한 "병렬이 순차와 본전이 되는 P" 다.
+-->
+<div class="lab" id="w-sw">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">work efficiency 와 step 수는 맞바꿈이다</span>
+    <span class="lab-note">책 11.5·11.6절 (p.266, 269) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>입력 크기 <code>N</code> 과 실행 유닛 수 <code>P</code> 를 바꿔 본다.
+       왼쪽은 다섯 알고리즘의 <b>work</b>(총 덧셈 횟수, 로그 눈금)이고 점선이 순차의 <code>N−1</code> 이다.
+       오른쪽은 <code>P</code> 를 쓸어 가며 본 <b>step 수</b>다.
+       <b>Kogge-Stone 곡선이 순차 가로선 위에 있는 구간에서는 병렬이 순차보다 느리다</b> —
+       그 교차점이 세로 점선이고, coarsening 곡선은 그 벽을 훨씬 앞당긴다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>입력 크기 N</span><b id="sw-v-n">512</b></label>
+        <input type="range" id="sw-s-n" min="4" max="20" step="1" value="9">
+      </div>
+      <div class="slider">
+        <label><span>실행 유닛 수 P</span><b id="sw-v-p">32</b></label>
+        <input type="range" id="sw-s-p" min="0" max="14" step="1" value="5">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="w512">책 예 N=512 (work 8~9×)</button>
+      <button data-act="s1024">책 예 N=1024, P=32 (320 step)</button>
+      <button data-act="big">N=2²⁰, P=2¹⁴</button>
+      <button data-act="tiny">N=16, P=16</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="sw-canvas" width="880" height="330"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>순차 N−1</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>naïve N(N−1)/2</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>Kogge-Stone</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>Brent-Kung · coarsening</span>
+    </div>
+    <div class="readout" id="sw-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('sw-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('sw-readout');
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function nOf() { return Math.pow(2, +document.getElementById('sw-s-n').value); }
+  function pOf() { return Math.pow(2, +document.getElementById('sw-s-p').value); }
+  function lg(v) { return Math.log(v) / Math.LN2; }
+
+  // 책 11.2·11.5·11.6·11.10절의 식
+  function wSeq(N)   { return N - 1; }                       // 책 p.253
+  function wNaive(N) { return N * (N - 1) / 2; }             // 책 p.254
+  function wKS(N)    { return N * lg(N) - (N - 1); }         // 책 p.266
+  function wBK(N)    { return 2 * N - 2 - lg(N); }           // 책 p.284
+  function wCoarse(N, P) { return 2 * N + P * lg(P) - P - N / P; }   // 책 p.269
+
+  function sSeq(N)   { return N; }                           // 책 p.266
+  function sKS(N, P) { return N * lg(N) / P; }               // 책 p.266
+  function sCoarse(N, P) { return 2 * N / P + lg(P) - 1; }   // 책 p.270
+
+  function set(N, P) {
+    document.getElementById('sw-s-n').value = lg(N);
+    document.getElementById('sw-s-p').value = lg(P);
+    draw();
+  }
+
+  function fmt(v) {
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'G';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return Math.round(v).toString();
+  }
+
+  function draw() {
+    var N = nOf(), P = pOf();
+    document.getElementById('sw-v-n').textContent = N.toLocaleString();
+    document.getElementById('sw-v-p').textContent = P.toLocaleString();
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 330;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    var gy = 30, gh = 226;
+
+    // ── 왼쪽: work 막대 (로그) ────────────────────────
+    var lx = 52, lw = Math.min(300, W * 0.35);
+    var bars = [
+      { k: '순차',   n: 'N−1',       v: wSeq(N),         c: '--ink-faint' },
+      { k: 'naïve',  n: 'N²/2',      v: wNaive(N),       c: '--predict' },
+      { k: 'K-S',    n: 'N·log₂N',   v: wKS(N),          c: '--accent' },
+      { k: 'B-K',    n: '2N',        v: wBK(N),          c: '--correct' },
+      { k: '+coarse', n: 'P=' + P,   v: wCoarse(N, P),   c: '--correct' }
+    ];
+    var LO = 1, HI = Math.max(wNaive(N), 10) * 2;
+    function LY(v) {
+      var t = (Math.log10(Math.max(v, LO)) - Math.log10(LO)) / (Math.log10(HI) - Math.log10(LO));
+      return gy + gh * (1 - Math.min(Math.max(t, 0), 1));
+    }
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('work — 총 덧셈 횟수 (로그 눈금)', 4, 16);
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, gy); ctx.lineTo(lx, gy + gh);
+    ctx.lineTo(lx + lw, gy + gh); ctx.stroke();
+    for (var e = 0; Math.pow(10, e) <= HI; e++) {
+      var yy = LY(Math.pow(10, e));
+      ctx.strokeStyle = css('--rule-soft');
+      ctx.beginPath(); ctx.moveTo(lx, yy); ctx.lineTo(lx + lw, yy); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText('10' + ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹','¹⁰','¹¹','¹²'][e], lx - 5, yy + 4);
+    }
+    // 순차 기준선
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(lx, LY(wSeq(N))); ctx.lineTo(lx + lw, LY(wSeq(N))); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var slot = lw / bars.length, bw = Math.min(34, slot * 0.5);
+    bars.forEach(function (b, i) {
+      var cx = lx + slot * (i + 0.5), y0 = LY(b.v);
+      ctx.fillStyle = css(b.c); ctx.globalAlpha = (i === 4) ? 0.45 : 0.85;
+      ctx.fillRect(cx - bw / 2, y0, bw, gy + gh - y0);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+      ctx.fillText(fmt(b.v), cx, y0 - 5);
+      ctx.fillStyle = css('--ink-soft'); ctx.fillText(b.k, cx, gy + gh + 15);
+      ctx.fillStyle = css('--ink-faint'); ctx.fillText(b.n, cx, gy + gh + 28);
+    });
+
+    // ── 오른쪽: P 에 따른 step 수 (양쪽 로그) ─────────
+    var gx = lx + lw + 66, gw = W - gx - 14;
+    var PMIN = 1, PMAX = Math.pow(2, 14);
+    var smax = sSeq(N) * 4, smin = 1;
+    function PX(p) { return gx + gw * (lg(p) - lg(PMIN)) / (lg(PMAX) - lg(PMIN)); }
+    function SY(s) {
+      var t = (Math.log10(Math.max(s, smin)) - Math.log10(smin)) /
+              (Math.log10(smax) - Math.log10(smin));
+      return gy + gh * (1 - Math.min(Math.max(t, 0), 1));
+    }
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('step 수 (양쪽 로그 눈금)', gx - 36, 16);
+    for (var e2 = 0; Math.pow(10, e2) <= smax; e2++) {
+      var yy2 = SY(Math.pow(10, e2));
+      ctx.strokeStyle = css('--rule-soft');
+      ctx.beginPath(); ctx.moveTo(gx, yy2); ctx.lineTo(gx + gw, yy2); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText('10' + ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸'][e2], gx - 5, yy2 + 4);
+    }
+    ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh);
+    ctx.lineTo(gx + gw, gy + gh); ctx.stroke();
+    ctx.fillStyle = css('--ink-faint');
+    [1, 32, 1024, 16384].forEach(function (p) {
+      // 오른쪽 끝 눈금이 캔버스 밖으로 나가지 않게 정렬을 바꾼다
+      ctx.textAlign = (p === 16384) ? 'right' : (p === 1 ? 'left' : 'center');
+      ctx.fillText(p, PX(p), gy + gh + 15);
+    });
+    ctx.textAlign = 'center';
+    ctx.fillText('실행 유닛 수 P', gx + gw / 2, gy + gh + 28);
+
+    // 순차 (가로선)
+    ctx.strokeStyle = css('--ink-faint'); ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(gx, SY(sSeq(N))); ctx.lineTo(gx + gw, SY(sSeq(N))); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+    ctx.fillText('순차 N step', gx + gw - 4, SY(sSeq(N)) - 5);
+
+    function curve(fn, color) {
+      ctx.strokeStyle = css(color); ctx.lineWidth = 2.2; ctx.beginPath();
+      for (var k = 0, first = true; k <= 14; k += 0.25) {
+        var p = Math.pow(2, k), v = fn(N, p);
+        first ? (ctx.moveTo(PX(p), SY(v)), first = false) : ctx.lineTo(PX(p), SY(v));
+      }
+      ctx.stroke();
+    }
+    curve(sKS, '--accent');
+    curve(sCoarse, '--correct');
+
+    // 본전이 되는 P — Kogge-Stone 이 순차와 같아지는 지점 = log2 N
+    var pBreak = lg(N);
+    if (pBreak >= PMIN && pBreak <= PMAX) {
+      ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(PX(pBreak), gy); ctx.lineTo(PX(pBreak), gy + gh); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = css('--accent'); ctx.textAlign = 'left';
+      ctx.fillText('본전 P=log₂N=' + pBreak.toFixed(0), PX(pBreak) + 4, gy + 12);
+    }
+    [[sKS, '--accent'], [sCoarse, '--correct']].forEach(function (q) {
+      ctx.fillStyle = css(q[1]);
+      ctx.beginPath(); ctx.arc(PX(P), SY(q[0](N, P)), 4.5, 0, 2 * Math.PI); ctx.fill();
+    });
+
+    // ── 숫자 ─────────────────────────────────────────
+    var ksW = wKS(N), ksS = sKS(N, P), coS = sCoarse(N, P);
+    out.innerHTML =
+      'N = <b>' + N.toLocaleString() + '</b> · P = <b>' + P.toLocaleString()
+      + '</b> · log₂N = <b>' + lg(N) + '</b><br>'
+      + 'work — 순차 <b>' + fmt(wSeq(N)) + '</b> · naïve <b>' + fmt(wNaive(N)) + '</b> ('
+      + (wNaive(N) / wSeq(N)).toFixed(0) + '×) · Kogge-Stone <b>' + fmt(ksW) + '</b> ('
+      + (ksW / wSeq(N)).toFixed(2) + '×, 상한 ' + (N * lg(N) / wSeq(N)).toFixed(2)
+      + '×) · Brent-Kung <b>' + fmt(wBK(N)) + '</b> (' + (wBK(N) / wSeq(N)).toFixed(2) + '×)<br>'
+      + 'step — 순차 <b>' + fmt(sSeq(N)) + '</b> · Kogge-Stone <b>' + ksS.toFixed(1)
+      + '</b> (<b>' + (sSeq(N) / ksS).toFixed(1) + '×</b> 감소) · +coarsening <b>' + coS.toFixed(1)
+      + '</b> (<b>' + (sSeq(N) / coS).toFixed(1) + '×</b> 감소)<br>'
+      + (ksS >= sSeq(N)
+         ? '<b>P 가 너무 작다 — Kogge-Stone 이 순차보다 느리다.</b> 본전이 되려면 P ≥ log₂N = '
+           + lg(N) + ' 이어야 한다.'
+         : 'Kogge-Stone 은 순차보다 빠르다. coarsening 을 더하면 여기서 <b>'
+           + (ksS / coS).toFixed(1) + '×</b> 더 줄어든다')
+      + ' · P = N 이면 span 은 log₂N = <b>' + lg(N) + '</b> step 이 한계다';
+  }
+
+  document.querySelectorAll('#w-sw [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'w512') set(512, 32);
+      else if (a === 's1024') set(1024, 32);
+      else if (a === 'big') set(Math.pow(2, 20), Math.pow(2, 14));
+      else if (a === 'tiny') set(16, 16);
+      else set(512, 32);
+    });
+  });
+  ['sw-s-n', 'sw-s-p'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  set(512, 32);
+})();
+</script>
