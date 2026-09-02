@@ -1,0 +1,34 @@
+# 10장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 10 --book-pages 221-250 \
+#         --out part2_patterns/10_reduction/images \
+#         --names _study_kit/tools/figure_names/ch10.txt
+#
+# 자동 추출로 안 되는 둘 — 아래로 따로 뽑는다.
+#  ① 연습문제 3의 삽화는 캡션이 없다
+#   python3 _study_kit/tools/extract_figures.py --clip 122,393,395,612 --page 276 \
+#     --name ex10_3_access_pattern --out part2_patterns/10_reduction/images
+#  ② Figure 10.4 는 회색 박스 안에 있어 바로 위 본문 문단까지 함께 잡힌다
+#   python3 _study_kit/tools/extract_figures.py --clip 92,168,412,244 --page 254 \
+#     --name fig10_4_world_cup --out part2_patterns/10_reduction/images
+
+Figure 10.1  = fig10_1_sequential_sum
+Figure 10.2  = fig10_2_sequential_general
+Figure 10.3  = fig10_3_reduction_trees
+Figure 10.4  = fig10_4_world_cup
+Figure 10.5  = fig10_5_simple_kernel
+Figure 10.6  = fig10_6_simple_execution
+Figure 10.7  = fig10_7_better_assignment
+Figure 10.8  = fig10_8_convergent_kernel
+Figure 10.9  = fig10_9_shared_memory_idea
+Figure 10.10 = fig10_10_shared_kernel
+Figure 10.11 = fig10_11_shfl_down_sync
+Figure 10.12 = fig10_12_warp_reduce_final
+Figure 10.13 = fig10_13_warp_reduce_device
+Figure 10.14 = fig10_14_warp_kernel
+Figure 10.15 = fig10_15_two_stage_idea
+Figure 10.16 = fig10_16_two_stage_kernel
+Figure 10.17 = fig10_17_multiblock_atomic
+Figure 10.18 = fig10_18_multiblock_kernel
+Figure 10.19 = fig10_19_coarsening
+Figure 10.20 = fig10_20_coarsening_kernel
+Figure 10.21 = fig10_21_coarsening_compare
