@@ -1,0 +1,290 @@
+<!--
+  Radix sort — 14.5~14.8절의 한 iteration 과 radix 크기의 맞바꿈을 함께 본다.
+
+  대응: 책 14.5절 (p.336~339) · 14.6절 (p.339~342) · 14.7절 (p.342~344) · 14.8절 (p.344)
+        Figure 14.6 (p.338) · Figure 14.9 (p.341) · Figure 14.12 (p.344)
+  입력은 Figure 14.4~14.13 의 4비트 key 16개 그대로다.
+    r=1, block 4개 → Figure 14.9 의 표 [2,2,1,3,2,2,3,1], scan [0,2,4,5,8,10,12,15]
+    r=2, block 4개 → Figure 14.12 의 표와 scan
+  표는 row-major (행 = bucket, 열 = block) 이고, 그 선형 순서가 곧 출력 배치 순서다.
+  아래 지표는 14.7·14.8절의 세 식을 그대로 계산한다.
+    반복 수 = ceil(b/r) · 표 크기 = 2^r * B · bucket 당 key = K / 2^r
+-->
+<div class="lab" id="w-rs">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">radix 크기가 세 가지를 동시에 움직인다</span>
+    <span class="lab-note">Figure 14.6 · 14.9 · 14.12 (책 p.338~344) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p><b>radix 비트 수 <code>r</code></b> 과 <b>block 당 key 수 <code>K</code></b> 를 바꿔 본다.
+       위쪽은 <b>지역 정렬 → 표 → exclusive scan → 전역 출력</b> 이고,
+       <b>표는 row-major (행 = bucket, 열 = block)</b> 라 그 선형 순서가 곧 출력 배치 순서다.
+       아래 막대는 14.7절의 두 단점 —
+       <b><code>r</code> 이 커지면 반복은 줄지만 표가 커지고 bucket 당 key 가 줄어든다.</b>
+       <code>K</code> 를 키우는 것(= thread coarsening, 14.8절)이 그 둘을 동시에 되돌린다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>radix 비트 수 r</span><b id="rs-v-r">1</b></label>
+        <input type="range" id="rs-s-r" min="1" max="4" step="1" value="1">
+      </div>
+      <div class="slider">
+        <label><span>block 당 key 수 K</span><b id="rs-v-k">4</b></label>
+        <input type="range" id="rs-s-k" min="2" max="4" step="1" value="2">
+      </div>
+      <div class="slider">
+        <label><span>iteration (하위 자리부터)</span><b id="rs-v-i">0</b></label>
+        <input type="range" id="rs-s-i" min="0" max="3" step="1" value="0">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="f9">Figure 14.9 (r=1, K=4)</button>
+      <button data-act="f12">Figure 14.12 (r=2, K=4)</button>
+      <button data-act="f13">Figure 14.13 (r=2, K=8)</button>
+      <button data-act="big">r=4 — bucket 이 텅 빈다</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="rs-canvas" width="880" height="425"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>bucket 0 · 짝수 bucket</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>bucket 1 · 홀수 bucket</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>표와 exclusive scan</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>block 경계</span>
+    </div>
+    <div class="readout" id="rs-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('rs-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('rs-readout');
+
+  // Figure 14.4~14.13 의 입력 (4비트 key 16개)
+  var KEYS = [0xC, 0x3, 0x6, 0x9, 0xF, 0x8, 0x5, 0xA,
+              0x9, 0x6, 0xB, 0xD, 0x4, 0xA, 0x7, 0x0];
+  var NKEY = KEYS.length, BITS = 4;
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  function b4(v) { var s = v.toString(2); while (s.length < 4) s = '0' + s; return s; }
+  function rOf() { return +document.getElementById('rs-s-r').value; }
+  function kOf() { return 1 << (+document.getElementById('rs-s-k').value); }   // 4, 8, 16
+  function iOf() { return +document.getElementById('rs-s-i').value; }
+
+  // 한 iteration 을 block 단위로 계산한다 (14.6절 지역 정렬 → 표 → scan → 전역)
+  function compute(r, K, it) {
+    var nb = Math.ceil(NKEY / K), nbucket = 1 << r, mask = nbucket - 1;
+    var shift = it * r;
+    var local = [], counts = [];
+    for (var blk = 0; blk < nb; blk++) {
+      var seg = KEYS.slice(blk*K, Math.min((blk+1)*K, NKEY));
+      var idx = seg.map(function (_, i) { return i; });
+      idx.sort(function (a, b) {                      // stable: digit, 그다음 원래 순서
+        var da = (seg[a] >> shift) & mask, db = (seg[b] >> shift) & mask;
+        return (da - db) || (a - b);
+      });
+      local.push(idx.map(function (i) { return seg[i]; }));
+      var c = new Array(nbucket).fill(0);
+      seg.forEach(function (k) { c[(k >> shift) & mask]++; });
+      counts.push(c);
+    }
+    // 표는 row-major — 행 = bucket, 열 = block
+    var flat = [];
+    for (var v = 0; v < nbucket; v++)
+      for (var b = 0; b < nb; b++) flat.push(counts[b][v]);
+    var scan = [], acc = 0;
+    for (var t = 0; t < flat.length; t++) { scan.push(acc); acc += flat[t]; }
+    // 전역 출력
+    var glob = new Array(NKEY).fill(null), cur = scan.slice();
+    for (var b2 = 0; b2 < nb; b2++)
+      local[b2].forEach(function (k) {
+        var d = (k >> shift) & mask;
+        glob[cur[d*nb + b2]++] = k;
+      });
+    return { nb: nb, nbucket: nbucket, local: local, counts: counts,
+             flat: flat, scan: scan, glob: glob, shift: shift };
+  }
+
+  function draw() {
+    var r = rOf(), K = kOf(), it = Math.min(iOf(), Math.ceil(BITS/r) - 1);
+    document.getElementById('rs-s-i').max = Math.ceil(BITS/r) - 1;
+    var S = compute(r, K, it);
+    document.getElementById('rs-v-r').textContent = r;
+    document.getElementById('rs-v-k').textContent = K;
+    document.getElementById('rs-v-i').textContent = it;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 425;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    var x0 = 110, cw = (W - x0 - 14) / NKEY, hR = 26;
+
+    // key 한 줄을 그린다 (관심 자리를 강조)
+    function row(y, arr, label, sep) {
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(label, x0 - 8, y + 17);
+      for (var t = 0; t < arr.length; t++) {
+        var x = x0 + t * cw;
+        var d = (arr[t] >> S.shift) & (S.nbucket - 1);
+        ctx.fillStyle = css(d % 2 ? '--correct' : '--predict');
+        ctx.globalAlpha = 0.18 + 0.5 * (d / Math.max(1, S.nbucket - 1));
+        ctx.fillRect(x + 1, y, cw - 2, hR);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = css('--rule-soft'); ctx.strokeRect(x + 1, y, cw - 2, hR);
+        // 4비트 문자열 — 관심 자리만 진하게
+        var s = b4(arr[t]);
+        var hi = 4 - S.shift - r, lo = 4 - S.shift;      // 강조 구간 [hi, lo)
+        ctx.textAlign = 'left';
+        var fx = x + cw / 2 - 15;
+        for (var c = 0; c < 4; c++) {
+          var on = (c >= hi && c < lo);
+          ctx.fillStyle = on ? css('--ink') : css('--ink-faint');
+          ctx.font = (on ? 'bold ' : '') + '11px ui-monospace, Menlo, monospace';
+          ctx.fillText(s[c], fx, y + 17); fx += 8;
+        }
+        ctx.font = '11px system-ui, sans-serif';
+      }
+      if (sep) {
+        ctx.strokeStyle = css('--ink-faint'); ctx.setLineDash([3, 3]);
+        for (var b = 1; b < S.nb; b++) {
+          var bx = x0 + b * K * cw;
+          ctx.beginPath(); ctx.moveTo(bx, y - 3); ctx.lineTo(bx, y + hR + 3); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+    }
+
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('iteration ' + it + ' — 굵은 자리가 이번에 보는 ' + r + '비트', 4, 14);
+    row(22, KEYS, 'input', true);
+    var flatLocal = [];
+    S.local.forEach(function (a) { a.forEach(function (k) { flatLocal.push(k); }); });
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('① block 안에서 지역 정렬 (shared memory) — 14.6절', 4, 68);
+    row(76, flatLocal, 'local', true);
+
+    // ── 표와 scan ────────────────────────────────────────────────
+    var ty = 128, th = Math.min(15, 108 / S.nbucket), tw = Math.min(46, (W - 320) / S.nb);
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('② 지역 bucket 크기 표 (행 = bucket, 열 = block · row-major)', 4, ty - 8);
+    function table(px, vals, title) {
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+      ctx.fillText(title, px, ty + 8);
+      for (var v = 0; v < S.nbucket; v++) {
+        ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+        ctx.fillText(v.toString(2).padStart(r, '0'), px - 4, ty + 24 + v*th + th - 4);
+        for (var b = 0; b < S.nb; b++) {
+          var x = px + b*tw, y = ty + 24 + v*th;
+          ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.22;
+          ctx.fillRect(x, y, tw - 2, th - 2); ctx.globalAlpha = 1;
+          ctx.strokeStyle = css('--rule-soft'); ctx.strokeRect(x, y, tw - 2, th - 2);
+          ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+          ctx.fillText(vals[v*S.nb + b], x + tw/2 - 1, y + th - 4);
+        }
+      }
+    }
+    table(60, S.flat, '표');
+    table(60 + S.nb*tw + 92, S.scan, 'exclusive scan → 각 지역 bucket 의 전역 시작 위치');
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('→', 60 + S.nb*tw + 44, ty + 24 + (S.nbucket*th)/2);
+
+    // ── 전역 출력 ────────────────────────────────────────────────
+    var oy = ty + 24 + S.nbucket*th + 26;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('③ 지역 bucket 을 전역 bucket 으로 (coalesced) — 이번 iteration 의 출력', 4, oy - 8);
+    row(oy, S.glob, 'output', false);
+
+    // ── 14.7·14.8절 지표 막대 ────────────────────────────────────
+    var my = oy + hR + 30, bw = W - 250;
+    // 그림의 K(4·8·16)는 장난감 값이라, 실제 규모는 64배로 환산해 쓴다 (256·512·1024).
+    // 14.7절의 표가 K=256, 14.8절의 coarsening 예가 K=1024 였다.
+    var Nbig = 1 << 20, realK = K * 64, B = Nbig / realK;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('14.7·14.8절 지표 — b=32비트 key, N=2^20, block 당 key '
+                 + realK + '개로 환산', 4, my - 8);
+    var rows = [
+      { k: '반복 수  ceil(b/r)', v: Math.ceil(32/r), max: 32, good: false },
+      { k: '표 크기  2^r·B / N', v: (1 << r) * B / Nbig, max: 0.25, good: false },
+      { k: 'bucket 당 key  K/2^r', v: realK / (1 << r), max: 512, good: true }
+    ];
+    rows.forEach(function (rw, i) {
+      var y = my + i*22;
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(rw.k, 172, y + 11);
+      var frac = Math.min(1, rw.v / rw.max);
+      ctx.fillStyle = css(rw.good ? '--correct' : '--accent');
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(180, y, Math.max(2, bw * frac), 13);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'left';
+      ctx.fillText(rw.v < 1 ? rw.v.toFixed(3) : rw.v.toFixed(rw.v % 1 ? 1 : 0),
+                   180 + Math.max(2, bw * frac) + 6, y + 11);
+    });
+
+    // ── 숫자 ─────────────────────────────────────────────────────
+    var perBucket = realK / (1 << r), tableSize = (1 << r) * B;
+    var sortedOK = (function () {           // 모든 iteration 을 돌리면 정렬되는가
+      var cur = KEYS.slice();
+      for (var t = 0; t < Math.ceil(BITS/r); t++) {
+        var sh = t*r, m = (1 << r) - 1;
+        var idx = cur.map(function (_, i) { return i; });
+        idx.sort(function (a, b) { return (((cur[a]>>sh)&m) - ((cur[b]>>sh)&m)) || (a-b); });
+        cur = idx.map(function (i) { return cur[i]; });
+      }
+      var srt = KEYS.slice().sort(function (a, b) { return a - b; });
+      return cur.every(function (v, i) { return v === srt[i]; });
+    })();
+
+    out.innerHTML =
+      'r = <b>' + r + '</b>비트 (bucket <b>' + S.nbucket + '</b>개) · block 당 key <b>' + K
+      + '</b> · 이 예의 block <b>' + S.nb + '</b>개 · iteration <b>' + it + '/'
+      + (Math.ceil(BITS/r) - 1) + '</b><br>'
+      + '표 (row-major): <code>[' + S.flat.join(', ') + ']</code><br>'
+      + 'exclusive scan: <code>[' + S.scan.join(', ') + ']</code>'
+      + ' ← 각 (bucket, block) 의 전역 시작 위치<br>'
+      + '<b>실제 규모로 환산 (b=32비트, N=2^20, block 당 key ' + realK + '개)</b> — 현재 r='
+      + r + ': 반복 <b>' + Math.ceil(32/r) + '</b>회 · block <b>' + B.toLocaleString()
+      + '</b>개 · 전역 scan 표 <b>' + tableSize.toLocaleString() + '</b> (입력의 <b>'
+      + (tableSize/Nbig*100).toFixed(2) + '%</b>) · bucket 당 key <b>'
+      + perBucket.toFixed(perBucket % 1 ? 1 : 0) + '</b>'
+      + ' · 지역 1비트 pass <b>' + Math.ceil(32/r)*r + '</b>회 (r 과 무관)<br>'
+      + '<code>' + [1,2,4,8].map(function (rr) {
+          var tb = (1 << rr) * B, pb = realK / (1 << rr);
+          return (rr === r ? '▶' : ' ') + 'r=' + rr + ': 반복 ' + String(Math.ceil(32/rr)).padStart(2)
+                 + ' · 표 ' + String(tb.toLocaleString()).padStart(9)
+                 + ' (' + (tb/Nbig*100).toFixed(1).padStart(5) + '%)'
+                 + ' · bucket당 ' + String(pb.toFixed(pb % 1 ? 1 : 0)).padStart(5);
+        }).join('<br>') + '</code><br>'
+      + (perBucket <= 4
+          ? '<b>bucket 당 key 가 너무 적다 — coalescing 이 사라진다.</b>'
+            + ' K 를 키우면(thread coarsening, 14.8절) 되돌릴 수 있다.'
+          : (tableSize/Nbig > 0.05
+              ? '<b>표가 입력의 5% 를 넘는다 — 전역 scan 오버헤드가 눈에 띄기 시작한다.</b>'
+              : '반복 수·표 크기·bucket 당 key 가 균형 잡힌 영역이다.'))
+      + ' · 4비트 key 를 끝까지 정렬하는지 확인: <b>' + (sortedOK ? '✓' : '✗') + '</b>';
+  }
+
+  document.querySelectorAll('#w-rs [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      var R = document.getElementById('rs-s-r'), Kk = document.getElementById('rs-s-k'),
+          I = document.getElementById('rs-s-i');
+      if (a === 'f9')       { R.value = 1; Kk.value = 2; I.value = 0; }
+      else if (a === 'f12') { R.value = 2; Kk.value = 2; I.value = 0; }
+      else if (a === 'f13') { R.value = 2; Kk.value = 3; I.value = 0; }
+      else if (a === 'big') { R.value = 4; Kk.value = 2; I.value = 0; }
+      else                  { R.value = 1; Kk.value = 2; I.value = 0; }
+      draw();
+    });
+  });
+  ['rs-s-r', 'rs-s-k', 'rs-s-i'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

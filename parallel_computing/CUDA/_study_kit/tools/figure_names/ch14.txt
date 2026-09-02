@@ -1,0 +1,18 @@
+# 14장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 14 --book-pages 329-348 \
+#         --out part2_patterns/14_sorting/images \
+#         --names _study_kit/tools/figure_names/ch14.txt
+
+Figure 14.1  = fig14_1_odd_even_sort
+Figure 14.2  = fig14_2_odd_even_kernel
+Figure 14.3  = fig14_3_merge_sort
+Figure 14.4  = fig14_4_radix_example
+Figure 14.5  = fig14_5_one_key_per_thread
+Figure 14.6  = fig14_6_destination
+Figure 14.7  = fig14_7_radix_kernel
+Figure 14.8  = fig14_8_local_sort
+Figure 14.9  = fig14_9_block_bucket_dest
+Figure 14.10 = fig14_10_2bit_radix
+Figure 14.11 = fig14_11_2bit_shared
+Figure 14.12 = fig14_12_2bit_bucket_dest
+Figure 14.13 = fig14_13_coarsening
