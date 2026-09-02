@@ -30,7 +30,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 10장 Reduction | ✅ | ✅ 21개 + 연습 삽화 1개 | ✅ reduction-efficiency |
 | 11장 Scan | ✅ | ✅ 20개 | ✅ scan-work-span |
 | 12장 Filter | ✅ | ✅ 11개 | ✅ warp-vote |
-| 13장 Merge | ⬜ | — | — |
+| 13장 Merge | ✅ | ✅ 20개 | ✅ co-rank |
 | 14장 Sorting | ⬜ | — | — |
 | 15장 Advanced optimizations for matrix multiplication | ⬜ | — | — |
 | 16장 Dynamic programming and wavefront parallelism | ⬜ | — | — |

@@ -1,0 +1,275 @@
+<!--
+  Co-rank — 13.4절의 binary search 를 한 step 씩 눈으로 따라간다.
+
+  대응: 책 13.4절 (p.308~313) · Figure 13.5 (p.310) · Figure 13.6~13.8 (p.311~312)
+  상태 전이는 Figure 13.5 의 코드를 그대로 옮긴 것이다.
+    초기화   i = min(k,m) · j = k-i · i_low = max(0,k-n) · j_low = max(0,k-m)
+    첫 if    i>0 && j<n && A[i-1] > B[j]   → i 과다: delta = ceil((i-i_low)/2)
+    둘째 if  j>0 && i<m && B[j-1] >= A[i]  → j 과다: delta = ceil((j-j_low)/2)
+  프리셋이 책의 trace 를 그대로 재현한다.
+    thread 1 (k=3): (3,0) → (1,2) → (2,1) 에서 종료, i=2 j=1   (Fig 13.6~13.8)
+    thread 2 (k=6): (5,1) 에서 즉시 종료, i=5 j=1               (연습 2)
+    k=6 은 Figure 13.3(b) 의 라벨 i=4 j=2 가 오기임을 보여 준다.
+-->
+<div class="lab" id="w-cr">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">co-rank 의 binary search 를 한 step 씩</span>
+    <span class="lab-note">Figure 13.5~13.8 (책 p.310~312) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p><b>rank <code>k</code></b> 를 정하고 <b>한 step</b> 을 눌러 본다. 파란 막대가
+       <code>i_low</code>·<code>i</code>, 초록 막대가 <code>j_low</code>·<code>j</code> 이고
+       아래 <code>C</code> 에서 <b>굵은 칸이 이번 thread 가 만들 출력</b>이다.
+       <b>두 조건 <code>A[i-1] &lt;= B[j]</code> 와 <code>B[j-1] &lt; A[i]</code> 가 모두
+       만족되면 종료</b>한다. <b>등호가 한쪽에만 있는 것이 stability</b> 이고,
+       그것이 <code>k=6</code> 에서 <code>(5,1)</code> 과 <code>(4,2)</code> 의 tie 를 끊는다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>rank k</span><b id="cr-v-k">3</b></label>
+        <input type="range" id="cr-s-k" min="0" max="9" step="1" value="3">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="step">한 step ▶</button>
+      <button data-act="all">끝까지 ▶▶</button>
+      <button class="ghost" data-act="reset">처음으로</button>
+      <button data-act="t1">thread 1 (k=3)</button>
+      <button data-act="t2">thread 2 (k=6)</button>
+      <button data-act="long">긴 입력 (m=n=8)</button>
+      <button data-act="book">책 예로</button>
+    </div>
+
+    <canvas id="cr-canvas" width="880" height="384"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>i_low · i (A 쪽 탐색 범위)</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>j_low · j (B 쪽 탐색 범위)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>이번 thread 의 출력 구간</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>prefix (C[0..k-1])</span>
+    </div>
+    <div class="readout" id="cr-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('cr-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('cr-readout');
+
+  var BOOK = { A: [1, 7, 8, 9, 10], B: [7, 10, 10, 12] };
+  var LONG = { A: [2, 5, 8, 11, 14, 17, 20, 23], B: [1, 3, 9, 10, 15, 16, 21, 30] };
+  var D = BOOK;                       // 현재 입력
+  var S = null;                       // 탐색 상태
+  var LOG = [];
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+
+  // 순차 merge — C 와 각 자리의 출처를 함께 (Figure 13.2, stable)
+  function mergeSeq(A, B) {
+    var C = [], src = [], i = 0, j = 0;
+    while (i < A.length && j < B.length) {
+      if (A[i] <= B[j]) { C.push(A[i]); src.push('A' + i); i++; }
+      else              { C.push(B[j]); src.push('B' + j); j++; }
+    }
+    while (j < B.length) { C.push(B[j]); src.push('B' + j); j++; }
+    while (i < A.length) { C.push(A[i]); src.push('A' + i); i++; }
+    return { C: C, src: src };
+  }
+
+  function kOf() { return +document.getElementById('cr-s-k').value; }
+
+  // Figure 13.5 의 초기화
+  function init() {
+    var k = kOf(), m = D.A.length, n = D.B.length;
+    var i = k < m ? k : m;
+    S = { k: k, i: i, j: k - i,
+          i_low: Math.max(0, k - n), j_low: Math.max(0, k - m),
+          it: 0, done: false, why: '초기화' };
+    LOG = [];
+    draw();
+  }
+
+  // Figure 13.5 while-loop 한 반복
+  function step() {
+    if (!S || S.done) return;
+    var A = D.A, B = D.B, m = A.length, n = B.length;
+    var i = S.i, j = S.j, rec;
+    if (i > 0 && j < n && A[i-1] > B[j]) {
+      var d1 = (i - S.i_low + 1) >> 1;
+      rec = { it: S.it, i: i, j: j, i_low: S.i_low, j_low: S.j_low,
+              why: 'A[' + (i-1) + ']=' + A[i-1] + ' > B[' + j + ']=' + B[j] +
+                   ' → i 과다, delta=' + d1 };
+      S.j_low = j; S.j = j + d1; S.i = i - d1;
+    } else if (j > 0 && i < m && B[j-1] >= A[i]) {
+      var d2 = (j - S.j_low + 1) >> 1;
+      rec = { it: S.it, i: i, j: j, i_low: S.i_low, j_low: S.j_low,
+              why: 'B[' + (j-1) + ']=' + B[j-1] + ' >= A[' + i + ']=' + A[i] +
+                   ' → j 과다, delta=' + d2 };
+      S.i_low = i; S.i = i + d2; S.j = j - d2;
+    } else {
+      rec = { it: S.it, i: i, j: j, i_low: S.i_low, j_low: S.j_low, why: '두 조건 만족 → 종료' };
+      S.done = true;
+    }
+    LOG.push(rec);
+    S.it++;
+    draw();
+  }
+
+  function runAll() { var g = 0; while (S && !S.done && g < 64) { step(); g++; } }
+
+  function setData(d, k) {
+    D = d;
+    var sl = document.getElementById('cr-s-k');
+    sl.max = D.A.length + D.B.length;
+    sl.value = Math.min(k, +sl.max);
+    init();
+  }
+
+  function draw() {
+    var A = D.A, B = D.B, m = A.length, n = B.length;
+    var mg = mergeSeq(A, B), C = mg.C, src = mg.src;
+    var k = S.k;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 384;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '12px system-ui, sans-serif';
+
+    var cw = Math.min(40, (W * 0.40) / Math.max(m, n));
+    var ax = 46, bx = W * 0.52 + 6, yA = 82, hC = 30;
+
+    // ── 배열 하나를 그린다 (marker 포함) ────────────────────────
+    function drawArr(arr, x0, y, label, lowV, curV, colLow, tagLow, tagCur) {
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(label, x0 - 8, y + 20);
+      for (var t = 0; t < arr.length; t++) {
+        var x = x0 + t * cw;
+        var inPrefix = t < curV;
+        ctx.fillStyle = inPrefix ? css('--ink-faint') : css('--panel');
+        ctx.globalAlpha = inPrefix ? 0.30 : 0.55;
+        ctx.fillRect(x + 1, y, cw - 2, hC);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = css('--rule-soft'); ctx.strokeRect(x + 1, y, cw - 2, hC);
+        ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+        ctx.fillText(arr[t], x + cw / 2, y + 20);
+        ctx.fillStyle = css('--ink-faint');
+        ctx.font = '9px system-ui, sans-serif';
+        ctx.fillText(t, x + cw / 2, y + hC + 11);
+        ctx.font = '12px system-ui, sans-serif';
+      }
+      // marker 두 개 — 칸 경계에 세운다.
+      // 두 값이 같을 때 라벨이 겹치므로 low 는 윗줄, cur 는 아랫줄에 적는다.
+      [[lowV, tagLow, 0.45, -42], [curV, tagCur, 1, -26]].forEach(function (p) {
+        var mx = x0 + p[0] * cw;
+        ctx.strokeStyle = css(colLow); ctx.globalAlpha = p[2]; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(mx, y - 20); ctx.lineTo(mx, y + hC + 4); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.lineWidth = 1;
+        ctx.fillStyle = css(colLow); ctx.textAlign = 'center';
+        ctx.fillText(p[1] + '=' + p[0], mx, y + p[3]);
+      });
+    }
+
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('입력 (연한 칸 = prefix, 즉 이미 소비된 것으로 보는 부분)', 4, 18);
+    drawArr(A, ax, yA, 'A', S.i_low, S.i, '--predict', 'i_low', 'i');
+    drawArr(B, bx, yA, 'B', S.j_low, S.j, '--correct', 'j_low', 'j');
+
+    // ── C ────────────────────────────────────────────────────────
+    var ccw = Math.min(40, (W - 60) / C.length), cx = 46, yCr = 184;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('출력 C — 굵은 테두리가 rank k 이후 (이 thread 가 만들 자리)', 4, yCr - 26);
+    ctx.textAlign = 'right'; ctx.fillText('C', cx - 8, yCr + 20);
+    for (var t2 = 0; t2 < C.length; t2++) {
+      var x2 = cx + t2 * ccw;
+      var pre = t2 < k;
+      ctx.fillStyle = pre ? css('--ink-faint') : css('--accent');
+      ctx.globalAlpha = pre ? 0.30 : 0.55;
+      ctx.fillRect(x2 + 1, yCr, ccw - 2, hC);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = (t2 === k) ? css('--accent') : css('--rule-soft');
+      ctx.lineWidth = (t2 === k) ? 2.5 : 1;
+      ctx.strokeRect(x2 + 1, yCr, ccw - 2, hC);
+      ctx.lineWidth = 1;
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'center';
+      ctx.fillText(C[t2], x2 + ccw / 2, yCr + 20);
+      ctx.fillStyle = css('--ink-faint');
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.fillText(src[t2], x2 + ccw / 2, yCr + hC + 11);
+      ctx.font = '12px system-ui, sans-serif';
+    }
+
+    // ── 조건 두 개 ───────────────────────────────────────────────
+    var i = S.i, j = S.j, yq = 262;
+    function condLine(y, txt, ok) {
+      ctx.fillStyle = ok ? css('--correct') : css('--accent');
+      ctx.textAlign = 'left';
+      ctx.fillText((ok ? '✓  ' : '✗  ') + txt, 46, y);
+    }
+    var okA = (i === 0) || (j >= n) || (A[i-1] <= B[j]);
+    var okB = (j === 0) || (i >= m) || (B[j-1] < A[i]);
+    var sA = (i === 0) ? 'i=0 이라 자동 만족'
+           : (j >= n) ? 'j=n 이라 자동 만족'
+           : 'A[' + (i-1) + ']=' + A[i-1] + (okA ? ' <= ' : ' >  ') + 'B[' + j + ']=' + B[j];
+    var sB = (j === 0) ? 'j=0 이라 자동 만족'
+           : (i >= m) ? 'i=m 이라 자동 만족'
+           : 'B[' + (j-1) + ']=' + B[j-1] + (okB ? ' <  ' : ' >= ') + 'A[' + i + ']=' + A[i];
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('종료 조건 (등호가 A 쪽에만 있는 것이 stability)', 4, yq - 18);
+    condLine(yq, 'A[i-1] <= B[j]   ' + sA, okA);
+    condLine(yq + 20, 'B[j-1] <  A[i]   ' + sB, okB);
+
+    // ── trace 로그 ───────────────────────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.fillText('trace', 4, yq + 48);
+    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    var shown = LOG.slice(-4);
+    shown.forEach(function (r, idx) {
+      ctx.fillStyle = css('--ink-faint');
+      ctx.fillText('iter ' + r.it + ':  i_low=' + r.i_low + ' i=' + r.i +
+                   '   j_low=' + r.j_low + ' j=' + r.j + '   ' + r.why,
+                   46, yq + 66 + idx * 15);
+    });
+    ctx.font = '12px system-ui, sans-serif';
+
+    // ── 숫자 ─────────────────────────────────────────────────────
+    document.getElementById('cr-v-k').textContent = k;
+    var truth = 0;
+    for (var t3 = 0; t3 < k; t3++) if (src[t3].charAt(0) === 'A') truth++;
+    out.innerHTML =
+      'm=' + m + ' n=' + n + ' · rank <b>k=' + k + '</b>'
+      + ' · 현재 <b>i=' + i + ', j=' + j + '</b> (i+j=' + (i + j) + ' = k ✓ 불변식)'
+      + ' · 탐색 범위 A[' + S.i_low + '..' + i + '] B[' + S.j_low + '..' + j + ']<br>'
+      + (S.done
+          ? '<b>종료</b> — co-rank <b>(' + i + ', ' + j + ')</b>, 반복 <b>' + S.it + '</b>회.'
+            + ' 순차 merge 로 센 참값 <b>(' + truth + ', ' + (k - truth) + ')</b>'
+            + (i === truth ? ' ✓ 일치' : ' ✗ 불일치')
+            + ' · prefix C[0..' + (k - 1) + '] = A[0..' + (i - 1) + '] + B[0..' + (j - 1) + ']'
+          : '진행 중 — <b>한 step</b> 을 눌러 계속한다. (반복 ' + S.it + '회 경과)')
+      + '<br>초기화: i=min(k,m)=' + Math.min(k, m)
+      + ' · i_low=max(0,k-n)=' + Math.max(0, k - n)
+      + ' · j_low=max(0,k-m)=' + Math.max(0, k - m)
+      + (k === 6 && D === BOOK
+          ? '<br><b>k=6 에 주목</b> — co-rank 는 (5,1) 이다.'
+            + ' Figure 13.3(b) 의 라벨 <b>i=4, j=2</b> 는 오기다.'
+            + ' (4,2) 도 prefix 값은 같지만 <code>B[1]=10 &lt; A[4]=10</code> 이 거짓이라 탈락한다.'
+          : '');
+  }
+
+  document.querySelectorAll('#w-cr [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      if (a === 'step') step();
+      else if (a === 'all') runAll();
+      else if (a === 'reset') init();
+      else if (a === 't1') { setData(BOOK, 3); runAll(); }
+      else if (a === 't2') { setData(BOOK, 6); runAll(); }
+      else if (a === 'long') setData(LONG, 8);
+      else setData(BOOK, 3);
+    });
+  });
+  document.getElementById('cr-s-k').addEventListener('input', init);
+  window.addEventListener('resize', draw);
+  setData(BOOK, 3);
+})();
+</script>

@@ -1,0 +1,25 @@
+# 13장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 13 --book-pages 303-328 \
+#         --out part2_patterns/13_merge/images \
+#         --names _study_kit/tools/figure_names/ch13.txt
+
+Figure 13.1  = fig13_1_merge_example
+Figure 13.2  = fig13_2_sequential_merge
+Figure 13.3  = fig13_3_observation1
+Figure 13.4  = fig13_4_corank_example
+Figure 13.5  = fig13_5_corank_function
+Figure 13.6  = fig13_6_corank_iter0
+Figure 13.7  = fig13_7_corank_iter1
+Figure 13.8  = fig13_8_corank_iter2
+Figure 13.9  = fig13_9_basic_kernel
+Figure 13.10 = fig13_10_tiled_design
+Figure 13.11 = fig13_11_tiled_part1
+Figure 13.12 = fig13_12_tiled_part2
+Figure 13.13 = fig13_13_tiled_part3
+Figure 13.14 = fig13_14_iteration1
+Figure 13.15 = fig13_15_circular_scheme
+Figure 13.16 = fig13_16_circular_part2
+Figure 13.17 = fig13_17_simplified_model
+Figure 13.18 = fig13_18_circular_part3
+Figure 13.19 = fig13_19_corank_circular
+Figure 13.20 = fig13_20_merge_circular
