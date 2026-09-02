@@ -1650,7 +1650,7 @@ void merge_sequential_circular(int *A, int m, int *B, int n, int *C, int A_S_sta
 
 > **5.6절과 6.9절의 논리가 여기서 다시 쓰인다.**
 > "무엇이 병목인가"를 먼저 정하고, **병목이 아닌 자원을 써서 병목인 자원을 아낀다.**
-> merge 는 산술 강도가 극도로 낮다 — 원소 하나당 비교 한 번이 전부다.
+> merge 는 arithmetic intensity 가 극도로 낮다 — 원소 하나당 비교 한 번이 전부다.
 > 그러니 register 를 몇 개 더 쓰고 `%` 를 몇 번 더 하는 것은 거의 공짜다.
 
 ### 6. 예제/실습

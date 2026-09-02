@@ -1,0 +1,275 @@
+<!--
+  Matmul tiles — 15.2절의 arithmetic intensity와 15.7절의 자원 압박을 한 화면에서 본다.
+
+  대응: 책 15.2절 (p.350~352) · 15.4절 (p.357~360) · 15.6절 (p.361~363) · 15.7절 (p.363~364)
+  계산식은 전부 책의 것이다.
+    AI          = 0.5·bM·bN/(bM+bN)          (책 p.351, k 와 무관)
+    shared      = (bM·(bK+pad) + bK·bN)·4 B  (·2 는 double buffering, 15.8절)
+    register    = tM·tN + tM + tN + 임시      (책 p.363 의 64+8+8=80)
+    occupancy   = block 수 × thread 수 / 2048
+    shared 읽기 = 2·tM·tN·bK → bK·(tM+tN)     (15.4절, tM=tN 이면 tM 배 감소)
+  H100 임계값 20.0 FLOP/B 는 5장 노트의 66.9 TFLOPS / 3.35 TB/s 다.
+  프리셋이 책의 두 설정을 재현한다.
+    5장  32x32  → AI  8 FLOP/B (memory-bound)
+    15장 128x128 → AI 32 FLOP/B (compute-bound) · register 80 · occupancy 12.5%
+-->
+<div class="lab" id="w-mt">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">tile 을 키우면 arithmetic intensity가 오르고 occupancy 가 죽는다</span>
+    <span class="lab-note">책 15.2 · 15.7절 (p.351, 363) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p><b>block tile <code>bM</code>·<code>bN</code></b> 과 <b><code>bK</code></b>,
+       <b>block 당 thread 수</b>를 바꿔 본다. 위 막대가 <b>arithmetic intensity</b> 이고
+       점선이 <b>H100 임계값 20 FLOP/B</b> 다 — 이 선을 넘어야 compute-bound 다.
+       아래 세 막대가 <b>shared memory · thread 당 register · occupancy</b> 다.
+       <b><code>bM</code>·<code>bN</code> 을 키우면 arithmetic intensity가 오르지만 register 가 폭증하고,
+       <code>bK</code> 는 arithmetic intensity를 전혀 바꾸지 않으면서 shared memory 만 먹는다.</b></p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>bM (block tile 세로)</span><b id="mt-v-bm">128</b></label>
+        <input type="range" id="mt-s-bm" min="5" max="8" step="1" value="7">
+      </div>
+      <div class="slider">
+        <label><span>bN (block tile 가로)</span><b id="mt-v-bn">128</b></label>
+        <input type="range" id="mt-s-bn" min="5" max="8" step="1" value="7">
+      </div>
+      <div class="slider">
+        <label><span>bK (inner 차원)</span><b id="mt-v-bk">8</b></label>
+        <input type="range" id="mt-s-bk" min="2" max="6" step="1" value="3">
+      </div>
+      <div class="slider">
+        <label><span>block 당 thread</span><b id="mt-v-th">256</b></label>
+        <input type="range" id="mt-s-th" min="6" max="10" step="2" value="8">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="ch5">5장 32x32</button>
+      <button data-act="ch15">15장 128x128</button>
+      <button data-act="huge">256x256 — register 폭발</button>
+      <button data-act="bigk">bK=64 — shared 압박</button>
+      <button data-act="pad" id="mt-b-pad">padding 켬 (15.6)</button>
+      <button data-act="db" id="mt-b-db">double buffer 끔 (15.8)</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="mt-canvas" width="880" height="400"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--correct)"></i>여유 있음</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>압박 · 한계 초과</span>
+      <span><i class="swatch" style="background:var(--predict)"></i>arithmetic intensity</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>H100 임계값 20 FLOP/B</span>
+    </div>
+    <div class="readout" id="mt-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('mt-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('mt-readout');
+
+  var RIDGE = 66.9/3.35;        // H100 임계값 20.0 FLOP/B (5장 노트)
+  var SMEM_SM = 228*1024;       // H100 의 SM 당 shared memory
+  var RF = 64*1024;             // register file (register 개수)
+  var MAXREG = 255, MAXTHR = 2048, MAXBLK = 32;
+  var pad = true, dbuf = false;
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  var g = function (id) { return +document.getElementById(id).value; };
+
+  function state() {
+    var bM = 1 << g('mt-s-bm'), bN = 1 << g('mt-s-bn'),
+        bK = 1 << g('mt-s-bk'), th = 1 << g('mt-s-th');
+    // thread 를 정사각에 가깝게 배치한다 (64→8x8, 256→16x16, 1024→32x32)
+    var side = Math.round(Math.sqrt(th));
+    var tM = bM/side, tN = bN/side;
+    var ai = 0.5*bM*bN/(bM + bN);
+    var ldas = bK + (pad ? 1 : 0);
+    var smem = (bM*ldas + bK*bN)*4 * (dbuf ? 2 : 1);
+    var regsMin = tM*tN + tM + tN;                   // 책 p.363 의 64 + 8 + 8 = 80
+    var regsAlloc = Math.min(MAXREG, regsMin + 16);  // 임시값 16개 가정 (하한 추정)
+    var feasible = (tM >= 1 && tN >= 1 && regsMin <= MAXREG && smem <= SMEM_SM);
+    // SM 당 block 수 — register · shared memory · block 상한 중 최소
+    var byReg = Math.floor(RF/(Math.max(1, regsAlloc)*th));
+    var bySmem = Math.floor(SMEM_SM/Math.max(1, smem));
+    var byThr = Math.floor(MAXTHR/th);
+    var blocks = Math.max(0, Math.min(byReg, bySmem, byThr, MAXBLK));
+    // 책이 말하는 '실전' — 컴파일러가 thread 당 255 를 다 쓴다 (책 p.363)
+    var blocksMax = Math.max(0, Math.min(Math.floor(RF/(MAXREG*th)), bySmem2(smem), byThr, MAXBLK));
+    function bySmem2(sm) { return Math.floor(SMEM_SM/Math.max(1, sm)); }
+    return { bM: bM, bN: bN, bK: bK, th: th, side: side, tM: tM, tN: tN,
+             ai: ai, ldas: ldas, smem: smem, regsMin: regsMin, regsAlloc: regsAlloc,
+             feasible: feasible, blocks: blocks, occ: blocks*th/MAXTHR,
+             occMax: blocksMax*th/MAXTHR, blocksMax: blocksMax,
+             byReg: byReg, bySmem: bySmem, byThr: byThr };
+  }
+
+  function draw() {
+    var S = state();
+    document.getElementById('mt-v-bm').textContent = S.bM;
+    document.getElementById('mt-v-bn').textContent = S.bN;
+    document.getElementById('mt-v-bk').textContent = S.bK;
+    document.getElementById('mt-v-th').textContent = S.th;
+    document.getElementById('mt-b-pad').textContent = pad ? 'padding 켬 (15.6)' : 'padding 끔 (15.6)';
+    document.getElementById('mt-b-db').textContent = dbuf ? 'double buffer 켬 (15.8)'
+                                                          : 'double buffer 끔 (15.8)';
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 400;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '12px system-ui, sans-serif';
+
+    var lx = 176, bw = W - lx - 80;
+
+    // ── ① arithmetic intensity (선형, 최대 64) ──────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('① arithmetic intensity  AI = 0.5·bM·bN/(bM+bN)   — 점선(20 FLOP/B)을 넘어야 compute-bound',
+                 4, 18);
+    var AIMAX = 64, y1 = 30, h1 = 26;
+    ctx.strokeStyle = css('--rule-soft');
+    ctx.strokeRect(lx, y1, bw, h1);
+    ctx.fillStyle = css('--predict'); ctx.globalAlpha = 0.8;
+    ctx.fillRect(lx, y1, bw*Math.min(1, S.ai/AIMAX), h1);
+    ctx.globalAlpha = 1;
+    var rx = lx + bw*RIDGE/AIMAX;
+    ctx.strokeStyle = css('--ink-faint');
+    ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(rx, y1 - 6); ctx.lineTo(rx, y1 + h1 + 6); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('20', rx, y1 - 9);
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+    ctx.fillText('arithmetic intensity', lx - 8, y1 + 18);
+    ctx.fillStyle = css(S.ai > RIDGE ? '--correct' : '--accent'); ctx.textAlign = 'left';
+    ctx.fillText(S.ai.toFixed(1) + ' FLOP/B  ' + (S.ai > RIDGE ? 'compute-bound' : 'memory-bound'),
+                 lx + bw*Math.min(1, S.ai/AIMAX) + 8, y1 + 18);
+
+    // ── ② 자원 세 개 ────────────────────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('② SM 자원 압박', 4, 88);
+    var rows = [
+      { k: 'shared memory / SM 228 KB', v: S.smem, max: SMEM_SM,
+        txt: (S.smem/1024).toFixed(1) + ' KB', bad: S.smem > SMEM_SM },
+      { k: 'thread 당 register / 255', v: S.regsMin, max: MAXREG,
+        txt: S.regsMin + ' 개 (출력 ' + (S.tM*S.tN) + ' + strip ' + (S.tM + S.tN) + ', 임시값 제외)'
+             + (S.regsMin > MAXREG ? ' ← 초과! spill' : ''), bad: S.regsMin > MAXREG },
+      { k: 'occupancy / 2048 thread', v: S.occ, max: 1,
+        txt: (S.occ*100).toFixed(1) + '%  (block ' + S.blocks + '개 × ' + S.th + ')'
+             + '  · 255 다 쓰면 ' + (S.occMax*100).toFixed(1) + '%',
+        bad: false, good: true }
+    ];
+    rows.forEach(function (r, i) {
+      var y = 100 + i*30;
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(r.k, lx - 8, y + 15);
+      ctx.strokeStyle = css('--rule-soft'); ctx.strokeRect(lx, y, bw, 20);
+      var frac = Math.min(1, r.v/r.max);
+      ctx.fillStyle = css(r.bad ? '--accent' : (r.good ? '--correct'
+                        : (frac > 0.7 ? '--accent' : '--correct')));
+      ctx.globalAlpha = 0.8; ctx.fillRect(lx, y, Math.max(2, bw*frac), 20);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'left';
+      ctx.fillText(r.txt, lx + Math.max(2, bw*frac) + 8, y + 15);
+    });
+
+    // ── ③ tile 계층 그림 ────────────────────────────────────────
+    var ty = 208;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('③ tile 계층 — block tile 안에 thread tile 이 ' + S.side + '×' + S.side + ' 개',
+                 4, ty - 6);
+    var box = 128, ox = 40;
+    ctx.strokeStyle = css('--rule'); ctx.strokeRect(ox, ty, box, box);
+    var n = Math.min(S.side, 16);                      // 격자는 16x16 까지만 그린다
+    ctx.strokeStyle = css('--rule-soft'); ctx.lineWidth = 1;
+    for (var i2 = 1; i2 < n; i2++) {
+      ctx.beginPath(); ctx.moveTo(ox + box*i2/n, ty); ctx.lineTo(ox + box*i2/n, ty + box); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ox, ty + box*i2/n); ctx.lineTo(ox + box, ty + box*i2/n); ctx.stroke();
+    }
+    ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.55;
+    ctx.fillRect(ox + box/n, ty + box/n, box/n, box/n);       // thread 하나 강조
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('block tile ' + S.bM + '×' + S.bN, ox + box/2, ty + box + 16);
+    ctx.fillText('thread tile ' + S.tM + '×' + S.tN, ox + box/2, ty + box + 32);
+
+    // 오른쪽 설명 — 각 항목이 어느 절의 결과인지
+    var ex = ox + box + 40, ey = ty + 6;
+    var notes = [
+      ['15.2', 'AI 는 bK 와 무관 — bK 는 shared memory 만 먹는다'],
+      ['15.4', 'shared 읽기 ' + (2*S.tM*S.tN*S.bK) + ' → ' + (S.bK*(S.tM + S.tN))
+               + ' 회 (' + (2*S.tM*S.tN/(S.tM + S.tN)).toFixed(1) + '×)'],
+      ['15.6', 'A_s leading dim ' + S.bK + ' → ' + S.ldas
+               + (pad ? ' (bank conflict 없음)' : ' (8-way conflict)')],
+      ['15.7', 'register ' + S.tM*S.tN + '(출력) + ' + (S.tM + S.tN) + '(strip) = ' + S.regsMin],
+      ['15.8', 'double buffer ' + (dbuf ? '켬 — shared 2배' : '끔')]
+    ];
+    notes.forEach(function (nt, i3) {
+      ctx.fillStyle = css('--accent'); ctx.textAlign = 'left';
+      ctx.fillText(nt[0], ex, ey + i3*22 + 12);
+      ctx.fillStyle = css('--ink-soft');
+      ctx.fillText(nt[1], ex + 36, ey + i3*22 + 12);
+    });
+
+    // ── 숫자 ────────────────────────────────────────────────────
+    var limiter = (S.byReg <= S.bySmem && S.byReg <= S.byThr) ? 'register'
+                : (S.bySmem <= S.byThr ? 'shared memory' : 'thread 수');
+    var M = 4096;
+    var load = M*M*M*(1/S.bM + 1/S.bN);
+    out.innerHTML =
+      'block tile <b>' + S.bM + '×' + S.bN + '</b> · bK <b>' + S.bK + '</b> · thread <b>'
+      + S.th + '</b> (' + S.side + '×' + S.side + ') → thread tile <b>' + S.tM + '×' + S.tN
+      + '</b> · 검산 ' + S.th + '×' + (S.tM*S.tN) + ' = ' + (S.th*S.tM*S.tN)
+      + (S.th*S.tM*S.tN === S.bM*S.bN ? ' ✓' : ' ✗') + '<br>'
+      + '<b>AI ' + S.ai.toFixed(1) + ' FLOP/B</b> (임계값 20.0) · '
+      + 'shared <b>' + (S.smem/1024).toFixed(1) + ' KB</b> · '
+      + 'register <b>' + S.regsMin + '</b>/255 (임시값 제외) · '
+      + 'SM 당 block <b>' + S.blocks + '</b> → occupancy <b>' + (S.occ*100).toFixed(1) + '%</b> · '
+      + '제약은 <b>' + limiter + '</b><br>'
+      + 'M=N=K=4096 일 때 전역 적재 <b>' + (load/1e9).toFixed(2) + ' G</b> 원소 '
+      + '(= K·M·N·(1/bM + 1/bN)) · shared 읽기 <b>'
+      + (2*S.tM*S.tN/(S.tM + S.tN)).toFixed(1) + '×</b> 감소 (15.4절)<br>'
+      + '<b>책의 실전 수치</b>: 공격적 unrolling 으로 컴파일러가 thread 당 <b>255</b> 를 다 쓰므로 '
+      + RF.toLocaleString() + '/255 = ' + Math.floor(RF/MAXREG) + ' thread → block <b>'
+      + S.blocksMax + '</b>개 → occupancy <b>' + (S.occMax*100).toFixed(1) + '%</b> '
+      + '(책 p.363 의 12.5% 는 128×128·256 thread 설정의 값이다)<br>'
+      + (!S.feasible
+          ? '<b>이 설정은 실행할 수 없다</b> — '
+            + (S.regsMin > MAXREG ? 'thread 당 register 가 255 를 넘어 local memory 로 spill 된다.'
+                               : 'shared memory 가 SM 용량을 넘는다.')
+            + ' tile 을 줄이거나 thread 를 늘려야 한다.'
+          : (S.ai > RIDGE
+              ? '<b>compute-bound 다.</b> occupancy 가 낮아도 arithmetic intensity가 이긴다 (15.7절) — '
+                + '대신 vector load/store · loop unrolling · software pipelining 이 필요하다.'
+              : '<b>memory-bound 다.</b> bM·bN 을 키워야 임계값을 넘는다. '
+                + 'bK 를 키우는 것은 도움이 되지 않는다 (AI 가 bK 와 무관).'));
+  }
+
+  document.querySelectorAll('#w-mt [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      var S = { bm: 'mt-s-bm', bn: 'mt-s-bn', bk: 'mt-s-bk', th: 'mt-s-th' };
+      function set(bm, bn, bk, th) {
+        document.getElementById(S.bm).value = bm; document.getElementById(S.bn).value = bn;
+        document.getElementById(S.bk).value = bk; document.getElementById(S.th).value = th;
+      }
+      if (a === 'ch5')       set(5, 5, 3, 10);      // 32x32, bK=8, 1024 thread
+      else if (a === 'ch15') set(7, 7, 3, 8);       // 128x128, bK=8, 256 thread
+      else if (a === 'huge') set(8, 8, 3, 8);       // 256x256 → register 폭발
+      else if (a === 'bigk') set(7, 7, 6, 8);       // bK=64
+      else if (a === 'pad')  pad = !pad;
+      else if (a === 'db')   dbuf = !dbuf;
+      else { set(7, 7, 3, 8); pad = true; dbuf = false; }
+      draw();
+    });
+  });
+  ['mt-s-bm', 'mt-s-bn', 'mt-s-bk', 'mt-s-th'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

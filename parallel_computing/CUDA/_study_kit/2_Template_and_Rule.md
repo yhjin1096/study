@@ -809,3 +809,43 @@ representation)` 으로 병기한다.
 **`배` / `×` 경계 — 14장에서 나온 사례.**
 - "$10^5\times$ 더 많은 일", "$4\times$ 감소", "$4\times$ 증가" → **두 값의 비교 → `×`**
 - "구획 크기를 **두 배**씩 키우며" → **한 대상을 키우는 것 → `배`**
+
+
+### 15장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| GEMM (General Matrix Multiply) | (약어 그대로) |
+| leading dimension (`lda`·`ldb`·`ldc`) | 선행 차원 |
+| block-level / warp-level / thread-level tile | 블록 수준 타일 |
+| strip (register tile 의) | 스트립 — **"strip 쌍", "입력 strip" 으로 영어에 조사** |
+| software pipelining / warp specialization | 소프트웨어 파이프라이닝 / 워프 특화 |
+| double buffering | 이중 버퍼링 (6장 규약 그대로) |
+| tensor core / tensor memory (TMEM) | 텐서 코어 |
+| WMMA / WGMMA / LDGSTS / TMA | (약어 그대로) |
+| cuBLAS / cuDNN / CUTLASS / cuTile | (고유명사 그대로) |
+| prologue / steady state / epilogue | 도입부 / 정상 구간 / 마무리 |
+| `float4` / `__forceinline__` / `#pragma unroll` | (코드 식별자 — 백틱 그대로) |
+
+**15장에서 다시 확인한 것 — `arithmetic intensity` 는 영어다**
+
+5·7·8장이 모두 `arithmetic intensity` 로 써 왔다 (5장 규칙표의 "쓰지 말 것"에
+**산술 강도**가 명시돼 있다). 15장 초고에서 **29곳을 "산술 강도"로 쓴 것을 전량 되돌렸다.**
+
+> **교훈**: 장이 바뀌면 앞 장의 표기를 잊는다.
+> 새 장을 끝낼 때 **그 장의 핵심 용어가 앞 장에서 어떻게 쓰였는지 grep 으로 대조**하라.
+> ```bash
+> for f in part*/*/*.md; do printf "%-28s %s\n" "$(basename $f)" \
+>   "$(grep -o 'arithmetic intensity' $f | wc -l)"; done
+> ```
+
+**15장에서 추가로 한국어를 쓰는 것**: **외적**(outer product), **내적**, **정렬**(alignment),
+**임계값**(roofline 의 ridge point), **선형 결합**, **순열**, **사분면**(quadrant),
+**정보이론적 하한**은 한국어 수학 교재에서 표준이다.
+`swizzle` 은 **XOR swizzle** 로 영어를 쓴다 (고유한 기법 이름).
+
+**`배` / `×` 경계 — 15장에서 나온 사례.**
+- "연산이 **$34\times$** 오래 걸린다", "**$8\times$** 감소", "정사각이 **25%** 낫다" →
+  **두 값의 비교 → `×`** 또는 백분율
+- "shared memory **두 배**", "반복 **두 배**", "loop 를 **2배** unroll" →
+  **한 대상을 키우는 것 → `배`**

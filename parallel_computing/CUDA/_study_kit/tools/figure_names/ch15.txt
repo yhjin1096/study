@@ -1,0 +1,19 @@
+# 15장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 15 --book-pages 349-372 \
+#         --out part2_patterns/15_matmul_advanced/images \
+#         --names _study_kit/tools/figure_names/ch15.txt
+
+Figure 15.1  = fig15_1_tiled_review
+Figure 15.2  = fig15_2_large_tiles
+Figure 15.3  = fig15_3_kernel
+Figure 15.4  = fig15_4_clear
+Figure 15.5  = fig15_5_loadtile
+Figure 15.6  = fig15_6_mm
+Figure 15.7  = fig15_7_writetile
+Figure 15.8  = fig15_8_register_tiling
+Figure 15.9  = fig15_9_mm_register
+Figure 15.10 = fig15_10_rearrange
+Figure 15.11 = fig15_11_padding
+Figure 15.12 = fig15_12_interleaving
+Figure 15.13 = fig15_13_timing
+Figure 15.14 = fig15_14_pipelining
