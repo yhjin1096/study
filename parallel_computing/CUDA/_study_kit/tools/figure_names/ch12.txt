@@ -1,0 +1,16 @@
+# 12장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 12 --book-pages 289-302 \
+#         --out part2_patterns/12_filter/images \
+#         --names _study_kit/tools/figure_names/ch12.txt
+
+Figure 12.1  = fig12_1_unstable_vs_stable
+Figure 12.2  = fig12_2_unstable_kernel
+Figure 12.3  = fig12_3_coalesced_atomic_kernel
+Figure 12.4  = fig12_4_coalesced_group_kernel
+Figure 12.5  = fig12_5_privatization
+Figure 12.6  = fig12_6_privatization_kernel
+Figure 12.7  = fig12_7_stable_filter
+Figure 12.8  = fig12_8_stable_kernel
+Figure 12.9  = fig12_9_shared_memory_coalescing
+Figure 12.10 = fig12_10_thread_coarsening
+Figure 12.11 = fig12_11_dependence_diagram
