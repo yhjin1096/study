@@ -1,0 +1,305 @@
+<!--
+  Sparse formats — 17장의 다섯 형식을 같은 행렬 위에서 나란히 비교한다.
+
+  대응: 책 17.2~17.7절 (p.404~421) · Figure 17.3·17.7·17.10·17.13·17.14
+  저장 공식은 연습 2 의 답 그대로다.
+    COO = 3z · CSR = 2z+(m+1) · ELL = 2mK · JDS = 2z+m+(K+1)
+    hybrid ELL-COO = 2m·Kh + 3·(넘친 non-zero)
+  "첫 반복에 thread t 가 읽는 value index" 도 각 kernel 코드 그대로 계산한다.
+    COO i=t · CSR i=rowPtrs[t] · ELL i=t · JDS i=iterPtr[0]+t=t · CSC i=colPtrs[t]
+  프리셋이 책의 예를 재현한다.
+    Figure 17.1 (4x4, z=8, K=3) → COO 24 · CSR 21 · ELL 24 · JDS 24 · dense 16
+    "한 행이 튄다" 가 17.4절의 'CSR 의 20배' 상황을 작은 규모로 보여 준다.
+-->
+<div class="lab" id="w-sf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">어느 형식이 이기는지는 데이터가 정한다</span>
+    <span class="lab-note">책 17.2~17.7절 (p.404~421) 의 다섯 축 비교</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽이 sparse matrix 이고 오른쪽 숫자가 <b>행별 non-zero 수</b> 다.
+       <b>편향</b> 슬라이더를 오른쪽으로 밀면 <b>한 행에 non-zero 가 몰려</b>
+       <code>K</code>(행별 최대)가 커진다.
+       <b><code>K</code> 가 커지면 ELL 의 저장이 폭발하고</b>(2mK 이므로),
+       <b>JDS 는 정렬로 divergence 를 없애며</b>, <b>hybrid 는 긴 행을 COO 로 덜어낸다.</b>
+       아래는 <b>첫 반복에 thread 0~7 이 읽는 <code>value[]</code> index</b> —
+       <b>연속이면 coalesced</b> 다.</p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>행 수 m (= 열 수)</span><b id="sf-v-m">8</b></label>
+        <input type="range" id="sf-s-m" min="4" max="16" step="1" value="8">
+      </div>
+      <div class="slider">
+        <label><span>행당 평균 non-zero</span><b id="sf-v-d">2</b></label>
+        <input type="range" id="sf-s-d" min="1" max="6" step="1" value="2">
+      </div>
+      <div class="slider">
+        <label><span>편향 (0 = 고르게, 큰 값 = 한 행에 몰림)</span><b id="sf-v-s">0</b></label>
+        <input type="range" id="sf-s-s" min="0" max="10" step="1" value="0">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="fig1">Figure 17.1 (4×4)</button>
+      <button data-act="even">고른 행 — ELL 이 이긴다</button>
+      <button data-act="skew">한 행이 튄다 — ELL 폭발</button>
+      <button data-act="coo">COO</button>
+      <button data-act="csr">CSR</button>
+      <button data-act="ell">ELL</button>
+      <button data-act="jds">JDS</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="sf-canvas" width="880" height="352"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>non-zero</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>padding · 압박</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>여유 · 선택한 형식</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>0 원소</span>
+    </div>
+    <div class="readout" id="sf-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('sf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('sf-readout');
+  var fmt = 'CSR';
+  var FIG1 = [[1,7,0,0],[5,0,3,9],[0,2,8,0],[0,0,0,6]];
+  var useFig1 = false;
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  var g = function (id) { return +document.getElementById(id).value; };
+
+  // 결정적 의사난수 — 같은 설정이면 언제나 같은 행렬
+  function makeMatrix(m, avg, skew) {
+    if (useFig1) return FIG1;
+    var seed = 987654321;
+    function rnd() { seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; }
+    // 행 길이를 정한다 — 편향이 크면 한 행에 몰아준다
+    var lens = [];
+    for (var r = 0; r < m; r++) lens.push(avg);
+    if (skew > 0) {
+      var move = Math.min(skew, m - 1) * Math.max(1, Math.floor(avg/2));
+      var taken = 0;
+      for (var r2 = 1; r2 < m && taken < move; r2++) {
+        var give = Math.min(lens[r2] - 1, move - taken);
+        if (give > 0) { lens[r2] -= give; taken += give; }
+      }
+      lens[0] = Math.min(m, lens[0] + taken);
+    }
+    var A = [];
+    for (var i = 0; i < m; i++) {
+      var row = new Array(m).fill(0), placed = 0, guard = 0;
+      while (placed < Math.min(lens[i], m) && guard < 200) {
+        var c = Math.floor(rnd()*m);
+        if (!row[c]) { row[c] = 1 + Math.floor(rnd()*9); placed++; }
+        guard++;
+      }
+      A.push(row);
+    }
+    return A;
+  }
+
+  function analyze(A) {
+    var m = A.length, n = A[0].length;
+    var rows = A.map(function (r) {
+      var o = []; r.forEach(function (v, j) { if (v) o.push([j, v]); }); return o; });
+    var lens = rows.map(function (r) { return r.length; });
+    var z = lens.reduce(function (a, b) { return a + b; }, 0);
+    var K = Math.max.apply(null, lens), minL = Math.min.apply(null, lens);
+    // rowPtrs / colPtrs
+    var rowPtrs = [0]; lens.forEach(function (L) { rowPtrs.push(rowPtrs[rowPtrs.length-1] + L); });
+    var colLens = []; for (var j = 0; j < n; j++) {
+      var c = 0; for (var i = 0; i < m; i++) if (A[i][j]) c++; colLens.push(c); }
+    var colPtrs = [0]; colLens.forEach(function (L) { colPtrs.push(colPtrs[colPtrs.length-1] + L); });
+    // JDS: 긴 행부터 정렬
+    var order = lens.map(function (L, i) { return i; })
+                    .sort(function (a, b) { return lens[b] - lens[a] || a - b; });
+    var jdsLens = order.map(function (i) { return lens[i]; });
+    // hybrid: K_h = 중앙값
+    var sorted = lens.slice().sort(function (a, b) { return a - b; });
+    var Kh = Math.max(1, sorted[Math.floor(m/2)]);
+    var overflow = lens.reduce(function (s, L) { return s + Math.max(0, L - Kh); }, 0);
+    return { m: m, n: n, rows: rows, lens: lens, z: z, K: K, minL: minL,
+             rowPtrs: rowPtrs, colPtrs: colPtrs, order: order, jdsLens: jdsLens,
+             Kh: Kh, overflow: overflow,
+             store: { COO: 3*z, CSR: 2*z + m + 1, ELL: 2*m*K,
+                      JDS: 2*z + m + K + 1, hybrid: 2*m*Kh + 3*overflow,
+                      dense: m*n } };
+  }
+
+  // 첫 반복에 thread t 가 읽는 value[] index — 각 kernel 코드 그대로
+  function firstAccess(S, f) {
+    var out = [], lim = Math.min(8, S.m);
+    for (var t = 0; t < lim; t++) {
+      if (f === 'COO')      out.push(t);
+      else if (f === 'CSR') out.push(S.rowPtrs[t]);
+      else if (f === 'ELL') out.push(t);
+      else if (f === 'JDS') out.push(t);
+      else if (f === 'CSC') out.push(S.colPtrs[t]);
+    }
+    return out;
+  }
+
+  function draw() {
+    var m = useFig1 ? 4 : g('sf-s-m'), avg = g('sf-s-d'), skew = g('sf-s-s');
+    var A = makeMatrix(m, avg, skew), S = analyze(A);
+    document.getElementById('sf-v-m').textContent = S.m;
+    document.getElementById('sf-v-d').textContent = avg;
+    document.getElementById('sf-v-s').textContent = skew;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 352;
+    if (cv.width !== W*dpr || cv.height !== H*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 왼쪽: 행렬 ───────────────────────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('sparse matrix — 오른쪽 숫자가 행별 non-zero 수', 4, 16);
+    var gx = 16, gy = 28, gw = Math.min(172, W*0.23), cs = gw/S.m;
+    for (var i = 0; i < S.m; i++) {
+      for (var j = 0; j < S.n; j++) {
+        var x = gx + j*cs, y = gy + i*cs;
+        ctx.fillStyle = A[i][j] ? css('--predict') : css('--ink-faint');
+        ctx.globalAlpha = A[i][j] ? 0.8 : 0.12;
+        ctx.fillRect(x, y, cs - 0.7, cs - 0.7);
+        ctx.globalAlpha = 1;
+      }
+      // 행 길이 막대 + 숫자
+      var bw2 = (S.lens[i]/Math.max(1, S.K)) * 42;
+      ctx.fillStyle = css(S.lens[i] === S.K ? '--accent' : '--correct');
+      ctx.globalAlpha = 0.6; ctx.fillRect(gx + gw + 6, gy + i*cs, bw2, cs - 1);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+      if (cs >= 9) ctx.fillText(S.lens[i], gx + gw + 52, gy + i*cs + cs - 1);
+    }
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'left';
+    ctx.fillText('K = ' + S.K + ' (최대) · 최소 ' + S.minL + ' · z = ' + S.z,
+                 gx, gy + gw + 15);
+
+    // ── 오른쪽 위: 형식별 저장 ───────────────────────────────────
+    var bx = gx + gw + 120, bw = W - bx - 90, by = 30;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('형식별 저장 (정수 개수) — 점선이 dense (m×n)', bx - 66, 16);
+    var keys = ['COO', 'CSR', 'ELL', 'JDS', 'hybrid'];
+    var mx = Math.max.apply(null, keys.map(function (k) { return S.store[k]; })
+                                      .concat([S.store.dense]));
+    keys.forEach(function (k, i) {
+      var y = by + i*24;
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(k, bx - 8, y + 13);
+      var frac = S.store[k]/mx, sel = (k === fmt);
+      ctx.fillStyle = css(S.store[k] > S.store.dense ? '--accent'
+                          : (sel ? '--correct' : '--predict'));
+      ctx.globalAlpha = sel ? 0.9 : 0.55;
+      ctx.fillRect(bx, y, Math.max(2, bw*frac), 17);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'left';
+      ctx.fillText(S.store[k].toLocaleString(), bx + Math.max(2, bw*frac) + 6, y + 13);
+    });
+    var dx = bx + bw*S.store.dense/mx;
+    ctx.strokeStyle = css('--ink-faint'); ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(dx, by - 4); ctx.lineTo(dx, by + 5*24 - 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('dense ' + S.store.dense, dx, by + 5*24 + 11);
+
+    // ── 오른쪽 아래: 첫 반복 접근 패턴 ──────────────────────────
+    var ay = by + 5*24 + 34;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('첫 반복에 thread 0~' + (Math.min(8, S.m) - 1)
+                 + ' 이 읽는 value[] index — ' + fmt, bx - 66, ay - 6);
+    var acc = firstAccess(S, fmt), span = Math.max(1, S.z);
+    ctx.strokeStyle = css('--rule'); ctx.beginPath();
+    ctx.moveTo(bx, ay + 22); ctx.lineTo(bx + bw, ay + 22); ctx.stroke();
+    acc.forEach(function (v, t) {
+      var x = bx + bw*v/span;
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.85;
+      ctx.fillRect(x - 2, ay + 6, 4, 16); ctx.globalAlpha = 1;
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+      if (acc.length <= 8) ctx.fillText(v, x, ay + 36);
+    });
+    var contiguous = acc.every(function (v, t) { return t === 0 || v === acc[t-1] + 1; });
+    ctx.fillStyle = css(contiguous ? '--correct' : '--accent'); ctx.textAlign = 'left';
+    ctx.fillText(contiguous ? '연속 → coalesced ✓' : '흩어짐 → uncoalesced ✗',
+                 bx, ay + 54);
+
+    // ── 아래: 다섯 축 요약 ──────────────────────────────────────
+    var ty = Math.max(gy + gw + 34, ay + 70);
+    var axes = {
+      COO:    ['3z',            '최고',  'nz→(r,c)', 'coalesced',  '완벽',  '필요'],
+      CSR:    ['2z+(m+1)',      '나쁨',  'r→nz',     'uncoalesced', '나쁨', '불필요'],
+      ELL:    ['2mK',           '좋음',  '둘 다',     'coalesced',  '나쁨',  '불필요'],
+      JDS:    ['2z+m+(K+1)',    '최악',  'r→nz',     'coalesced',  '좋음',  '불필요'],
+      hybrid: ['2m·Kh+3·넘침',  '좋음',  '일부',      'coalesced',  '좋음',  '일부']
+    };
+    var hdr = ['형식', '저장', '유연성', '접근성', 'coalescing', '부하 균형', 'atomic'];
+    var colw = [64, 108, 56, 76, 96, 66, 56];
+    var tx = 8;
+    ctx.font = '10px system-ui, sans-serif';
+    hdr.forEach(function (h, c) {
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+      ctx.fillText(h, tx + colw.slice(0, c).reduce(function (a,b){return a+b;}, 0), ty);
+    });
+    keys.forEach(function (k, r) {
+      var y = ty + 15 + r*14, sel = (k === fmt);
+      if (sel) { ctx.fillStyle = css('--correct'); ctx.globalAlpha = 0.14;
+                 ctx.fillRect(tx - 3, y - 10, colw.reduce(function(a,b){return a+b;},0), 13);
+                 ctx.globalAlpha = 1; }
+      [k].concat(axes[k]).forEach(function (v, c) {
+        ctx.fillStyle = css(c === 0 ? '--ink' : '--ink-soft'); ctx.textAlign = 'left';
+        ctx.fillText(v, tx + colw.slice(0, c).reduce(function (a,b){return a+b;}, 0), y);
+      });
+    });
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 숫자 ────────────────────────────────────────────────────
+    var pad = S.m*S.K - S.z, div = S.K - S.minL;
+    out.innerHTML =
+      'm = n = <b>' + S.m + '</b> · non-zero <b>' + S.z + '</b> (밀도 '
+      + (S.z/(S.m*S.n)*100).toFixed(0) + '%) · <b>K = ' + S.K + '</b> · 최소 행 '
+      + S.minL + '<br>'
+      + '<b>ELL padding</b> ' + pad + '개 (' + (pad/(S.m*S.K)*100).toFixed(0)
+      + '% 가 낭비) · <b>hybrid</b> Kh=' + S.Kh + ' 로 자르면 COO 로 '
+      + S.overflow + '개, padding ' + Math.max(0, S.m*S.Kh - (S.z - S.overflow)) + '개<br>'
+      + '<b>divergence</b> — CSR·ELL 은 thread 별 반복이 ' + S.minL + '~' + S.K
+      + ' 로 갈린다 (차이 <b>' + div + '</b>). '
+      + 'JDS 는 정렬 후 ' + S.jdsLens.slice(0, 8).join(',')
+      + (S.m > 8 ? ',…' : '') + ' 로 <b>이웃 차이가 최소</b><br>'
+      + '<b>저장</b> — ' + keys.map(function (k) {
+          return k + ' ' + S.store[k].toLocaleString(); }).join(' · ')
+      + ' · dense ' + S.store.dense.toLocaleString() + '<br>'
+      + (S.store.ELL > S.store.CSR*3
+          ? '<b>ELL 이 CSR 의 ' + (S.store.ELL/S.store.CSR).toFixed(1)
+            + '배다 — K 하나 때문에 2mK 가 폭발했다.</b> hybrid 나 JDS 로 가야 한다.'
+          : (S.store.ELL <= S.store.CSR
+              ? '<b>행이 고르면 ELL 이 이긴다</b> — padding 이 적고 coalescing 까지 얻는다.'
+              : '균형 잡힌 영역 — 형식 선택이 응용의 다른 요구(유연성·접근성)에 달렸다.'))
+      + '<br>모든 형식이 dense(' + S.store.dense + ')보다 크면 <b>이 행렬은 아직 충분히 성기지 않다</b>'
+      + ' (17.1절).';
+  }
+
+  document.querySelectorAll('#w-sf [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      var M = document.getElementById('sf-s-m'), D = document.getElementById('sf-s-d'),
+          Sk = document.getElementById('sf-s-s');
+      if (a === 'fig1')      { useFig1 = true; }
+      else if (a === 'even') { useFig1 = false; M.value = 12; D.value = 3; Sk.value = 0; }
+      else if (a === 'skew') { useFig1 = false; M.value = 12; D.value = 3; Sk.value = 10; }
+      else if (a === 'reset'){ useFig1 = false; M.value = 8; D.value = 2; Sk.value = 0; fmt = 'CSR'; }
+      else                   { fmt = a.toUpperCase(); }
+      draw();
+    });
+  });
+  ['sf-s-m', 'sf-s-d', 'sf-s-s'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { useFig1 = false; draw(); });
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>

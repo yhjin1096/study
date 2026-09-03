@@ -34,7 +34,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 14장 Sorting | ✅ | ✅ 13개 | ✅ radix-sort |
 | 15장 Advanced optimizations for matrix multiplication | ✅ | ✅ 14개 | ✅ matmul-tiles |
 | 16장 Dynamic programming and wavefront parallelism | ✅ | ✅ 21개 | ✅ wavefront |
-| 17장 Sparse matrix computation | ⬜ | — | — |
+| 17장 Sparse matrix computation | ✅ | ✅ 18개 | ✅ sparse-formats |
 | 18장 Graph traversal | ⬜ | — | — |
 | 19장 Convolutional neural networks | ⬜ | — | — |
 | 20장 Large language models | ⬜ | — | — |

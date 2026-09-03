@@ -1,0 +1,23 @@
+# 17장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 17 --book-pages 401-424 \
+#         --out part3_applications/17_sparse_matrix/images \
+#         --names _study_kit/tools/figure_names/ch17.txt
+
+Figure 17.1  = fig17_1_sparse_example
+Figure 17.2  = fig17_2_spmv
+Figure 17.3  = fig17_3_coo
+Figure 17.4  = fig17_4_coo_parallel
+Figure 17.5  = fig17_5_coo_kernel
+Figure 17.6  = fig17_6_coo_reorder
+Figure 17.7  = fig17_7_csr
+Figure 17.8  = fig17_8_csr_parallel
+Figure 17.9  = fig17_9_csr_kernel
+Figure 17.10 = fig17_10_ell
+Figure 17.11 = fig17_11_ell_parallel
+Figure 17.12 = fig17_12_ell_kernel
+Figure 17.13 = fig17_13_hybrid
+Figure 17.14 = fig17_14_jds
+Figure 17.15 = fig17_15_jds_parallel
+Figure 17.16 = fig17_16_csc
+Figure 17.17 = fig17_17_csc_parallel
+Figure 17.18 = fig17_18_csc_kernel
