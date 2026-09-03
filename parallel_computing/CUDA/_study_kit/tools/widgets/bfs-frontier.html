@@ -1,0 +1,321 @@
+<div class="lab" id="w-bfsfrontier">
+  <div class="lab-head">
+    <span class="lab-tag">실험 18</span>
+    <span class="lab-title">BFS 네 구현의 작업량 — frontier 는 무엇을 없애는가</span>
+    <span class="lab-note">Figure 18.1 · 18.7 · 18.9 · 18.11 · 18.13 을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      Figure 18.1 의 예제 graph (정점 9개 · 간선 15개) 위에서 BFS 를 <b>한 level 씩</b> 돌린다.
+      네 구현이 같은 반복에서 각각 <b>몇 개의 thread 를 띄우고</b>, <b>몇 개가 실제로 일하며</b>,
+      <b>몇 개의 간선을 검사하는지</b> 보여 준다.
+      18.5절의 작업 복잡도 $O(d\cdot n + m)$ · $O(d(n{+}m))$ · $O(d\cdot m)$ · $O(n{+}m)$ 가
+      이 숫자로 실제로 나타난다.
+    </p>
+
+    <div class="btnrow" id="bfsf-roots"></div>
+    <div class="btnrow" id="bfsf-impls"></div>
+    <div class="btnrow">
+      <button id="bfsf-step">다음 반복 ▶</button>
+      <button id="bfsf-all" class="ghost">끝까지</button>
+      <button id="bfsf-reset" class="ghost">처음부터</button>
+    </div>
+
+    <canvas id="bfsf-canvas" width="880" height="390"></canvas>
+
+    <div class="legend" id="bfsf-legend"></div>
+    <div class="readout" id="bfsf-readout"></div>
+    <div class="log" id="bfsf-log" style="max-height:190px;overflow:auto;white-space:pre"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-bfsfrontier');
+  if (!root) return;
+  var cv = document.getElementById('bfsf-canvas');
+  var ctx = cv.getContext('2d');
+
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  // ── Figure 18.1 의 graph ────────────────────────────────────────────
+  var N = 9;
+  var EDGES = [[0,1],[0,2],[1,3],[1,4],[2,5],[2,6],[2,7],
+               [3,4],[3,8],[4,5],[4,8],[5,6],[6,8],[7,0],[7,6]];
+  var M = EDGES.length;
+  // Figure 18.1 의 배치를 그대로 옮긴 좌표 (0~1 정규화)
+  var POS = [[0.065,0.505],[0.270,0.295],[0.340,0.580],[0.440,0.090],
+             [0.605,0.272],[0.685,0.530],[0.685,0.808],[0.352,0.900],[0.915,0.305]];
+
+  // CSR / CSC 를 만든다 (18.1절 Figure 18.3 과 같은 배열)
+  var OUT = [], IN = [];
+  for (var v = 0; v < N; v++) { OUT.push([]); IN.push([]); }
+  EDGES.forEach(function (e, i) { OUT[e[0]].push(i); IN[e[1]].push(i); });
+
+  var IMPLS = [
+    {key:'push',     label:'vertex-centric push (CSR)'},
+    {key:'pull',     label:'vertex-centric pull (CSC)'},
+    {key:'edge',     label:'edge-centric (COO)'},
+    {key:'frontier', label:'frontier 기반 push (CSR)'}
+  ];
+
+  var state = { root: 0, impl: 'push', iters: [], k: 0 };
+
+  // ── 시뮬레이션: 반복마다 무슨 일이 벌어지는지 전부 기록한다 ─────────
+  function simulate(rootV, impl) {
+    var level = new Array(N).fill(-1);
+    level[rootV] = 0;
+    var out = [];
+    var frontier = [rootV];
+    for (var cl = 1; ; cl++) {
+      var rec = { level: cl, launched: 0, active: [], edges: [], labeled: [],
+                  breakEdge: {}, prevFrontier: frontier.slice(), currFrontier: [] };
+      var v, ei, e;
+      if (impl === 'push' || impl === 'frontier') {
+        var act = [];
+        for (v = 0; v < N; v++) if (level[v] === cl - 1) act.push(v);
+        rec.launched = (impl === 'push') ? N : frontier.length;
+        rec.active = act;
+        act.forEach(function (u) { OUT[u].forEach(function (idx) { rec.edges.push(idx); }); });
+      } else if (impl === 'pull') {
+        rec.launched = N;
+        for (v = 0; v < N; v++) {
+          if (level[v] !== -1) continue;
+          rec.active.push(v);
+          for (var t = 0; t < IN[v].length; t++) {
+            ei = IN[v][t];
+            rec.edges.push(ei);
+            if (level[EDGES[ei][0]] === cl - 1) { rec.breakEdge[v] = ei; break; }
+          }
+        }
+      } else { // edge
+        rec.launched = M;
+        for (ei = 0; ei < M; ei++) {
+          rec.edges.push(ei);
+          if (level[EDGES[ei][0]] === cl - 1) rec.active.push(ei);
+        }
+      }
+      // 실제 labeling (구현과 무관하게 같은 결과)
+      var newly = [];
+      EDGES.forEach(function (ed) {
+        if (level[ed[0]] === cl - 1 && level[ed[1]] === -1 && newly.indexOf(ed[1]) < 0)
+          newly.push(ed[1]);
+      });
+      rec.labeled = newly.slice();
+      rec.currFrontier = newly.slice();
+      rec.levelBefore = level.slice();
+      out.push(rec);
+      if (!newly.length) break;
+      newly.forEach(function (u) { level[u] = cl; });
+      frontier = newly.slice();
+    }
+    return out;
+  }
+
+  function totals(rootV, impl) {
+    var it = simulate(rootV, impl), L = 0, E = 0, A = 0;
+    it.forEach(function (r) {
+      L += r.launched;
+      E += (impl === 'edge') ? M : r.edges.length;
+      A += (impl === 'edge') ? r.active.length : r.active.length;
+    });
+    return { launched: L, edges: E, active: A, iters: it.length };
+  }
+
+  // ── 그리기 ──────────────────────────────────────────────────────────
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 390;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var rec = state.iters[state.k];
+    if (!rec) return;
+
+    var GW = Math.min(430, W * 0.52), GH = 330, GX = 10, GY = 14;
+    var R = 17;
+    function PX(i) { return GX + R + 6 + POS[i][0] * (GW - 2 * R - 12); }
+    function PY(i) { return GY + R + 6 + POS[i][1] * (GH - 2 * R - 12); }
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), panel = css('--panel');
+
+    var hot = {}, brk = {};
+    rec.edges.forEach(function (i) { hot[i] = 1; });
+    if (state.impl === 'edge') { hot = {}; rec.active.forEach(function (i) { hot[i] = 1; }); }
+    Object.keys(rec.breakEdge).forEach(function (v) { brk[rec.breakEdge[v]] = 1; });
+
+    // 간선
+    EDGES.forEach(function (e, i) {
+      var x1 = PX(e[0]), y1 = PY(e[0]), x2 = PX(e[1]), y2 = PY(e[1]);
+      var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+      var sx = x1 + dx / L * R, sy = y1 + dy / L * R;
+      var tx = x2 - dx / L * (R + 3), ty = y2 - dy / L * (R + 3);
+      var on = !!hot[i];
+      ctx.strokeStyle = brk[i] ? correct : (on ? accent : rule);
+      ctx.lineWidth = on ? 2.4 : 1;
+      ctx.globalAlpha = on ? 1 : 0.4;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+      // 화살촉
+      var a = Math.atan2(dy, dx), hl = on ? 9 : 6;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(tx - hl * Math.cos(a - 0.4), ty - hl * Math.sin(a - 0.4));
+      ctx.lineTo(tx - hl * Math.cos(a + 0.4), ty - hl * Math.sin(a + 0.4));
+      ctx.closePath();
+      ctx.fillStyle = brk[i] ? correct : (on ? accent : rule);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // 정점
+    var activeSet = {};
+    if (state.impl !== 'edge') rec.active.forEach(function (v) { activeSet[v] = 1; });
+    var labeledSet = {}; rec.labeled.forEach(function (v) { labeledSet[v] = 1; });
+    var frontSet = {}; if (state.impl === 'frontier') rec.prevFrontier.forEach(function (v) { frontSet[v] = 1; });
+
+    for (var v = 0; v < N; v++) {
+      var lv = rec.levelBefore[v];
+      var fill = panel, stroke = rule, tcol = soft, lw = 1.2;
+      if (lv !== -1) { fill = panel; stroke = soft; tcol = ink; }
+      if (activeSet[v]) { stroke = accent; lw = 3; tcol = ink; }
+      if (labeledSet[v]) { stroke = correct; lw = 3; tcol = ink; }
+      if (state.impl === 'frontier' && frontSet[v]) { stroke = accent; lw = 3.6; }
+      ctx.beginPath(); ctx.arc(PX(v), PY(v), R, 0, 6.2832);
+      ctx.fillStyle = fill; ctx.fill();
+      ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
+      ctx.fillStyle = tcol; ctx.font = 'bold 14px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(v), PX(v), PY(v));
+      // level label
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillStyle = labeledSet[v] ? correct : (lv === -1 ? faint : soft);
+      ctx.fillText(labeledSet[v] ? ('→' + rec.level) : (lv === -1 ? '·' : String(lv)),
+                   PX(v), PY(v) - R - 9);
+    }
+
+    // ── 오른쪽: 네 구현 누적 작업량 막대 ─────────────────────────────
+    var BX = GX + GW + 26, BW = Math.max(150, W - BX - 16);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = ink; ctx.font = 'bold 12px ui-monospace, monospace';
+    ctx.fillText('root ' + state.root + ' 의 BFS 전체 작업량', BX, GY + 12);
+    ctx.font = '10.5px ui-monospace, monospace';
+    ctx.fillStyle = faint;
+    ctx.fillText('띄운 thread 합 + 검사한 간선 합', BX, GY + 27);
+
+    var rows = IMPLS.map(function (im) {
+      var t = totals(state.root, im.key);
+      return { key: im.key, label: im.label, L: t.launched, E: t.edges, S: t.launched + t.edges };
+    });
+    var maxS = Math.max.apply(null, rows.map(function (r) { return r.S; })) || 1;
+    var y = GY + 48;
+    rows.forEach(function (r) {
+      var sel = r.key === state.impl;
+      ctx.fillStyle = sel ? ink : soft;
+      ctx.font = (sel ? 'bold ' : '') + '11px ui-monospace, monospace';
+      ctx.fillText(r.label, BX, y);
+      var barY = y + 7, barH = 15;
+      var wl = (BW - 60) * r.L / maxS, we = (BW - 60) * r.E / maxS;
+      ctx.globalAlpha = sel ? 1 : 0.45;
+      ctx.fillStyle = accent;  ctx.fillRect(BX, barY, wl, barH);
+      ctx.fillStyle = predict; ctx.fillRect(BX + wl, barY, we, barH);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = sel ? ink : faint;
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText(String(r.S), BX + wl + we + 6, barY + 12);
+      y += 46;
+    });
+
+    // 이상적인 선
+    var ideal = N + M;
+    var ix = BX + (BW - 60) * ideal / maxS;
+    ctx.strokeStyle = correct; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(ix, GY + 52); ctx.lineTo(ix, y - 28); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = correct; ctx.font = '10.5px ui-monospace, monospace';
+    ctx.fillText('이상 n+m=' + ideal, ix + 4, y - 16);
+  }
+
+  // ── UI ──────────────────────────────────────────────────────────────
+  function renderControls() {
+    var rb = document.getElementById('bfsf-roots');
+    rb.innerHTML = '<span style="align-self:center;font-size:12px;opacity:.75">root&nbsp;</span>';
+    for (var v = 0; v < N; v++) (function (v) {
+      var b = document.createElement('button');
+      b.textContent = String(v);
+      if (v !== state.root) b.className = 'ghost';
+      b.onclick = function () { state.root = v; reset(); };
+      rb.appendChild(b);
+    })(v);
+
+    var ib = document.getElementById('bfsf-impls');
+    ib.innerHTML = '';
+    IMPLS.forEach(function (im) {
+      var b = document.createElement('button');
+      b.textContent = im.label;
+      if (im.key !== state.impl) b.className = 'ghost';
+      b.onclick = function () { state.impl = im.key; reset(); };
+      ib.appendChild(b);
+    });
+
+    document.getElementById('bfsf-legend').innerHTML =
+      '<span class="swatch" style="background:var(--accent)"></span>이번 반복에 일하는 thread / 검사하는 간선' +
+      '<span class="swatch" style="background:var(--correct)"></span>새로 label 되는 정점 · pull 이 조기 이탈한 간선' +
+      '<span class="swatch" style="background:var(--rule)"></span>이번 반복에 쓰이지 않는 것';
+  }
+
+  function renderText() {
+    var rec = state.iters[state.k];
+    var ro = document.getElementById('bfsf-readout');
+    var lg = document.getElementById('bfsf-log');
+    if (!rec) { ro.textContent = ''; return; }
+    var edgeCount = (state.impl === 'edge') ? M : rec.edges.length;
+    var nActive = rec.active.length;
+    var idle = rec.launched - (state.impl === 'edge' ? nActive : nActive);
+    ro.innerHTML =
+      '반복 <b>' + rec.level + '</b> / ' + state.iters.length +
+      ' &nbsp;·&nbsp; 띄운 thread <b>' + rec.launched + '</b>' +
+      ' &nbsp;·&nbsp; 실제로 일한 thread <b>' + nActive + '</b>' +
+      ' &nbsp;·&nbsp; 검사한 간선 <b>' + edgeCount + '</b>' +
+      ' &nbsp;·&nbsp; 새로 label 된 정점 <b>' + rec.labeled.length + '</b>' +
+      (idle > 0 ? ' &nbsp;·&nbsp; <b>' + idle + '</b> 개가 헛돌았다' : ' &nbsp;·&nbsp; <b>헛도는 thread 없음</b>') +
+      (state.impl === 'frontier'
+        ? '<br>prevFrontier = [' + rec.prevFrontier.join(', ') + ']' +
+          ' &nbsp;→&nbsp; currFrontier = [' + rec.currFrontier.join(', ') + ']'
+        : '');
+
+    var html = '';
+    var cl = 0, ce = 0;
+    for (var i = 0; i <= state.k; i++) {
+      var r = state.iters[i];
+      var ec = (state.impl === 'edge') ? M : r.edges.length;
+      cl += r.launched; ce += ec;
+      html += '반복 ' + r.level + ': 띄움 ' + String(r.launched).padStart(2) +
+              ' · 일함 ' + String(r.active.length).padStart(2) +
+              ' · 간선 ' + String(ec).padStart(2) +
+              ' · label ' + r.labeled.length +
+              '  (누적 ' + cl + ' + ' + ce + ' = ' + (cl + ce) + ')\n';
+    }
+    if (state.k === state.iters.length - 1) {
+      html += '─────────────────────────────────────────\n';
+      html += '끝. 이상적인 작업량은 n+m = ' + (N + M) + ' 이다.\n';
+    }
+    lg.textContent = html;
+    lg.scrollTop = lg.scrollHeight;
+  }
+
+  function reset() { state.iters = simulate(state.root, state.impl); state.k = 0; renderControls(); renderText(); draw(); }
+  function step()  { if (state.k < state.iters.length - 1) state.k++; renderText(); draw(); }
+  function all()   { state.k = state.iters.length - 1; renderText(); draw(); }
+
+  document.getElementById('bfsf-step').onclick = step;
+  document.getElementById('bfsf-all').onclick = all;
+  document.getElementById('bfsf-reset').onclick = function () { state.k = 0; renderText(); draw(); };
+  window.addEventListener('resize', draw);
+
+  reset();
+})();
+</script>

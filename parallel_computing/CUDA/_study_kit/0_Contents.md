@@ -35,7 +35,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 15장 Advanced optimizations for matrix multiplication | ✅ | ✅ 14개 | ✅ matmul-tiles |
 | 16장 Dynamic programming and wavefront parallelism | ✅ | ✅ 21개 | ✅ wavefront |
 | 17장 Sparse matrix computation | ✅ | ✅ 18개 | ✅ sparse-formats |
-| 18장 Graph traversal | ⬜ | — | — |
+| 18장 Graph traversal | ✅ | ✅ 17개 + 연습 삽화 1개 | ✅ bfs-frontier |
 | 19장 Convolutional neural networks | ⬜ | — | — |
 | 20장 Large language models | ⬜ | — | — |
 | 21장 Electrostatic potential map | ⬜ | — | — |

@@ -1,0 +1,26 @@
+# 18장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 18 --book-pages 425-451 \
+#         --out part3_applications/18_graph_traversal/images \
+#         --names _study_kit/tools/figure_names/ch18.txt
+#
+# 주의: 책 452쪽(백지 verso)은 PDF 에 없다. page_offset 이 26 -> 25 로 바뀌는 경계라
+#       book_to_pdf(452) 가 None 을 돌려준다. 그래서 --book-pages 는 451 까지만.
+#       (18장 = 책 425-451 = PDF 451-477)
+
+Figure 18.1  = fig18_1_graph
+Figure 18.2  = fig18_2_adjacency
+Figure 18.3  = fig18_3_csr_csc_coo
+Figure 18.4  = fig18_4_bfs_result
+Figure 18.5  = fig18_5_maze_routing
+Figure 18.6  = fig18_6_push_kernel
+Figure 18.7  = fig18_7_push_example
+Figure 18.8  = fig18_8_pull_kernel
+Figure 18.9  = fig18_9_pull_example
+Figure 18.10 = fig18_10_edge_kernel
+Figure 18.11 = fig18_11_edge_example
+Figure 18.12 = fig18_12_frontier_kernel
+Figure 18.13 = fig18_13_frontier_example
+Figure 18.14 = fig18_14_visit_atomically
+Figure 18.15 = fig18_15_privatized_kernel
+Figure 18.16 = fig18_16_privatization_example
+Figure 18.17 = fig18_17_coop_groups_kernel
