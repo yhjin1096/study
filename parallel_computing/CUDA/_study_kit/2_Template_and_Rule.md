@@ -849,3 +849,60 @@ representation)` 으로 병기한다.
   **두 값의 비교 → `×`** 또는 백분율
 - "shared memory **두 배**", "반복 **두 배**", "loop 를 **2배** unroll" →
   **한 대상을 키우는 것 → `배`**
+
+
+---
+
+## Part 3 (16장~) 의 용어
+
+### 16장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| dynamic programming | 동적 계획법 |
+| **wavefront** | 파면 / 물결 |
+| memoization / tabulation | 메모이제이션 / 표작성 |
+| top-down / bottom-up | 하향식 / 상향식 |
+| optimal substructure / overlapping sub-problems | 최적 부분구조 / 겹치는 부분문제 |
+| Floyd-Warshall / Smith-Waterman / Needleman-Wunsch | (고유명사 그대로) |
+| **anti-diagonal** | 반대각선 / 역대각선 |
+| **hypertile** / hyperplane partitioning | 하이퍼타일 / 초평면 분할 |
+| **shear transformation** / shear factor | 전단 변환 |
+| affine transformation | 아핀 변환 (**첫 등장 병기 허용**) |
+| scoring matrix / homology score | 점수 행렬 / 상동성 점수 |
+| genome / sequence alignment / read / base pair (bp) | 게놈 / 서열 정렬 / 리드 / 염기쌍 (**아래 참조**) |
+| traceback | 역추적 (**첫 등장 병기 허용**) |
+| persistent thread block | 상주 블록 |
+| cooperative groups / `grid.sync()` | 협력 그룹 |
+| DPX / `__vimax3_s32_relu()` | (약어·식별자 그대로) |
+| time skewing / temporal blocking | 시간 기울이기 |
+
+**16장에서 정한 경계 — 생물학 용어는 한국어를 쓴다**
+
+`genome`·`sequence alignment`·`base pair` 는 **생물학·생명정보학 한국어 문헌에서
+게놈·서열 정렬·염기쌍이 완전히 표준**이다. 이 스터디의 판단 기준("한국어 교재에서
+그 번역어가 실제로 통용되는가")을 그대로 적용하면 **한국어**다.
+
+| 쓸 것 | 예 |
+|---|---|
+| **염기쌍**, **게놈**, **서열**, **정렬**(생물학 문맥) | "인간 게놈은 32억 염기쌍" |
+| `read`, `sequencing` | **영어** — "short read", "sequencing 기계" (음차가 흔들린다) |
+| `Smith-Waterman`, `homology score` | **영어** — 알고리즘·지표의 고유 이름 |
+
+**`정점`·`간선` 은 한국어를 쓴다** (graph 의 vertex·edge). 한국어 알고리즘 교재의 표준이고
+**18장에서도 계속 쓴다**. 다만 `graph` 자체는 영어다 (8장에서 `grid` 를 영어로 둔 것과 같은
+이유 — "그래프"는 차트와 헷갈린다).
+
+**`대각선`·`평면`·`사분면` 은 한국어**다 (기하 일반명사, 8·15장 규약 그대로).
+그러나 **`anti-diagonal` 은 영어** — 이 장이 정의해 반복해서 쓰는 **고유한 개념 이름**이고,
+"반대각선"이 통용되지 않는다.
+
+**16장에서 추가로 한국어를 쓰는 것**: **점화식**(11장 규약), **재귀**, **부분문제**,
+**최단 경로**, **경계 조건**, **기울임**, **불완전 tile**, **삽입**·**삭제**(insertion·deletion 을
+생물학 문맥에서 풀어 쓸 때)는 한국어가 표준이다.
+
+**`배` / `×` 경계 — 16장에서 나온 사례.**
+- "**$32\times$** 감소", "**$2\times$** 효율적", "**$1.5\times$** 로 는다",
+  "사각 tile 의 **$2\times$** 개수" → **두 값의 비교 → `×`**
+- 16장 본문에는 순수한 `배` 를 쓸 자리가 없었다 — 전부 **비교**다.
+  ("두 배 효율적"처럼 한국어로 읽고 싶어지는 자리가 많으니 특히 주의한다.)

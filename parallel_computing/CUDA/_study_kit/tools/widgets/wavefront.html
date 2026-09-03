@@ -1,0 +1,243 @@
+<!--
+  Wavefront — 16.6·16.7절의 사각 tile 과 hypertile 을 나란히 본다.
+
+  대응: 책 16.6절 (p.384~389) · 16.7절 (p.389~397)
+        Figure 16.7(b) (p.385) · Figure 16.13 (p.390) · Figure 16.14 (p.391)
+  좌표 규칙은 kernel 코드 그대로다.
+    사각   tile_row = r/n,  tile_col = q/n,                    d = tile_row + tile_col
+    hyper  tile_row = r/n,  tile_col = (q + r%n)/n,            d = tile_col + 2*tile_row
+           (shear factor m = -1 → global q = n*tile_col + q_tile - r_tile)
+  지표는 식 (16.3)·(16.4) 와 16.7절의 wavefront 수 유도를 그대로 계산한다.
+    tile 안 반복  square 2n-1 · hyper n        work 는 둘 다 n^2
+    kernel 호출   square 2T-1 · hyper 3T-1     (T = numTiles_x)
+  프리셋이 책 그림을 재현한다.
+    Figure 16.7(b): n=3, T=3, 사각  → kernel 호출 5
+    Figure 16.14  : n=3, T=3, hyper → kernel 호출 8
+-->
+<div class="lab" id="w-wf">
+  <div class="lab-head">
+    <span class="lab-tag">실험 1</span>
+    <span class="lab-title">tile 을 기울이면 wavefront 가 고르게 된다</span>
+    <span class="lab-note">Figure 16.7(b) · 16.14 (책 p.385, 391) 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>왼쪽은 scoring matrix 이고 <b>색이 tile anti-diagonal 번호 <code>d</code></b>,
+       굵은 선이 tile 경계다. 오른쪽은 <b>tile 하나를 계산할 때 반복마다 활성인 thread 수</b> 다.
+       <b>사각 tile 은 <code>2n-1</code> 번 반복하며 활성 thread 가 1→n→1 로 변하고,
+       hypertile 은 <code>n</code> 번 반복하며 언제나 <code>n</code> 개가 활성</b>이다.
+       총 work 는 둘 다 <code>n²</code> 로 같다 — <b>같은 일을 몇 번에 나눠 하느냐만 다르다.</b></p>
+
+    <div class="sliders">
+      <div class="slider">
+        <label><span>tile 폭 n</span><b id="wf-v-n">3</b></label>
+        <input type="range" id="wf-s-n" min="2" max="6" step="1" value="3">
+      </div>
+      <div class="slider">
+        <label><span>tile 개수 numTiles_x</span><b id="wf-v-t">3</b></label>
+        <input type="range" id="wf-s-t" min="2" max="5" step="1" value="3">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button data-act="sq">Figure 16.7(b) 사각 tile</button>
+      <button data-act="hy">Figure 16.14 hypertile</button>
+      <button data-act="big">n=6, T=5</button>
+      <button class="ghost" data-act="reset">초기화</button>
+    </div>
+
+    <canvas id="wf-canvas" width="880" height="372"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--predict)"></i>이른 tile anti-diagonal</span>
+      <span><i class="swatch" style="background:var(--accent)"></i>늦은 tile anti-diagonal</span>
+      <span><i class="swatch" style="background:var(--correct)"></i>반복당 활성 thread</span>
+      <span><i class="swatch" style="background:var(--ink-faint)"></i>경계 행·열 (전부 0)</span>
+    </div>
+    <div class="readout" id="wf-readout"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById('wf-canvas'), ctx = cv.getContext('2d');
+  var out = document.getElementById('wf-readout');
+  var hyper = false;
+
+  function css(k) { return getComputedStyle(document.documentElement).getPropertyValue(k).trim(); }
+  var g = function (id) { return +document.getElementById(id).value; };
+
+  // 칸 (r, q) 가 속한 tile 과 tile anti-diagonal — kernel 의 좌표 규칙 그대로
+  function tileOf(r, q, n, hyper) {
+    var tr = Math.floor(r / n), rt = r % n;
+    if (!hyper) {
+      var tc = Math.floor(q / n);
+      return { tr: tr, tc: tc, rt: rt, qt: q % n, d: tr + tc };
+    }
+    // shear m = -1 : global q = n*tc + (qt - rt)  →  qt = (q + rt) mod n
+    var s = q + rt, tc2 = Math.floor(s / n);
+    return { tr: tr, tc: tc2, rt: rt, qt: s % n, d: tc2 + 2 * tr };
+  }
+
+  function stats(n, T) {
+    var sqIter = 2 * n - 1, hyIter = n;
+    var sqWork = 0;
+    for (var i = 1; i <= n; i++) sqWork += i;
+    for (var j = n + 1; j <= 2 * n - 1; j++) sqWork += (2 * n - j);
+    return { sqIter: sqIter, hyIter: hyIter, sqWork: sqWork, hyWork: n * n,
+             sqAvg: sqWork / sqIter, hyAvg: n,
+             sqCalls: 2 * T - 1, hyCalls: 3 * T - 1 };
+  }
+
+  function draw() {
+    var n = g('wf-s-n'), T = g('wf-s-t'), L = n * T;
+    document.getElementById('wf-v-n').textContent = n;
+    document.getElementById('wf-v-t').textContent = T;
+    var S = stats(n, T);
+    var maxD = hyper ? S.hyCalls - 1 : S.sqCalls - 1;
+
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 372;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, sans-serif';
+
+    // ── 왼쪽: scoring matrix ─────────────────────────────────────
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText((hyper ? 'hypertile' : '사각 tile') + ' — 색 = tile anti-diagonal d, '
+                 + '굵은 선 = tile 경계', 4, 16);
+    var gx = 30, gy = 30, gw = Math.min(272, W * 0.40);
+    var cs = gw / (L + 1);                      // 경계 행·열 하나 포함
+    // 경계 행·열
+    ctx.fillStyle = css('--ink-faint'); ctx.globalAlpha = 0.25;
+    ctx.fillRect(gx, gy, gw, cs); ctx.fillRect(gx, gy, cs, gw);
+    ctx.globalAlpha = 1;
+    for (var r = 0; r < L; r++) {
+      for (var q = 0; q < L; q++) {
+        var t = tileOf(r, q, n, hyper);
+        var x = gx + (q + 1) * cs, y = gy + (r + 1) * cs;
+        if (t.tc < 0 || t.tc > (hyper ? T : T - 1)) continue;   // 존재하지 않는 tile
+        var f = maxD > 0 ? t.d / maxD : 0;
+        // 이른 d 는 predict, 늦은 d 는 accent 로
+        ctx.fillStyle = css(f < 0.5 ? '--predict' : '--accent');
+        ctx.globalAlpha = 0.20 + 0.55 * (f < 0.5 ? f * 2 : (f - 0.5) * 2);
+        ctx.fillRect(x, y, cs - 0.6, cs - 0.6);
+        ctx.globalAlpha = 1;
+      }
+    }
+    // tile 경계 — 각 칸의 tile 이 바뀌는 곳에 선을 긋는다
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.55;
+    for (var r2 = 0; r2 < L; r2++) {
+      for (var q2 = 0; q2 < L; q2++) {
+        var a = tileOf(r2, q2, n, hyper);
+        var x2 = gx + (q2 + 1) * cs, y2 = gy + (r2 + 1) * cs;
+        var right = (q2 + 1 < L) ? tileOf(r2, q2 + 1, n, hyper) : null;
+        var down = (r2 + 1 < L) ? tileOf(r2 + 1, q2, n, hyper) : null;
+        if (!right || right.tc !== a.tc || right.tr !== a.tr) {
+          ctx.beginPath(); ctx.moveTo(x2 + cs, y2); ctx.lineTo(x2 + cs, y2 + cs); ctx.stroke();
+        }
+        if (!down || down.tc !== a.tc || down.tr !== a.tr) {
+          ctx.beginPath(); ctx.moveTo(x2, y2 + cs); ctx.lineTo(x2 + cs, y2 + cs); ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha = 1; ctx.lineWidth = 1;
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('scoring matrix  ' + (L + 1) + '×' + (L + 1)
+                 + '  (계산 대상 ' + L + '×' + L + ')', gx + gw / 2, gy + gw + 16);
+
+    // ── 오른쪽: tile 하나의 반복별 활성 thread ───────────────────
+    var bx = gx + gw + 56, bw = W - bx - 20, by = 46, bh = 150;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('tile 하나: 반복마다 활성인 thread 수', bx - 26, 16);
+    var series = [];
+    for (var i = 0; i < S.sqIter; i++) series.push(Math.min(i + 1, n, 2 * n - 1 - i));
+    var hyS = []; for (var h = 0; h < n; h++) hyS.push(n);
+    var slots = S.sqIter, sw = bw / slots;
+    ctx.strokeStyle = css('--rule'); ctx.beginPath();
+    ctx.moveTo(bx, by); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.stroke();
+    for (var gi = 0; gi <= n; gi += Math.max(1, Math.round(n / 4))) {
+      var yy = by + bh * (1 - gi / n);
+      ctx.strokeStyle = css('--rule-soft');
+      ctx.beginPath(); ctx.moveTo(bx, yy); ctx.lineTo(bx + bw, yy); ctx.stroke();
+      ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'right';
+      ctx.fillText(gi, bx - 5, yy + 4);
+    }
+    // 사각 (연한) 과 hypertile (진한) 을 겹쳐 그린다
+    series.forEach(function (v, i) {
+      var x = bx + i * sw, hgt = bh * v / n;
+      ctx.fillStyle = css('--accent'); ctx.globalAlpha = hyper ? 0.20 : 0.75;
+      ctx.fillRect(x + 1, by + bh - hgt, sw - 2, hgt);
+      ctx.globalAlpha = 1;
+    });
+    hyS.forEach(function (v, i) {
+      var x = bx + i * sw, hgt = bh * v / n;
+      ctx.fillStyle = css('--correct'); ctx.globalAlpha = hyper ? 0.8 : 0.22;
+      ctx.fillRect(x + 1, by + bh - hgt, sw - 2, hgt);
+      ctx.globalAlpha = 1;
+    });
+    ctx.fillStyle = css('--ink-faint'); ctx.textAlign = 'center';
+    ctx.fillText('반복 (사각 ' + S.sqIter + '회 · hyper ' + S.hyIter + '회)',
+                 bx + bw / 2, by + bh + 16);
+
+    // ── 지표 막대 ───────────────────────────────────────────────
+    var my = by + bh + 44, lx = bx + 118, mw = W - lx - 24;
+    ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'left';
+    ctx.fillText('사각 tile 대비', bx - 26, my - 8);
+    var rows = [
+      { k: 'tile 당 반복', a: S.sqIter, b: S.hyIter, lower: true },
+      { k: '반복당 평균 활성', a: S.sqAvg, b: S.hyAvg, lower: false },
+      { k: 'kernel 호출', a: S.sqCalls, b: S.hyCalls, lower: true }
+    ];
+    rows.forEach(function (rw, i) {
+      var y = my + i * 26, mx = Math.max(rw.a, rw.b);
+      ctx.fillStyle = css('--ink-soft'); ctx.textAlign = 'right';
+      ctx.fillText(rw.k, lx - 8, y + 15);
+      [[rw.a, '--accent', 0], [rw.b, '--correct', 9]].forEach(function (p) {
+        ctx.fillStyle = css(p[1]); ctx.globalAlpha = 0.8;
+        ctx.fillRect(lx, y + p[2], Math.max(2, mw * 0.62 * p[0] / mx), 8);
+        ctx.globalAlpha = 1;
+      });
+      ctx.fillStyle = css('--ink'); ctx.textAlign = 'left';
+      ctx.fillText(rw.a.toFixed(rw.a % 1 ? 2 : 0) + ' → ' + rw.b.toFixed(rw.b % 1 ? 2 : 0)
+                   + '   ' + (rw.lower ? (rw.b <= rw.a ? '↓ 이득' : '↑ 손해')
+                                       : (rw.b >= rw.a ? '↑ 이득' : '↓ 손해')),
+                   lx + mw * 0.64, y + 13);
+    });
+
+    // ── 숫자 ────────────────────────────────────────────────────
+    out.innerHTML =
+      '지금 보는 것: <b>' + (hyper ? 'hypertile' : '사각 tile') + '</b>'
+      + ' · tile 폭 <b>n=' + n + '</b> · <b>numTiles_x=' + T + '</b>'
+      + ' · scoring matrix <b>' + (L + 1) + '×' + (L + 1) + '</b><br>'
+      + '<b>tile 하나</b> — 사각: 반복 <b>' + S.sqIter + '</b>회, work <b>' + S.sqWork
+      + '</b>, 평균 활성 <b>' + S.sqAvg.toFixed(2) + '</b>'
+      + '  |  hyper: 반복 <b>' + S.hyIter + '</b>회, work <b>' + S.hyWork
+      + '</b>, 평균 활성 <b>' + S.hyAvg + '</b>'
+      + '  → 평균 <b>' + (S.hyAvg / S.sqAvg).toFixed(2) + '×</b> (n→∞ 에서 2×)<br>'
+      + '<b>work 는 둘 다 n² = ' + (n * n) + '</b> 로 같다 (식 16.3 = 식 16.4) '
+      + (S.sqWork === S.hyWork ? '✓' : '✗') + '<br>'
+      + '<b>kernel 호출</b> — 사각 2T−1 = <b>' + S.sqCalls + '</b>,'
+      + ' hyper 3T−1 = <b>' + S.hyCalls + '</b>'
+      + ' → <b>' + (S.hyCalls / S.sqCalls).toFixed(2) + '×</b> 증가 (T→∞ 에서 1.5×)<br>'
+      + 'block 하나가 겪는 barrier 총합: 사각 <b>' + (S.sqIter * T) + '</b>'
+      + ' → hyper <b>' + (S.hyIter * T) + '</b>'
+      + ' · <b>tile 안에서 2× 벌고 tile 사이에서 1.5× 잃는다</b>'
+      + ' — 16.8절의 flag 동기화가 그 손해를 없앤다.';
+  }
+
+  document.querySelectorAll('#w-wf [data-act]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var a = b.dataset.act;
+      var N = document.getElementById('wf-s-n'), T = document.getElementById('wf-s-t');
+      if (a === 'sq')       { hyper = false; N.value = 3; T.value = 3; }
+      else if (a === 'hy')  { hyper = true;  N.value = 3; T.value = 3; }
+      else if (a === 'big') { N.value = 6; T.value = 5; }
+      else                  { hyper = false; N.value = 3; T.value = 3; }
+      draw();
+    });
+  });
+  ['wf-s-n', 'wf-s-t'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', draw);
+  });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
