@@ -1,0 +1,27 @@
+# 20장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 20 --book-pages 477-512 \
+#         --out part3_applications/20_llm/images \
+#         --names _study_kit/tools/figure_names/ch20.txt
+#
+# 20장 = 책 477-512 = PDF 501-536. 이 구간은 빠진 쪽이 없다
+# (kit.conf 의 빠진 백지 쪽 182·288·452·476 은 전부 앞쪽이다).
+
+Figure 20.1  = fig20_1_decoder_only
+Figure 20.2  = fig20_2_attention_matrices
+Figure 20.3  = fig20_3_two_phases
+Figure 20.4  = fig20_4_softmax_kernel
+Figure 20.5  = fig20_5_incremental
+Figure 20.6  = fig20_6_kv_cache_gen
+Figure 20.7  = fig20_7_two_phases_kv
+Figure 20.8  = fig20_8_flash_tiling
+Figure 20.9  = fig20_9_flash_kernel
+Figure 20.10 = fig20_10_load_Q
+Figure 20.11 = fig20_11_load_KTV
+Figure 20.12 = fig20_12_compute_S_and_max
+Figure 20.13 = fig20_13_compute_O
+Figure 20.14 = fig20_14_update_m_and_D
+Figure 20.15 = fig20_15_compute_P_and_update_D
+Figure 20.16 = fig20_16_store_O
+Figure 20.17 = fig20_17_batching
+Figure 20.18 = fig20_18_speculative_decoding
+Figure 20.19 = fig20_19_mha_mqa_gqa_mla

@@ -37,7 +37,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 17장 Sparse matrix computation | ✅ | ✅ 18개 | ✅ sparse-formats |
 | 18장 Graph traversal | ✅ | ✅ 17개 + 연습 삽화 1개 | ✅ bfs-frontier |
 | 19장 Convolutional neural networks | ✅ | ✅ 11개 + Table 1개 | ✅ conv-gemm |
-| 20장 Large language models | ⬜ | — | — |
+| 20장 Large language models | ✅ | ✅ 19개 | ✅ flash-attention |
 | 21장 Electrostatic potential map | ⬜ | — | — |
 | 22장 Algorithm selection, problem decomposition, and problem formulation | ⬜ | — | — |
 | 23장 Multi-GPU programming | ⬜ | — | — |

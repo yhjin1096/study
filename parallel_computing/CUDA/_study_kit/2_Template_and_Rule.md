@@ -1099,3 +1099,75 @@ grep 으로도 구분되게 한다. 19장 본문의 `channel` 은 전부 CNN 쪽
 | `coalescing` / `bank conflict` 영어 | 6장 |
 | `GEMM` · `register tiling` · `double buffering` 영어 | 15장 |
 | `tensor core` 영어 | 15장 |
+
+
+### 20장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| **LLM** / **transformer** / **attention** | 대규모 언어 모델 / 트랜스포머 / 어텐션·주의 기제 |
+| **token** / **tokenizer** / **token ID** | 토큰 / 토크나이저 |
+| **embedding** (벡터) | 임베딩 |
+| **softmax** / **logit** | 소프트맥스 / 로짓 |
+| **query · key · value** ($Q,K,V$) | 질의·키·값 (**약어 $Q,K,V$ 로 쓴다**) |
+| **head** / **attention head** / **head dimension** | 헤드 / 주의 머리 |
+| **mask** (인과성 mask) | 마스크 (7장 `convolution mask` 규약 그대로) |
+| **KV cache** / **prefill** | KV 캐시 / 사전 채움 |
+| **flash attention** / **online softmax** | (고유명사·기법 이름 그대로) |
+| **MHA · MQA · GQA · MLA · MoE** | (약어 그대로) |
+| **speculative decoding** / **draft model** / **target model** | 투기적 디코딩 / 초안 모델 |
+| **inflight batching** / **PagedAttention** / **RAG** | (기법 이름 그대로) |
+| **encoder / decoder** / decoder-only | 부호기 / 복호기 |
+| **residual connection** | 잔차 연결 (**첫 등장 병기 허용**) |
+| **sequence length** / **context length** | (영어 — 기호 $N$ 으로 쓰는 편이 낫다) |
+| `TempStorage` · `WarpReduce` · `BlockReduce` · `__shfl_sync` | (식별자 그대로) |
+| **TMA · WGMMA · warp specialization** | (15장 규약 그대로) |
+
+**20장에서 정한 경계 셋**
+
+**① `국면`(phase)은 한국어, 국면의 *이름*은 영어.**
+19장에서 `추론 국면`·`훈련 국면`을 한국어로 썼고 그대로 간다.
+그러나 **`prefill`** 은 고유한 기법 이름이므로 영어다.
+`summarization phase`·`generation phase` 는 **요약 국면 · 생성 국면**(한국어)으로 쓰되
+첫 등장에 원어를 병기한다.
+
+**② `병합`(merge)은 한국어 — `coalescing` 과 헷갈리지 않는다.**
+전역 규칙표는 `coalescing` 을 "병합"으로 옮기지 말라고 하는데,
+20.5절의 **부분 결과를 합치는 merge** 는 13장 규약("generic 한 동작으로서의 merge 는 한국어")
+그대로 **병합**이다. 두 낱말이 같은 절에 나오지만
+**`coalesced`·`coalescing` 은 언제나 영어로 두었으므로** grep 으로도 구분된다.
+
+| 쓸 것 | 뜻 |
+|---|---|
+| **병합**(한국어) | merge — "$O$ tile 에 병합", "부분합을 병합" |
+| **`coalescing`**(영어) | 메모리 접근 합치기 — "coalesced 적재" |
+
+**③ 수식 기호는 기호로 쓴다.**
+$N$(sequence length), $d$(head dimension), $h_q$(query head 수), $l$(layer 수),
+$g_q$(group 수), $b$(batch 크기), $p$(정밀도 바이트) 는 **풀어 쓰지 말고 기호로** 쓴다 —
+20.6·20.7절의 식이 전부 이 기호로 되어 있어 풀어 쓰면 대조가 불가능해진다.
+
+**20장에서 추가로 한국어를 쓰는 것**: **어휘**(vocabulary)·**정규화**·**가중치**·
+**선형 사영**·**좌표 변환**·**내적**·**코사인 유사도**·**확률 분포**·**인과성**·
+**수치 안정성**·**결합 규칙**(composition rule)·**부분급수**·**전문화**·**과적합**은
+한국어가 표준이다. **자기회귀**(auto-regressive)도 한국어로 쓰되 첫 등장에 병기한다.
+
+**`배` / `×` 경계 — 20장에서 나온 사례.**
+- "$N\times$ 줄어든다", "$4\times$ 빨라진다", "$2\times$ 의 일을 한다", "$20\times$ 아래",
+  "$h_q$ 배가 아니라 **$\times$**" → **전부 두 값의 비교 → `×`**
+- 20장 본문에도 순수한 `배` 는 없었다. `AI 가 $k$ 배 오른다` 처럼 쓰고 싶어지는 자리가
+  많은데 **전부 비교이므로 `×`** 다.
+
+**20장에서 되짚은 앞 장 규약** (전부 그대로 지켰다)
+
+| 용어 | 어디서 정했나 |
+|---|---|
+| `latency` (지연시간 ✗) | 전역 규칙표 |
+| `arithmetic intensity` (산술 강도 ✗) | 5장 · 15장 |
+| `batch` (배치 ✗ — "배치"는 arrangement) | **19장** |
+| `layer` (층·계층 ✗) | 19장 |
+| `kernel` · `memory bandwidth` · `occupancy` | 전역 규칙표 |
+| `bank conflict` · `coalescing` · `padding` | 6장 |
+| `register tiling` · `double buffering` · `tensor core` | 15장 |
+| `cooperative groups` / `grid.sync()` | 16 · 18장 |
+| `sparse` 형용사도 영어 | 17장 |

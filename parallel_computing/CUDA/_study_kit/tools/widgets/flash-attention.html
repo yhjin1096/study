@@ -1,0 +1,306 @@
+<div class="lab" id="w-flashattn">
+  <div class="lab-head">
+    <span class="lab-tag">실험 20</span>
+    <span class="lab-title">online softmax — 행을 한 번도 통째로 보지 않고 softmax 하기</span>
+    <span class="lab-note">식 (20.3)~(20.6) 과 Figure 20.13~20.15 를 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      $S$ 의 한 행(logit 16개)을 <b>tile 단위로만</b> 훑으면서
+      $(m,\ D,\ \tilde O)$ 세 값을 굴린다.
+      <b>다음 tile</b> 을 누를 때마다 식 (20.4)·(20.6) 의 결합 규칙이 한 번 적용되고,
+      마지막에 $\tilde O/D$ 가 <b>행 전체를 한 번에 계산한 값과 정확히 일치</b>하는 것을 보인다.
+      아래 슬라이더는 이 융합이 없앤 <b>global memory 트래픽</b>을 잰다.
+    </p>
+
+    <div class="btnrow" id="fa-bc"></div>
+    <div class="btnrow">
+      <button id="fa-step">다음 tile ▶</button>
+      <button id="fa-all" class="ghost">끝까지</button>
+      <button id="fa-reset" class="ghost">처음부터</button>
+      <button id="fa-shift" class="ghost">큰 logit (+710)</button>
+    </div>
+
+    <canvas id="fa-canvas" width="880" height="262"></canvas>
+
+    <div class="legend" id="fa-legend"></div>
+    <div class="readout" id="fa-readout"></div>
+    <div class="log" id="fa-log" style="max-height:150px;overflow:auto;white-space:pre"></div>
+
+    <div class="sliders">
+      <label class="slider">N (sequence length)
+        <input type="range" id="fa-N" min="512" max="65536" step="512" value="8192">
+        <output id="fa-Nv">8192</output>
+      </label>
+      <label class="slider">d (head dimension)
+        <input type="range" id="fa-d" min="32" max="256" step="32" value="128">
+        <output id="fa-dv">128</output>
+      </label>
+      <label class="slider">B_r = B_c (tile)
+        <input type="range" id="fa-B" min="16" max="128" step="16" value="32">
+        <output id="fa-Bv">32</output>
+      </label>
+    </div>
+    <div class="readout" id="fa-cost"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-flashattn');
+  if (!root) return;
+  var cv = document.getElementById('fa-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  // ── 고정 logit 행 (결정적) 과 V 의 한 열 ─────────────────────────────
+  var L0 = [ 0.3,-1.2, 2.5, 0.0, 1.1,-0.7, 3.3, 0.9,
+            -2.1, 1.8, 0.4, 2.2,-0.5, 1.4, 0.7,-1.6];
+  var VV = [ 1.5,-0.4, 2.0, 0.7,-1.1, 0.3, 0.9,-2.2,
+             0.5, 1.2,-0.8, 1.7, 0.1,-1.4, 2.3, 0.6];
+  var NL = L0.length;
+
+  var st = { Bc: 4, k: 0, shift: 0 };
+  function L(i) { return L0[i] + st.shift; }
+
+  // ── 기준값: 행 전체를 한 번에 ────────────────────────────────────────
+  function reference() {
+    var m = -Infinity, i;
+    for (i = 0; i < NL; i++) m = Math.max(m, L(i));
+    var D = 0, O = 0;
+    for (i = 0; i < NL; i++) { var e = Math.exp(L(i) - m); D += e; O += e*VV[i]; }
+    return { m: m, D: D, O: O/D };
+  }
+  // 순진한 방식 (max 를 빼지 않는다) — overflow 를 보이기 위해
+  function naive() {
+    var D = 0, O = 0;
+    for (var i = 0; i < NL; i++) { var e = Math.exp(L(i)); D += e; O += e*VV[i]; }
+    return { D: D, O: O/D };
+  }
+
+  // ── online 재귀 — Figure 20.13~20.15 그대로 ──────────────────────────
+  function runTo(k) {
+    var m = -Infinity, D = 0, Ot = 0, steps = [];
+    var nT = Math.ceil(NL/st.Bc);
+    for (var t = 0; t < Math.min(k, nT); t++) {
+      var lo = t*st.Bc, hi = Math.min(NL, lo + st.Bc), j;
+      var mt = -Infinity;
+      for (j = lo; j < hi; j++) mt = Math.max(mt, L(j));      // compute_S_and_max
+      var last_m = m, mNew = Math.max(m, mt);                 // update_m_and_D
+      var resc = (last_m === -Infinity) ? 0 : Math.exp(last_m - mNew);
+      var sB = 0, oB = 0;
+      for (j = lo; j < hi; j++) {                             // compute_P_and_update_D
+        var e = Math.exp(L(j) - mNew);
+        sB += e; oB += e*VV[j];
+      }
+      D = D*resc + sB;                                        // compute_O
+      Ot = Ot*resc + oB;
+      m = mNew;
+      steps.push({t:t, lo:lo, hi:hi, last_m:last_m, mt:mt, m:m, resc:resc,
+                  sB:sB, oB:oB, D:D, Ot:Ot});
+    }
+    return { m:m, D:D, Ot:Ot, steps:steps, nT:nT };
+  }
+
+  function nTiles() { return Math.ceil(NL/st.Bc); }
+
+  // ── 그리기 ──────────────────────────────────────────────────────────
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 262;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), panel = css('--panel');
+
+    var r = runTo(st.k), ref = reference();
+    var cur = r.steps.length ? r.steps[r.steps.length-1] : null;
+
+    // ── logit 막대 ────────────────────────────────────────────────────
+    var x0 = 14, y0 = 26, bw = Math.min(40, (W - 300)/NL), bh = 78;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('S 의 한 행 — logit  l_{r,j}   (tile B_c = ' + st.Bc + ')', x0, y0 - 10);
+    var lo = -3 + st.shift, hi = 4 + st.shift;
+    for (var j = 0; j < NL; j++) {
+      var done = j < st.k*st.Bc;
+      var isCur = cur && j >= cur.lo && j < cur.hi;
+      var v = (L(j) - lo)/(hi - lo);
+      var h = Math.max(2, v*bh);
+      ctx.fillStyle = isCur ? accent : (done ? predict : panel);
+      ctx.fillRect(x0 + j*bw, y0 + bh - h, bw - 2, h);
+      ctx.strokeStyle = isCur ? accent : rule; ctx.lineWidth = isCur ? 2 : 1;
+      ctx.strokeRect(x0 + j*bw, y0, bw - 2, bh);
+      ctx.fillStyle = faint; ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(j), x0 + j*bw + (bw-2)/2, y0 + bh + 11);
+    }
+    // tile 경계
+    for (var t = 0; t <= nTiles(); t++) {
+      var xx = x0 + t*st.Bc*bw - 1;
+      if (t*st.Bc > NL) break;
+      ctx.strokeStyle = faint; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(xx, y0 - 4); ctx.lineTo(xx, y0 + bh + 4); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // ── 상태 (m, D, Otilde) ───────────────────────────────────────────
+    var sy = y0 + bh + 40;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('굴러가는 상태 — 이 셋만 register 에 들고 다닌다', x0, sy - 8);
+    var rows = [
+      ['m  (행 최댓값)',    r.m === -Infinity ? '-inf' : r.m.toFixed(4), ref.m.toFixed(4)],
+      ['D  (분모)',         r.D.toFixed(6),  ref.D.toFixed(6)],
+      ['O~ (정규화 전 O)',  r.Ot.toFixed(6), (ref.O*ref.D).toFixed(6)],
+      ['O = O~/D',          (r.D ? r.Ot/r.D : 0).toFixed(9), ref.O.toFixed(9)]
+    ];
+    ctx.font = '11.5px ui-monospace, monospace';
+    for (var i = 0; i < rows.length; i++) {
+      var yy = sy + 16 + i*20;
+      var last = (i === 3);
+      var eq = last && Math.abs((r.D ? r.Ot/r.D : 0) - ref.O) < 1e-12 && st.k >= nTiles();
+      ctx.fillStyle = last ? ink : soft;  ctx.fillText(rows[i][0], x0, yy);
+      ctx.fillStyle = eq ? correct : (last ? ink : soft);
+      ctx.fillText(rows[i][1], x0 + 150, yy);
+      ctx.fillStyle = faint;
+      ctx.fillText('(전체 한 번에: ' + rows[i][2] + ')', x0 + 300, yy);
+      if (eq) { ctx.fillStyle = correct; ctx.fillText('✓ 일치', x0 + 520, yy); }
+    }
+
+    // ── 오른쪽: 진행 막대 ─────────────────────────────────────────────
+    var BX = Math.max(x0 + 560, W - 250), BW = W - BX - 14;
+    if (BW > 90) {
+      ctx.fillStyle = ink; ctx.font = 'bold 11.5px ui-monospace, monospace';
+      ctx.fillText('tile ' + st.k + ' / ' + nTiles(), BX, y0 + 4);
+      for (var q = 0; q < nTiles(); q++) {
+        var w2 = (BW - (nTiles()-1)*3)/nTiles();
+        ctx.fillStyle = q < st.k ? predict : panel;
+        ctx.fillRect(BX + q*(w2+3), y0 + 14, w2, 14);
+        ctx.strokeStyle = rule; ctx.lineWidth = 1;
+        ctx.strokeRect(BX + q*(w2+3), y0 + 14, w2, 14);
+      }
+      ctx.fillStyle = faint; ctx.font = '10.5px ui-monospace, monospace';
+      ctx.fillText('행 전체를 한 번도', BX, y0 + 48);
+      ctx.fillText('통째로 보지 않는다', BX, y0 + 62);
+      var nv = naive();
+      ctx.fillStyle = isFinite(nv.D) ? soft : correct;
+      ctx.fillText('max 를 안 빼면', BX, y0 + 90);
+      ctx.fillText(isFinite(nv.D) ? ('D = ' + nv.D.toExponential(2)) : 'D = Infinity',
+                   BX, y0 + 104);
+      ctx.fillText(isFinite(nv.O) ? ('O = ' + nv.O.toFixed(6)) : 'O = NaN  (overflow)',
+                   BX, y0 + 118);
+    }
+  }
+
+  // ── 텍스트 ──────────────────────────────────────────────────────────
+  function renderText() {
+    var r = runTo(st.k), ref = reference();
+    var ro = document.getElementById('fa-readout');
+    var cur = r.steps.length ? r.steps[r.steps.length-1] : null;
+    if (!cur) {
+      ro.innerHTML = '초기 상태 — <b>m = -inf</b>, <b>D = 0</b>, <b>O~ = 0</b>' +
+        ' &nbsp;(연습문제 3 이 묻는 그 초기화)';
+    } else {
+      ro.innerHTML =
+        'tile <b>' + cur.t + '</b> = 열 ' + cur.lo + '~' + (cur.hi-1) +
+        ' &nbsp;·&nbsp; m_tile = <b>' + cur.mt.toFixed(4) + '</b>' +
+        ' &nbsp;→&nbsp; m: ' + (cur.last_m === -Infinity ? '-inf' : cur.last_m.toFixed(4)) +
+        ' → <b>' + cur.m.toFixed(4) + '</b>' +
+        ' &nbsp;·&nbsp; rescale = exp(m_old - m_new) = <b>' + cur.resc.toFixed(6) + '</b><br>' +
+        'D &nbsp;← D·' + cur.resc.toFixed(4) + ' + ' + cur.sB.toFixed(4) +
+        ' = <b>' + cur.D.toFixed(6) + '</b>' +
+        ' &nbsp;&nbsp;·&nbsp;&nbsp; ' +
+        'O~ ← O~·' + cur.resc.toFixed(4) + ' + ' + cur.oB.toFixed(4) +
+        ' = <b>' + cur.Ot.toFixed(6) + '</b>';
+    }
+    var lg = document.getElementById('fa-log');
+    var txt = '';
+    for (var i = 0; i < r.steps.length; i++) {
+      var s = r.steps[i];
+      txt += 'tile ' + s.t + ' [' + String(s.lo).padStart(2) + '..' + String(s.hi-1).padStart(2) + ']'
+           + '  m=' + s.m.toFixed(4).padStart(8)
+           + '  rescale=' + s.resc.toFixed(4)
+           + '  D=' + s.D.toFixed(6).padStart(11)
+           + '  O~=' + s.Ot.toFixed(6).padStart(11) + '\n';
+    }
+    if (st.k >= nTiles()) {
+      txt += '─────────────────────────────────────────────────────────────\n';
+      txt += 'O = O~/D = ' + (r.Ot/r.D).toFixed(12) + '\n';
+      txt += '전체 한 번에   = ' + ref.O.toFixed(12) + '\n';
+      txt += '차이           = ' + Math.abs(r.Ot/r.D - ref.O).toExponential(2)
+           + '   ← 정확한 재정식화\n';
+    }
+    lg.textContent = txt;
+    lg.scrollTop = lg.scrollHeight;
+  }
+
+  function renderCost() {
+    var N = +document.getElementById('fa-N').value;
+    var dd = +document.getElementById('fa-d').value;
+    var B  = +document.getElementById('fa-B').value;
+    document.getElementById('fa-Nv').textContent = N;
+    document.getElementById('fa-dv').textContent = dd;
+    document.getElementById('fa-Bv').textContent = B;
+    var p = 4;                                   // float32
+    // kernel 셋: GEMM(Q,K->S) + softmax(S->P,D) + GEMM(P,V->O)
+    var t3 = p*((2*N*dd + N*N) + (2*N*N + N) + (N*N + 2*N*dd));
+    // 융합: Q,K,V 읽고 O,D 쓰기. K^T·V 는 block 마다 다시 읽는다 (T_r/gridDim 회)
+    var tf = p*(3*N*dd + N*dd + N);
+    var Tr = Math.ceil(N/B), Tc = Math.ceil(N/B);
+    var need = 0;
+    for (var i = 0; i < Tr; i++) need += Math.min(Tc, Math.floor((B*i + B - 1)/B) + 1);
+    var GB = function (x) { return (x/1e9).toFixed(2) + ' GB'; };
+    document.getElementById('fa-cost').innerHTML =
+      '<b>global memory 트래픽</b> (FP32, head 하나, KV cache 없음)<br>' +
+      '&nbsp;&nbsp;kernel 세 개: <b>' + GB(t3) + '</b>' +
+      ' &nbsp;(그중 S·P 왕복이 <b>' + GB(p*4*N*N) + '</b> = ' +
+      (100*p*4*N*N/t3).toFixed(1) + '%)<br>' +
+      '&nbsp;&nbsp;융합 kernel: &nbsp;<b>' + GB(tf) + '</b>' +
+      ' &nbsp;→&nbsp; <b>' + (t3/tf).toFixed(0) + '×</b> 감소' +
+      ' &nbsp;·&nbsp; N² 항이 완전히 사라진다<br>' +
+      '<b>인과성 mask 로 낭비되는 tile</b>: ' + (Tr*Tc).toLocaleString() +
+      ' 개를 도는데 필요한 것은 ' + need.toLocaleString() + ' 개 → <b>' +
+      (Tr*Tc/need).toFixed(2) + '×</b> 낭비 (책이 다루지 않는 최적화)';
+  }
+
+  function renderBc() {
+    var b = document.getElementById('fa-bc');
+    b.innerHTML = '<span style="align-self:center;font-size:12px;opacity:.75">tile 크기 B_c&nbsp;</span>';
+    [2, 4, 8, 16].forEach(function (v) {
+      var el = document.createElement('button');
+      el.textContent = String(v);
+      if (v !== st.Bc) el.className = 'ghost';
+      el.onclick = function () { st.Bc = v; st.k = 0; renderAll(); };
+      b.appendChild(el);
+    });
+    document.getElementById('fa-shift').textContent =
+      st.shift ? '작은 logit 으로' : '큰 logit (+710)';
+    document.getElementById('fa-legend').innerHTML =
+      '<span class="swatch" style="background:var(--accent)"></span>이번 tile' +
+      '<span class="swatch" style="background:var(--predict)"></span>이미 합친 tile' +
+      '<span class="swatch" style="background:var(--correct)"></span>기준값과 일치';
+  }
+
+  function renderAll() { renderBc(); renderText(); renderCost(); draw(); }
+
+  document.getElementById('fa-step').onclick = function () {
+    st.k = Math.min(nTiles(), st.k + 1); renderAll();
+  };
+  document.getElementById('fa-all').onclick = function () { st.k = nTiles(); renderAll(); };
+  document.getElementById('fa-reset').onclick = function () { st.k = 0; renderAll(); };
+  document.getElementById('fa-shift').onclick = function () {
+    st.shift = st.shift ? 0 : 710; st.k = 0; renderAll();
+  };
+  ['fa-N','fa-d','fa-B'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', renderCost);
+  });
+  window.addEventListener('resize', draw);
+
+  renderAll();
+})();
+</script>
