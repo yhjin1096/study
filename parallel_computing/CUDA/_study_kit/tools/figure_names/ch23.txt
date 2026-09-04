@@ -1,0 +1,32 @@
+# 23장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 23 --book-pages 541-576 \
+#         --out part3_applications/23_multi_gpu/images \
+#         --names _study_kit/tools/figure_names/ch23.txt
+# 23장 = 책 541-576 = PDF 565-600. 빠진 쪽 없음.
+# 이름은 본문의 그림 참조를 읽어 확정했다 (쪽 순서만으로는 어긋난다).
+
+Figure 23.1  = fig23_1_jacobi_kernel
+Figure 23.2  = fig23_2_partition_4gpu
+Figure 23.3  = fig23_3_before_after
+Figure 23.4  = fig23_4_mpi_processes
+Figure 23.5  = fig23_5_mpi_setup_api
+Figure 23.6  = fig23_6_mpi_main
+Figure 23.7  = fig23_7_mpi_host_loop
+Figure 23.8  = fig23_8_mpi_send_sig
+Figure 23.9  = fig23_9_mpi_recv_sig
+Figure 23.10 = fig23_10_mpi_sendrecv_sig
+Figure 23.11 = fig23_11_mpi_allreduce_sig
+Figure 23.12 = fig23_12_two_stage
+Figure 23.13 = fig23_13_timelines
+Figure 23.14 = fig23_14_mpi_overlap_host
+Figure 23.15 = fig23_15_mpi_timeline
+Figure 23.16 = fig23_16_nccl_setup_api
+Figure 23.17 = fig23_17_nccl_main
+Figure 23.18 = fig23_18_nccl_send_recv
+Figure 23.19 = fig23_19_nccl_group
+Figure 23.20 = fig23_20_nccl_host
+Figure 23.21 = fig23_21_nccl_timeline
+Figure 23.22 = fig23_22_nvshmem_api
+Figure 23.23 = fig23_23_nvshmem_kernel
+Figure 23.24 = fig23_24_nvshmem_main
+Figure 23.25 = fig23_25_nvshmem_host

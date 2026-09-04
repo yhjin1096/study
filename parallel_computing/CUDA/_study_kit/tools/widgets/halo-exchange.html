@@ -1,0 +1,257 @@
+<div class="lab" id="w-halo">
+  <div class="lab-head">
+    <span class="lab-tag">실험 23</span>
+    <span class="lab-title">halo exchange 와 겹치기 — 세 모델의 timeline</span>
+    <span class="lab-note">Figure 23.2 · 23.12 · 23.13 · 23.15 · 23.21 을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      <b>위</b>: 전역 grid 를 $P$ 개로 나눈 모습과 halo 행. 어느 행이 <b>보내지고 받아지는지</b>를
+      화살표로 보인다.
+      <b>아래</b>: 한 반복의 timeline 을 <b>겹치기 없음 / MPI / NCCL / NVSHMEM</b> 넷으로 비교한다.
+      슬라이더로 통신 시간을 바꾸면 <b>어디서 겹침이 깨지는지</b> 보인다.
+    </p>
+
+    <div class="btnrow" id="ha-modes"></div>
+    <div class="sliders">
+      <label class="slider">GPU 수 P
+        <input type="range" id="ha-p" min="2" max="8" step="1" value="4">
+        <output id="ha-pv">4</output>
+      </label>
+      <label class="slider">rank 당 계산행 (ny-2)
+        <input type="range" id="ha-rows" min="4" max="64" step="2" value="32">
+        <output id="ha-rowsv">32</output>
+      </label>
+      <label class="slider">통신 시간 / 계산 시간
+        <input type="range" id="ha-tc" min="5" max="300" step="5" value="50">
+        <output id="ha-tcv">0.50</output>
+      </label>
+    </div>
+
+    <canvas id="ha-canvas" width="880" height="344"></canvas>
+    <div class="legend" id="ha-legend"></div>
+    <div class="readout" id="ha-readout"></div>
+    <div class="readout" id="ha-cmp"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-halo');
+  if (!root) return;
+  var cv = document.getElementById('ha-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  var MODES = [
+    {key:'none',    label:'겹치기 없음 (Figure 23.7)'},
+    {key:'mpi',     label:'MPI + stream (Figure 23.14)'},
+    {key:'nccl',    label:'NCCL (Figure 23.20)'},
+    {key:'nvshmem', label:'NVSHMEM (Figure 23.25)'}
+  ];
+  var st = { sel: 'mpi' };
+
+  function P()    { return +document.getElementById('ha-p').value; }
+  function ROWS() { return +document.getElementById('ha-rows').value; }
+  function TC()   { return +document.getElementById('ha-tc').value / 100; }
+
+  var TR = 0.10;                      // reduction 시간 (계산 = 1 기준)
+  var SYNC = 0.06;                    // host 동기화 overhead (MPI 만)
+
+  // 한 반복의 총 시간 모델
+  function timeline(mode) {
+    var rows = ROWS(), f = 2/rows, tc = TC();
+    var tb = f, ti = 1 - f;           // 경계 계산 / 내부 계산
+    if (mode === 'none')
+      return { total: 1 + tc + TR,
+               segs: [['계산', 0, 1, 0], ['통신', 1, tc, 0], ['reduction', 1+tc, TR, 0]] };
+    if (mode === 'mpi') {
+      // 경계 계산 -> host 동기화 -> 위 교환 -> host 동기화 -> 아래 교환 (직렬)
+      var comm = SYNC + tc/2 + SYNC + tc/2;
+      var t = tb + Math.max(ti, comm) + TR;
+      return { total: t,
+               segs: [['경계', 0, tb, 0], ['내부(겹침)', tb, ti, 0],
+                      ['통신+동기화', tb, comm, 1], ['reduction', tb + Math.max(ti, comm), TR, 0]] };
+    }
+    if (mode === 'nccl') {
+      var comm2 = tc;                 // host 동기화 없음, 위·아래가 stream 별로 동시에
+      var t2 = tb + Math.max(ti, comm2) + TR;
+      return { total: t2,
+               segs: [['경계', 0, tb, 0], ['내부(겹침)', tb, ti, 0],
+                      ['통신(stream)', tb, comm2, 1], ['reduction', tb + Math.max(ti, comm2), TR, 0]] };
+    }
+    // NVSHMEM — kernel 하나, put 이 계산 중에 흘러나간다
+    var t3 = Math.max(1, tc) + TR;
+    return { total: t3,
+             segs: [['계산+put', 0, 1, 0], ['통신(배경)', f, tc, 1],
+                    ['reduction+barrier', Math.max(1, tc), TR, 0]] };
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 344;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), panel = css('--panel');
+
+    // ── 위: 분할 그림 ────────────────────────────────────────────────
+    var p = P(), rows = 4;                       // 그림에는 계산행 4개만 (기호)
+    var x0 = 34, y0 = 30;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('전역 grid 를 ' + p + '개로 분할 (계산행은 ' + rows + '개만 그린다)',
+                 x0 - 14, y0 - 12);
+
+    var W_CELLS = 12, GAP = 9;
+    var avail = H - y0 - 10;
+    var ch = Math.max(4, Math.min(12, (avail - p*GAP)/(p*(rows + 2))));
+    var partH = (rows + 2)*ch + GAP;
+    var cw = 13, gridW = W_CELLS*cw;
+    var yy = y0;
+    for (var g = 0; g < p; g++) {
+      for (var r = 0; r < rows + 2; r++) {
+        var isHalo = (r === 0 || r === rows + 1);
+        var isBnd  = (r === 1 || r === rows);
+        for (var c = 0; c < W_CELLS; c++) {
+          ctx.fillStyle = isHalo ? panel : (isBnd ? accent : predict);
+          ctx.globalAlpha = isHalo ? 1 : (isBnd ? 0.9 : 0.35);
+          ctx.fillRect(x0 + c*cw, yy + r*ch, cw - 1, ch - 1);
+          ctx.globalAlpha = 1;
+        }
+        ctx.strokeStyle = isHalo ? faint : rule; ctx.lineWidth = isHalo ? 1.2 : 0.5;
+        ctx.setLineDash(isHalo ? [3,2] : []);
+        ctx.strokeRect(x0, yy + r*ch, gridW - 1, ch - 1);
+        ctx.setLineDash([]);
+      }
+      if (ch >= 7) {
+        ctx.fillStyle = faint; ctx.font = '9.5px ui-monospace, monospace';
+        ctx.fillText('GPU ' + g, x0 + gridW + 26, yy + partH/2 + 3);
+      }
+      yy += partH;
+    }
+    // 화살표 — 왼쪽: 행 1 을 위 이웃의 아래 halo 로 / 오른쪽: 행 ny-2 를 아래 이웃의 위 halo 로
+    function arrow(x, sy, ty, bulge, col) {
+      ctx.strokeStyle = col; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, sy); ctx.bezierCurveTo(x + bulge, sy, x + bulge, ty, x, ty); ctx.stroke();
+      var d = bulge > 0 ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(x, ty);
+      ctx.lineTo(x + d*7, ty - 3.2); ctx.lineTo(x + d*7, ty + 3.2); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill();
+    }
+    for (var g2 = 0; g2 + 1 < p; g2++) {
+      var topY = y0 + g2*partH, botY = y0 + (g2 + 1)*partH;
+      // 아래 이웃의 행 1 → 내 아래 halo (행 rows+1)
+      arrow(x0 - 3, botY + 1.5*ch, topY + (rows + 1.5)*ch, -18, correct);
+      // 내 행 rows → 아래 이웃의 위 halo (행 0)
+      arrow(x0 + gridW + 2, topY + (rows + 0.5)*ch, botY + 0.5*ch, 18, accent);
+    }
+
+    // ── 아래: timeline ──────────────────────────────────────────────
+    var tx = Math.max(x0 + 330, W*0.42), ty0 = 34, tw = W - tx - 24;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('한 반복의 timeline (계산 = 1.0 기준)', tx, ty0 - 12);
+
+    var tls = MODES.map(function (m) { return { m: m, t: timeline(m.key) }; });
+    var tmax = Math.max.apply(null, tls.map(function (o) { return o.t.total; }))*1.05;
+    var COL = [accent, predict, correct, faint];
+    tls.forEach(function (o, i) {
+      var by = ty0 + 6 + i*74;
+      var sel = (o.m.key === st.sel);
+      ctx.fillStyle = sel ? ink : soft;
+      ctx.font = (sel ? 'bold ' : '') + '11px ui-monospace, monospace';
+      ctx.fillText(o.m.label, tx, by);
+      o.t.segs.forEach(function (s, k) {
+        var sx = tx + (s[1]/tmax)*tw, sw = Math.max(1, (s[2]/tmax)*tw);
+        var row = s[3];                                        // 통신은 아랫줄
+        ctx.globalAlpha = sel ? 1 : 0.4;
+        ctx.fillStyle = COL[k % 4];
+        ctx.fillRect(sx, by + 6 + row*15, sw, 13);
+        ctx.globalAlpha = 1;
+        if (sel && sw > 34) {
+          ctx.fillStyle = css('--ground'); ctx.font = '9px ui-monospace, monospace';
+          ctx.fillText(s[0], sx + 3, by + 16 + row*15);
+        }
+      });
+      // 총 시간
+      ctx.fillStyle = sel ? correct : faint;
+      ctx.font = (sel ? 'bold ' : '') + '10.5px ui-monospace, monospace';
+      var lx = tx + (o.t.total/tmax)*tw + 5, lab = o.t.total.toFixed(3);
+      if (lx + ctx.measureText(lab).width > W - 4) {
+        ctx.textAlign = 'right'; ctx.fillText(lab, W - 4, by + 26); ctx.textAlign = 'left';
+      } else ctx.fillText(lab, lx, by + 26);
+    });
+    // 기준선
+    ctx.strokeStyle = rule; ctx.setLineDash([2,3]); ctx.lineWidth = 1;
+    for (var q = 0; q <= 4; q++) {
+      var xq = tx + (q/4)*tw;
+      ctx.beginPath(); ctx.moveTo(xq, ty0); ctx.lineTo(xq, ty0 + 4*74 - 20); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  function render() {
+    document.getElementById('ha-pv').textContent = P();
+    document.getElementById('ha-rowsv').textContent = ROWS();
+    document.getElementById('ha-tcv').textContent = TC().toFixed(2);
+
+    var rows = ROWS(), nx = 64;
+    var ny = rows + 2;
+    document.getElementById('ha-readout').innerHTML =
+      '<b>지역 배열</b> ny × nx = <b>' + ny + '</b> × ' + nx +
+      ' &nbsp;(계산행 ' + rows + ' + halo 2)' +
+      ' &nbsp;·&nbsp; 경계행이 계산에서 차지하는 비율 <b>' +
+      (100*2/rows).toFixed(2) + '%</b><br>' +
+      '&nbsp;&nbsp;보내기: 행 1 (offset <b>nx</b>) → top &nbsp;·&nbsp; 행 ' + (ny-2) +
+      ' (offset <b>(ny-2)·nx</b>) → bottom<br>' +
+      '&nbsp;&nbsp;받기: &nbsp;행 ' + (ny-1) + ' (offset <b>(ny-1)·nx</b>) ← bottom' +
+      ' &nbsp;·&nbsp; 행 0 (offset <b>0</b>) ← top' +
+      ' &nbsp;·&nbsp; 한 반복에 <b>' + (2*nx*4) + ' B</b> 를 보낸다';
+
+    var t = {};
+    MODES.forEach(function (m) { t[m.key] = timeline(m.key).total; });
+    var best = Math.min.apply(null, MODES.map(function (m) { return t[m.key]; }));
+    document.getElementById('ha-cmp').innerHTML =
+      MODES.map(function (m) {
+        return (m.key === st.sel ? '<b>' : '') + m.label.split(' (')[0] + ' <b>' +
+               t[m.key].toFixed(3) + '</b> (' + (t.none/t[m.key]).toFixed(2) + '×)' +
+               (m.key === st.sel ? '</b>' : '');
+      }).join(' &nbsp;·&nbsp; ') +
+      '<br>&nbsp;&nbsp;이론 하한 = 계산 + reduction = <b>' + (1 + TR).toFixed(3) + '</b>' +
+      ' &nbsp;→&nbsp; ' + (best <= 1 + TR + 1e-9
+        ? '<b>통신이 완전히 숨었다</b>' :
+          '통신이 <b>' + (best - 1 - TR).toFixed(3) + '</b> 만큼 삐져나온다') +
+      ' &nbsp;·&nbsp; reduction 은 <b>절대 겹칠 수 없다</b> (모든 grid point 에 의존)';
+  }
+
+  function renderBtns() {
+    var b = document.getElementById('ha-modes');
+    b.innerHTML = '';
+    MODES.forEach(function (m) {
+      var el = document.createElement('button');
+      el.textContent = m.label;
+      if (m.key !== st.sel) el.className = 'ghost';
+      el.onclick = function () { st.sel = m.key; renderAll(); };
+      b.appendChild(el);
+    });
+    document.getElementById('ha-legend').innerHTML =
+      '<span class="swatch" style="background:var(--accent)"></span>경계행 (Stage 1 · 이웃에게 보낸다)' +
+      '<span class="swatch" style="background:var(--predict)"></span>내부행 (Stage 2 · 통신과 겹친다)' +
+      '<span class="swatch" style="background:var(--panel);border:1px dashed var(--ink-faint)"></span>halo (입력 전용)' +
+      '<span class="swatch" style="background:var(--correct)"></span>위로 보내는 행 &nbsp;(오른쪽 화살표는 아래로)';
+  }
+
+  function renderAll() { renderBtns(); render(); draw(); }
+  ['ha-p','ha-rows','ha-tc'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { render(); draw(); });
+  });
+  window.addEventListener('resize', draw);
+  renderAll();
+})();
+</script>
