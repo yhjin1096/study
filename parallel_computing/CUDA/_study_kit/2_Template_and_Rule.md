@@ -1171,3 +1171,65 @@ $g_q$(group 수), $b$(batch 크기), $p$(정밀도 바이트) 는 **풀어 쓰�
 | `register tiling` · `double buffering` · `tensor core` | 15장 |
 | `cooperative groups` / `grid.sync()` | 16 · 18장 |
 | `sparse` 형용사도 영어 | 17장 |
+
+
+### 21장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| **DCS** (Direct Coulomb Summation) | (약어 그대로) |
+| **VMD** / molecular dynamics | (고유명사 / 분자동역학은 한국어) |
+| **grid point** / `grid` | 격자점 / 격자 (**8장 규약 그대로** — 아래 참조) |
+| **scatter** / **gather** | 흩뿌리기 / 모으기 |
+| **cutoff summation** / **cutoff binning** / **cutoff 거리** | 절단 합 / 구간화 |
+| **bin** / **neighborhood** (bin 의) | 상자 / 이웃 목록 |
+| **overflow list** | 넘침 목록 |
+| **super circle** | 초대형 원 (**첫 등장 병기 허용**) |
+| **constant memory** / **constant cache** | 상수 메모리 / 상수 캐시 |
+| **vector store** / `float4` | 벡터 저장 (6.3절 규약 그대로) |
+| **thread coarsening** / `COARSEN_FACTOR` | (6장 규약 그대로) |
+| `gridspacing` · `energygrid` · `atoms[]` | (코드 식별자 — 백틱 그대로) |
+
+**21장에서 되짚은 8장 규약 — `격자` 는 쓰지 않는다**
+
+8장이 정한 대로 **"격자"라는 한국어를 쓰지 않고 `grid`·`grid point` 를 영어로 둔다.**
+이 장은 그 규약이 **가장 절실한 장**이다 — 책 자신이
+"**thread grid 와 혼동하지 말 것**"(책 p.517)이라고 괄호로 경고할 만큼
+`grid` 가 두 뜻으로 쏟아진다.
+
+| 쓸 것 | 뜻 |
+|---|---|
+| `grid` / `thread grid` / `gridDim` | CUDA 의 block 집합 |
+| `grid point` · `energy grid` · `grid 공간` · `grid 간격` | 정전기 potential 을 계산할 이산 격자 |
+
+> 초고에서 `격자점` 을 130번 썼다가 8장 규칙표에 걸려 전부 되돌렸다.
+> **`grid point 를`·`grid point 가`·`grid point 마다`** 처럼 조사를 띄어 붙인다 (8장 표기 그대로).
+
+**21장에서 정한 경계 둘**
+
+**① 물리·화학 용어는 한국어.**
+**정전기**·**전하**·**이온**·**원자**·**분자**·**분자동역학**·**단백질**·**배선**은
+한국어 물리·화학 교재의 표준이다. 단위 **Å**(옹스트롬)은 기호 그대로.
+
+**② `scatter`·`gather` 는 영어.**
+21.2절의 제목이자 이 장의 축이고, "흩뿌리기/모으기"가 통용되지 않는다.
+동사로 풀어 쓸 때는 **"흩뿌린다"·"모은다"**(한국어)를 쓰되 개념 이름은 영어다 —
+12장에서 `filter` 를 영어로 두고 "거른다"는 한국어로 쓴 것과 같은 처리다.
+
+**`배` / `×` 경계 — 21장에서 나온 사례.**
+- "$4\times$ 감소", "$1.6\times$ 감소", "$4\times$ 낭비", "$138\times$", "$2\times$ 가 상한"
+  → **두 값의 비교 → `×`**
+- **"부피가 10배면 일은 100배"** → **한 대상을 키우는 것 → `배`** ✓
+  (1장이 정한 "자원량·배수 변화" 쪽이다. 21장에서 처음으로 순수한 `배` 가 나왔다.)
+
+**21장에서 되짚은 앞 장 규약** (전부 그대로 지켰다)
+
+| 용어 | 어디서 정했나 |
+|---|---|
+| `grid` · `grid point` (격자 ✗) | **8장** |
+| `memory bandwidth` (대역폭 ✗) | 전역 규칙표 |
+| `thread coarsening` · `coalescing` · `padding` | 6장 |
+| `atomic operation` (원자적 연산 ✗) | 전역 규칙표 |
+| `occupancy` · `register` | 전역 규칙표 · 4장 |
+| `배치` 는 arrangement (batch 는 영어) | 19장 |
+| `control divergence` (제어 분기 ✗) | 전역 규칙표 |

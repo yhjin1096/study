@@ -1,0 +1,238 @@
+<div class="lab" id="w-dcscoarse">
+  <div class="lab-head">
+    <span class="lab-tag">실험 21</span>
+    <span class="lab-title">grid point 를 누가 쓰는가 — Figure 21.6 · 21.8 · 21.10 을 나란히</span>
+    <span class="lab-note">Figure 21.8 의 line 05 버그와 coalescing 을 눈으로 확인</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      한 행의 grid point 를 <b>어느 thread 가 쓰는지</b>를 세 판본에 대해 그린다.
+      Figure 21.8 은 책 line 05 를 그대로 쓰면 <b>어떤 점은 여러 번 써지고 어떤 점은 아예
+      계산되지 않는다.</b> 아래 막대는 warp 하나의 쓰기가 건드리는
+      <b>128 B transaction 수</b>와 그 활용률이다.
+    </p>
+
+    <div class="btnrow" id="dc-modes"></div>
+    <div class="sliders">
+      <label class="slider">blockDim.x
+        <input type="range" id="dc-bd" min="2" max="8" step="1" value="4">
+        <output id="dc-bdv">4</output>
+      </label>
+      <label class="slider">COARSEN_FACTOR
+        <input type="range" id="dc-cf" min="1" max="8" step="1" value="4">
+        <output id="dc-cfv">4</output>
+      </label>
+    </div>
+
+    <canvas id="dc-canvas" width="880" height="232"></canvas>
+
+    <div class="legend" id="dc-legend"></div>
+    <div class="readout" id="dc-readout"></div>
+    <div class="readout" id="dc-ops"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-dcscoarse');
+  if (!root) return;
+  var cv = document.getElementById('dc-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  var MODES = [
+    {key:'f6',  label:'Figure 21.6 — thread 하나가 grid point 하나'},
+    {key:'f8',  label:'Figure 21.8 — 책 line 05 그대로 ⚠'},
+    {key:'f8f', label:'Figure 21.8 — line 05 를 고친 판'},
+    {key:'f10', label:'Figure 21.10 — blockDim.x 간격 (coalesced)'}
+  ];
+  var st = { mode: 'f8' };
+
+  function params() {
+    return { bd: +document.getElementById('dc-bd').value,
+             cf: +document.getElementById('dc-cf').value };
+  }
+
+  // grid point -> 그 점을 쓰는 thread 목록
+  function assign(mode, bd, cf, npts, nblk) {
+    var owner = [];               // owner[p] = [ {blk,thr,slot}, ... ]
+    for (var p = 0; p < npts; p++) owner.push([]);
+    for (var b = 0; b < nblk; b++) {
+      for (var t = 0; t < bd; t++) {
+        var i, c;
+        if (mode === 'f6') {
+          i = b*bd + t;
+          if (i < npts) owner[i].push({blk:b, thr:t, slot:0});
+          continue;
+        }
+        if (mode === 'f8')       i = b*bd*cf + t;              // 책 line 05
+        else if (mode === 'f8f') i = (b*bd + t)*cf;            // 고친 판
+        else                     i = b*bd*cf + t;              // f10
+        for (c = 0; c < cf; c++) {
+          var p = (mode === 'f10') ? i + c*bd : i + c;
+          if (p < npts) owner[p].push({blk:b, thr:t, slot:c});
+        }
+      }
+    }
+    return owner;
+  }
+
+  function nblocks(mode, bd, cf, npts) {
+    return (mode === 'f6') ? Math.ceil(npts/bd) : Math.ceil(npts/(bd*cf));
+  }
+
+  // warp 하나(32 thread)의 c 번째 쓰기가 건드리는 128B(=float 32개) 구간 수
+  function segs(mode, bd, cf) {
+    if (mode === 'f6')  return { n: 1, stride: 1 };
+    if (mode === 'f10') return { n: 1, stride: 1 };
+    return { n: Math.min(32, cf), stride: cf };   // f8 / f8f 는 stride = cf
+  }
+
+  function draw() {
+    var rows0 = Math.min(+document.getElementById('dc-bd').value, 8);
+    var H = 164 + rows0*17;
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880;
+    cv.style.height = H + 'px';
+    if (cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)) {
+      cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), panel = css('--panel');
+
+    var pp = params(), bd = pp.bd, cf = pp.cf;
+    var npts = 32;
+    var nblk = nblocks(st.mode, bd, cf, npts);
+    var own = assign(st.mode, bd, cf, npts, nblk);
+
+    var x0 = 14, y0 = 40, cw = Math.min(26, (W - 40)/npts);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('한 행의 grid point 32개 — 칸 안 숫자는 이 점을 쓰는 thread 수', x0, y0 - 14);
+
+    // grid point 칸
+    for (var p = 0; p < npts; p++) {
+      var k = own[p].length;
+      var fill = panel, stroke = rule, tc = faint;
+      if (k === 1) { fill = correct; stroke = correct; tc = css('--ground'); }
+      else if (k === 0) { fill = panel; stroke = accent; tc = accent; }
+      else { fill = accent; stroke = accent; tc = css('--ground'); }
+      ctx.fillStyle = fill; ctx.fillRect(x0 + p*cw, y0, cw - 2, 24);
+      ctx.strokeStyle = stroke; ctx.lineWidth = (k === 1) ? 1 : 2;
+      ctx.strokeRect(x0 + p*cw, y0, cw - 2, 24);
+      ctx.fillStyle = tc; ctx.font = 'bold 11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(k), x0 + p*cw + (cw-2)/2, y0 + 16);
+      ctx.fillStyle = faint; ctx.font = '8.5px ui-monospace, monospace';
+      if (p % 2 === 0) ctx.fillText(String(p), x0 + p*cw + (cw-2)/2, y0 + 36);
+    }
+
+    // block 0 의 thread 별 배정
+    var ty = y0 + 62;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('block 0 의 thread 가 맡는 grid point', x0, ty - 8);
+    var rows = Math.min(bd, 8);
+    for (var t = 0; t < rows; t++) {
+      var yy = ty + 8 + t*17;
+      ctx.fillStyle = faint; ctx.font = '10.5px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('t' + t, x0, yy + 10);
+      for (var p2 = 0; p2 < npts; p2++) {
+        var mine = own[p2].some(function (o) { return o.blk === 0 && o.thr === t; });
+        if (!mine) continue;
+        ctx.fillStyle = predict;
+        ctx.fillRect(x0 + 22 + p2*cw, yy, cw - 2, 12);
+      }
+      // 배경 격자
+      ctx.strokeStyle = rule; ctx.lineWidth = 0.5;
+      ctx.strokeRect(x0 + 22, yy, npts*cw - 2, 12);
+    }
+
+    // transaction 막대
+    var by = ty + 8 + rows*17 + 24;
+    var sg = segs(st.mode, bd, cf);
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('warp 하나의 쓰기 한 번 — 128 B transaction 과 활용률', x0, by - 8);
+    var total = 4;                              // 그림에는 최대 4개까지
+    var used = 1/Math.max(1, sg.stride);
+    for (var s = 0; s < Math.min(total, sg.n); s++) {
+      var bx = x0 + s*120;
+      ctx.fillStyle = panel; ctx.fillRect(bx, by, 88, 18);
+      ctx.fillStyle = (sg.n === 1) ? correct : accent;
+      ctx.fillRect(bx, by, 88*used, 18);
+      ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.strokeRect(bx, by, 88, 18);
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(Math.round(used*100) + '%', bx + 92, by + 13);
+    }
+  }
+
+  function renderText() {
+    var pp = params(), bd = pp.bd, cf = pp.cf, npts = 32;
+    document.getElementById('dc-bdv').textContent = bd;
+    document.getElementById('dc-cfv').textContent = cf;
+    var nblk = nblocks(st.mode, bd, cf, npts);
+    var own = assign(st.mode, bd, cf, npts, nblk);
+    var miss = own.filter(function (o) { return o.length === 0; }).length;
+    var dup  = own.filter(function (o) { return o.length > 1; }).length;
+    var maxk = Math.max.apply(null, own.map(function (o) { return o.length; }));
+    var sg = segs(st.mode, bd, cf);
+    var ok = (miss === 0 && dup === 0);
+    document.getElementById('dc-readout').innerHTML =
+      '<b>' + MODES.filter(function (m) { return m.key === st.mode; })[0].label + '</b><br>' +
+      'block ' + nblk + '개 · thread ' + (nblk*bd) + '개 · grid point ' + npts + '개 &nbsp;→&nbsp; ' +
+      (ok ? '<b>모든 grid point 를 정확히 한 번씩</b> ✓'
+          : '<b>계산 안 된 grid point ' + miss + '개</b>, <b>중복된 것 ' + dup +
+            '개</b> (최대 ' + maxk + '번) ⚠ <b>결과가 틀린다</b>') +
+      '<br>warp 하나의 쓰기: stride <b>' + sg.stride + '</b>' +
+      ' → 128 B transaction <b>' + sg.n + '</b>개, 활용률 <b>' +
+      Math.round(100/Math.max(1, sg.stride)) + '%</b>' +
+      (sg.n === 1 ? ' &nbsp;<b>coalesced</b> ✓' : ' &nbsp;<b>uncoalesced</b>');
+
+    // 연산 수 (원자 하나 기준)
+    var C = (st.mode === 'f6') ? 1 : cf;
+    var base = { const: 4*C, sub: 3*C, mul: 3*C, add: 3*C, div: C };
+    var co   = { const: 4,   sub: 3,   mul: C + (C > 1 ? 2 : 0), add: 3*C, div: C };
+    var use  = (st.mode === 'f6') ? base : co;
+    var fpB = base.sub + base.mul + base.add + base.div;
+    var fpU = use.sub + use.mul + use.add + use.div;
+    document.getElementById('dc-ops').innerHTML =
+      '<b>원자 하나 · grid point ' + C + '개당 연산</b> — ' +
+      'constant 적재 <b>' + use.const + '</b>' +
+      ' · 뺄셈 ' + use.sub + ' · 곱셈 ' + use.mul + ' · 덧셈 ' + use.add +
+      ' · 나눗셈 ' + use.div + ' &nbsp;→&nbsp; FP 합계 <b>' + fpU + '</b>' +
+      (st.mode === 'f6' ? '' :
+        ' &nbsp;(Figure 21.6 을 ' + C + '번 하면 constant ' + base.const +
+        ' · FP ' + fpB + ' → <b>' + (base.const/use.const).toFixed(0) + '×</b> · <b>' +
+        (fpB/fpU).toFixed(2) + '×</b> 감소)');
+  }
+
+  function renderModes() {
+    var mb = document.getElementById('dc-modes');
+    mb.innerHTML = '';
+    MODES.forEach(function (m) {
+      var b = document.createElement('button');
+      b.textContent = m.label;
+      if (m.key !== st.mode) b.className = 'ghost';
+      b.onclick = function () { st.mode = m.key; renderAll(); };
+      mb.appendChild(b);
+    });
+    document.getElementById('dc-legend').innerHTML =
+      '<span class="swatch" style="background:var(--correct)"></span>정확히 한 번 써지는 grid point' +
+      '<span class="swatch" style="background:var(--accent)"></span>중복 / 누락' +
+      '<span class="swatch" style="background:var(--predict)"></span>block 0 의 thread 가 맡은 점';
+  }
+
+  function renderAll() { renderModes(); renderText(); draw(); }
+
+  ['dc-bd','dc-cf'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', renderAll);
+  });
+  window.addEventListener('resize', draw);
+  renderAll();
+})();
+</script>

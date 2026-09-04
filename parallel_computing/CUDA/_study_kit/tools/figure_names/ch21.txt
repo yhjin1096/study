@@ -1,0 +1,21 @@
+# 21장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 21 --book-pages 513-528 \
+#         --out part3_applications/21_electrostatic/images \
+#         --names _study_kit/tools/figure_names/ch21.txt
+#
+# 21장 = 책 513-528 = PDF 537-552. 빠진 쪽 없음.
+
+Figure 21.1  = fig21_1_ion_placement
+Figure 21.2  = fig21_2_dcs_contribution
+Figure 21.3  = fig21_3_c_unoptimized
+Figure 21.4  = fig21_4_c_optimized
+Figure 21.5  = fig21_5_scatter_kernel
+Figure 21.6  = fig21_6_gather_kernel
+Figure 21.7  = fig21_7_reuse_across_points
+Figure 21.8  = fig21_8_coarsened_kernel
+Figure 21.9  = fig21_9_coalesced_layout
+Figure 21.10 = fig21_10_coarsened_coalesced_kernel
+Figure 21.11 = fig21_11_cutoff_vs_direct
+Figure 21.12 = fig21_12_neighborhood_bins
+Figure 21.13 = fig21_13_per_block_bins
+Figure 21.14 = fig21_14_neighbor_offsets
