@@ -1,0 +1,23 @@
+# 19장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 19 --book-pages 453-475 \
+#         --out part3_applications/19_cnn/images \
+#         --names _study_kit/tools/figure_names/ch19.txt
+#
+# 주의: 책 476쪽(백지 verso)은 PDF 에 없다 (kit.conf 의 빠진 쪽 목록: 182·288·452·476).
+#       그래서 --book-pages 는 475 까지. (19장 = 책 453-475 = PDF 478-500)
+#
+# Table 19.1 은 캡션이 표 '위'에 있어 자동 추출이 되지만 (kit.conf 메모와 달리
+# 이번 실행에서는 잡혔다) 결과를 눈으로 확인할 것.
+
+Figure 19.1  = fig19_1_lenet5
+Figure 19.2  = fig19_2_conv_layer
+Figure 19.3  = fig19_3_c_forward
+Figure 19.4  = fig19_4_batched_forward
+Figure 19.5  = fig19_5_host_code
+Figure 19.6  = fig19_6_tile_mapping
+Figure 19.7  = fig19_7_conv_kernel
+Figure 19.8  = fig19_8_gemm_formulation
+Figure 19.9  = fig19_9_implicit_tiles
+Figure 19.10 = fig19_10_b10_2_mapping
+Figure 19.11 = fig19_11_tiled_matmul_kernel
+Table 19.1   = table19_1_cudnn_params

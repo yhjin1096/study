@@ -1,0 +1,343 @@
+<div class="lab" id="w-convgemm">
+  <div class="lab-head">
+    <span class="lab-tag">실험 19</span>
+    <span class="lab-title">convolutional layer = GEMM — 식 (19.5) 를 눈으로 따라가기</span>
+    <span class="lab-note">Figure 19.8 · 19.9 · 19.10 을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      Figure 19.2(b) 의 예제($C{=}3$ 개의 $3{\times}3$ 입력, $M{=}2$ 개의 $2{\times}2$ 출력,
+      $K{=}2$)로 <b>unfolded 행렬 $B$</b> 를 만든다.
+      $B$ 의 칸을 누르면 <b>식 (19.5) 가 그 칸을 어느 $X$ 픽셀로 보내는지</b> 단계별로 보여 준다.
+      <b>phase</b> 버튼은 Figure 19.9 처럼 $2{\times}2$ tiled matmul 을 한 단계씩 진행시킨다.
+    </p>
+
+    <div class="btnrow" id="cg-modes"></div>
+    <div class="btnrow" id="cg-steps">
+      <button id="cg-prev" class="ghost">◀ 이전 phase</button>
+      <button id="cg-next">다음 phase ▶</button>
+      <button id="cg-reset" class="ghost">처음부터</button>
+    </div>
+
+    <canvas id="cg-canvas" width="880" height="320"></canvas>
+
+    <div class="legend" id="cg-legend"></div>
+    <div class="readout" id="cg-readout"></div>
+
+    <div class="sliders">
+      <label class="slider">C (입력 feature map)
+        <input type="range" id="cg-C" min="1" max="512" step="1" value="64">
+        <output id="cg-Cv">64</output>
+      </label>
+      <label class="slider">K (filter 크기)
+        <input type="range" id="cg-K" min="1" max="11" step="1" value="5">
+        <output id="cg-Kv">5</output>
+      </label>
+      <label class="slider">H_in = W_in
+        <input type="range" id="cg-H" min="4" max="256" step="1" value="224">
+        <output id="cg-Hv">224</output>
+      </label>
+      <label class="slider">TILE_WIDTH
+        <input type="range" id="cg-T" min="4" max="128" step="4" value="16">
+        <output id="cg-Tv">16</output>
+      </label>
+    </div>
+    <div class="readout" id="cg-cost"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-convgemm');
+  if (!root) return;
+  var cv = document.getElementById('cg-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  // ── Figure 19.2(b) 의 예제 ──────────────────────────────────────────
+  var X = [ [[1,2,0],[1,1,3],[0,2,2]],
+            [[0,2,1],[0,3,2],[1,1,0]],
+            [[1,2,1],[0,1,3],[3,3,2]] ];
+  var FIL = [ [ [[1,1],[2,2]], [[1,1],[1,1]], [[0,1],[1,0]] ],
+              [ [[1,0],[0,1]], [[2,1],[2,1]], [[1,2],[2,0]] ] ];
+  var C = 3, M = 2, K = 2, HIN = 3, WIN = 3;
+  var HOUT = HIN - K + 1, WOUT = WIN - K + 1;
+  var UROWS = C*K*K, VCOLS = HOUT*WOUT;          // 12 x 4
+  var TILE = 2;                                   // Figure 19.9 의 2x2 tile
+  var NPHASE = UROWS / TILE;                      // 6
+
+  function mapBV(u, v) {                          // 식 (19.5)
+    var c = Math.floor(u/(K*K));
+    var p = Math.floor((u % (K*K))/K), q = (u % (K*K)) % K;
+    var h = Math.floor(v/WOUT),        w = v % WOUT;
+    return { c:c, p:p, q:q, h:h, w:w, row:p+h, col:q+w, val:X[c][p+h][q+w] };
+  }
+  var Fmat = [], Bmat = [], Ymat = [];
+  for (var m = 0; m < M; m++) {
+    Fmat.push([]);
+    for (var c = 0; c < C; c++) for (var p = 0; p < K; p++) for (var q = 0; q < K; q++)
+      Fmat[m].push(FIL[m][c][p][q]);
+  }
+  for (var u = 0; u < UROWS; u++) {
+    Bmat.push([]);
+    for (var v = 0; v < VCOLS; v++) Bmat[u].push(mapBV(u, v).val);
+  }
+  for (m = 0; m < M; m++) {
+    Ymat.push([]);
+    for (v = 0; v < VCOLS; v++) {
+      var s = 0; for (u = 0; u < UROWS; u++) s += Fmat[m][u]*Bmat[u][v];
+      Ymat[m].push(s);
+    }
+  }
+
+  var st = { mode: 'map', sel: {u:10, v:2}, phase: 0, blk: 0 };
+
+  // ── 그리기 ──────────────────────────────────────────────────────────
+  var CELL = 22, GAP = 3;
+  var hit = [];   // {x,y,w,h,kind,u,v}
+
+  function box(x, y, w, h, fill, stroke, lw) {
+    ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.strokeRect(x, y, w, h); }
+  }
+  function label(t, x, y, col, size, align) {
+    ctx.fillStyle = col; ctx.font = (size||11) + 'px ui-monospace, monospace';
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(t, x, y);
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 320;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    hit = [];
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), panel = css('--panel'), panel2 = css('--panel-2');
+
+    var sel = st.sel, mp = mapBV(sel.u, sel.v);
+    // phase 모드에서 강조할 집합
+    var inFtile = function (m, u) {
+      return st.mode === 'phase' && u >= st.phase*TILE && u < (st.phase+1)*TILE;
+    };
+    var inBtile = function (u, v) {
+      if (st.mode !== 'phase') return false;
+      return u >= st.phase*TILE && u < (st.phase+1)*TILE
+          && v >= st.blk*TILE   && v < (st.blk+1)*TILE;
+    };
+    var inYtile = function (m, v) {
+      return st.mode === 'phase' && v >= st.blk*TILE && v < (st.blk+1)*TILE;
+    };
+
+    // ── 입력 feature map 세 장 (왼쪽 위) ────────────────────────────
+    var x0 = 12, y0 = 26;
+    label('입력 feature map  X   (C=3, 3×3)', x0, y0 - 12, soft, 11.5, 'left');
+    for (var c = 0; c < C; c++) {
+      var gx = x0 + c*(3*CELL + 18);
+      label('c=' + c, gx + 1.5*CELL, y0 + 3*CELL + 12, faint, 10.5);
+      for (var r = 0; r < HIN; r++) for (var cc = 0; cc < WIN; cc++) {
+        var isSrc = (st.mode === 'map' && c === mp.c && r === mp.row && cc === mp.col);
+        box(gx + cc*CELL, y0 + r*CELL, CELL - 1, CELL - 1,
+            isSrc ? accent : panel, isSrc ? accent : rule, isSrc ? 2 : 1);
+        label(String(X[c][r][cc]), gx + cc*CELL + CELL/2 - 0.5, y0 + r*CELL + CELL/2 - 0.5,
+              isSrc ? css('--ground') : ink, 11.5);
+      }
+    }
+
+    // ── F 행렬 (왼쪽 아래) ──────────────────────────────────────────
+    var fy = y0 + 3*CELL + 42;
+    label('Filter Bank Matrix  F   (M=2 × C·K² =12)', x0, fy - 12, soft, 11.5, 'left');
+    for (m = 0; m < M; m++) for (u = 0; u < UROWS; u++) {
+      var on = inFtile(m, u);
+      box(x0 + u*CELL, fy + m*CELL, CELL - 1, CELL - 1,
+          on ? predict : panel, on ? predict : rule, on ? 2 : 1);
+      label(String(Fmat[m][u]), x0 + u*CELL + CELL/2 - 0.5, fy + m*CELL + CELL/2 - 0.5,
+            on ? css('--ground') : ink, 11.5);
+    }
+    // c 구분선
+    for (c = 1; c < C; c++) {
+      ctx.strokeStyle = faint; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0 + c*K*K*CELL - 1.5, fy); ctx.lineTo(x0 + c*K*K*CELL - 1.5, fy + M*CELL); ctx.stroke();
+    }
+
+    // ── B 행렬 (가운데) ─────────────────────────────────────────────
+    var bx = x0 + UROWS*CELL + 46, by = y0;
+    label('Unfolded Input Feature Matrix  B   (12 × 4)', bx, by - 12, soft, 11.5, 'left');
+    for (u = 0; u < UROWS; u++) {
+      label('u=' + u, bx - 8, by + u*CELL + CELL/2 - 0.5, faint, 9.5, 'right');
+      for (v = 0; v < VCOLS; v++) {
+        var isSel = (st.mode === 'map' && u === sel.u && v === sel.v);
+        var on2 = inBtile(u, v);
+        var f = isSel ? accent : (on2 ? predict : panel);
+        box(bx + v*CELL, by + u*CELL, CELL - 1, CELL - 1,
+            f, isSel ? accent : (on2 ? predict : rule), (isSel || on2) ? 2 : 1);
+        label(String(Bmat[u][v]), bx + v*CELL + CELL/2 - 0.5, by + u*CELL + CELL/2 - 0.5,
+              (isSel || on2) ? css('--ground') : ink, 11.5);
+        hit.push({x: bx + v*CELL, y: by + u*CELL, w: CELL, h: CELL, u: u, v: v});
+      }
+    }
+    for (v = 0; v < VCOLS; v++) label('v=' + v, bx + v*CELL + CELL/2 - 0.5, by - 1, faint, 9.5);
+    for (c = 1; c < C; c++) {
+      ctx.strokeStyle = faint; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx, by + c*K*K*CELL - 1.5); ctx.lineTo(bx + VCOLS*CELL, by + c*K*K*CELL - 1.5); ctx.stroke();
+    }
+
+    // ── Y 행렬 (오른쪽) ─────────────────────────────────────────────
+    var yx = bx + VCOLS*CELL + 56, yy = by + 30;
+    label('Output  Y  (2 × 4)', yx, yy - 12, soft, 11.5, 'left');
+    for (m = 0; m < M; m++) for (v = 0; v < VCOLS; v++) {
+      var ony = inYtile(m, v);
+      var isY = (st.mode === 'map' && v === sel.v);
+      box(yx + v*(CELL + 5), yy + m*CELL, CELL + 4, CELL - 1,
+          ony ? correct : (isY ? accent : panel), ony ? correct : (isY ? accent : rule),
+          (ony || isY) ? 2 : 1);
+      label(String(Ymat[m][v]), yx + v*(CELL + 5) + (CELL + 4)/2, yy + m*CELL + CELL/2 - 0.5,
+            (ony || isY) ? css('--ground') : ink, 11.5);
+    }
+    label('m=0', yx - 8, yy + CELL/2 - 0.5, faint, 9.5, 'right');
+    label('m=1', yx - 8, yy + CELL + CELL/2 - 0.5, faint, 9.5, 'right');
+    label('= F × B', yx, yy + 2*CELL + 16, faint, 11, 'left');
+
+    if (st.mode === 'phase') {
+      label('phase ' + st.phase + ' / ' + (NPHASE - 1) + '  ·  block ' + st.blk,
+            yx, yy + 2*CELL + 34, ink, 11.5, 'left');
+      label('붉은 tile 은 출력 map 두 개에', yx, yy + 2*CELL + 52, correct, 10.5, 'left');
+      label('걸쳐 있다 — 재사용의 정체', yx, yy + 2*CELL + 67, correct, 10.5, 'left');
+    }
+
+    // ── map 모드: 선택한 B 칸 → X 픽셀 화살표 ───────────────────────
+    if (st.mode === 'map') {
+      var sx = bx + sel.v*CELL + CELL/2, sy = by + sel.u*CELL + CELL/2;
+      var tx2 = x0 + mp.c*(3*CELL + 18) + mp.col*CELL + CELL/2;
+      var ty2 = y0 + mp.row*CELL + CELL/2;
+      ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(sx, sy);
+      ctx.bezierCurveTo(sx - 60, sy, tx2 + 60, ty2 + 70, tx2, ty2);
+      ctx.stroke(); ctx.setLineDash([]);
+      var a = Math.atan2(ty2 - (ty2 + 70), tx2 - (tx2 + 60));
+      ctx.beginPath(); ctx.moveTo(tx2, ty2);
+      ctx.lineTo(tx2 - 9*Math.cos(a - 0.4), ty2 - 9*Math.sin(a - 0.4));
+      ctx.lineTo(tx2 - 9*Math.cos(a + 0.4), ty2 - 9*Math.sin(a + 0.4));
+      ctx.closePath(); ctx.fillStyle = accent; ctx.fill();
+    }
+  }
+
+  // ── 텍스트 출력 ─────────────────────────────────────────────────────
+  function renderReadout() {
+    var ro = document.getElementById('cg-readout');
+    if (st.mode === 'map') {
+      var s = st.sel, mp = mapBV(s.u, s.v);
+      ro.innerHTML =
+        'B[<b>' + s.u + '</b>,<b>' + s.v + '</b>] &nbsp;←&nbsp; X[n, <b>' + mp.c + '</b>, <b>' +
+        mp.row + '</b>, <b>' + mp.col + '</b>] = <b>' + mp.val + '</b><br>' +
+        '&nbsp;&nbsp;c &nbsp;= u/K² &nbsp;&nbsp;&nbsp;&nbsp;= ' + s.u + '/4 = <b>' + mp.c + '</b>' +
+        ' &nbsp;·&nbsp; p = (u%K²)/K = (' + (s.u % 4) + ')/2 = <b>' + mp.p + '</b>' +
+        ' &nbsp;·&nbsp; q = (u%K²)%K = <b>' + mp.q + '</b><br>' +
+        '&nbsp;&nbsp;h &nbsp;= v/W_out = ' + s.v + '/2 = <b>' + mp.h + '</b>' +
+        ' &nbsp;·&nbsp; w = v%W_out = <b>' + mp.w + '</b>' +
+        ' &nbsp;→&nbsp; 행 = p+h = <b>' + mp.row + '</b>, 열 = q+w = <b>' + mp.col + '</b><br>' +
+        '&nbsp;&nbsp;이 칸은 출력 픽셀 Y[n, m, ' + mp.h + ', ' + mp.w + '] (= Y 행렬의 열 ' + s.v +
+        ') 에 기여한다.';
+    } else {
+      var lo = st.phase*TILE, hi2 = lo + TILE - 1;
+      var pairs = [];
+      for (var u = lo; u <= hi2; u++) for (var v = st.blk*TILE; v < (st.blk+1)*TILE; v++) {
+        var m2 = mapBV(u, v);
+        pairs.push('B[' + u + ',' + v + ']←X[n,' + m2.c + ',' + m2.row + ',' + m2.col + ']=' + m2.val);
+      }
+      ro.innerHTML =
+        'phase <b>' + st.phase + '</b> · block <b>' + st.blk + '</b> &nbsp;—&nbsp; ' +
+        'F tile = 열 ' + lo + '~' + hi2 + ', B tile = 행 ' + lo + '~' + hi2 +
+        ' × 열 ' + (st.blk*TILE) + '~' + (st.blk*TILE + TILE - 1) + '<br>' +
+        pairs.join(' &nbsp;·&nbsp; ');
+    }
+  }
+
+  function renderCost() {
+    var C_ = +document.getElementById('cg-C').value;
+    var K_ = +document.getElementById('cg-K').value;
+    var H_ = +document.getElementById('cg-H').value;
+    var T_ = +document.getElementById('cg-T').value;
+    document.getElementById('cg-Cv').textContent = C_;
+    document.getElementById('cg-Kv').textContent = K_;
+    document.getElementById('cg-Hv').textContent = H_;
+    document.getElementById('cg-Tv').textContent = T_;
+    var Ho = Math.max(1, H_ - K_ + 1);
+    var expand = (K_*K_*Ho*Ho)/(H_*H_);
+    var aiBasic = 0.25;                    // 2CK² / (8CK²)
+    var aiTiled = T_/4;                    // 0.5·T²/(2T)
+    var ridge = 20;                        // H100
+    var CKK = C_*K_*K_;
+    var phBook = Math.floor(CKK/T_), phCeil = Math.ceil(CKK/T_);
+    document.getElementById('cg-cost').innerHTML =
+      '<b>명시적 unfolding 의 팽창비</b> = K²·H_out·W_out / (H_in·W_in) = <b>' +
+      expand.toFixed(2) + '×</b>  (K² = ' + (K_*K_) + ' 에 수렴)' +
+      ' &nbsp;·&nbsp; B 원소 ' + (CKK*Ho*Ho).toLocaleString() +
+      ' 개 vs X 원소 ' + (C_*H_*H_).toLocaleString() + ' 개<br>' +
+      '<b>arithmetic intensity</b> — Figure 19.7 직접 kernel <b>' + aiBasic + '</b> FLOP/B' +
+      ' &nbsp;→&nbsp; Figure 19.11 (TILE_WIDTH=' + T_ + ') <b>' + aiTiled + '</b> FLOP/B' +
+      ' (' + (aiTiled/aiBasic) + '×). H100 임계값 ' + ridge + ' → <b>' +
+      (aiTiled >= ridge ? 'compute-bound' : 'memory-bound') + '</b>' +
+      (aiTiled < ridge ? ' (T ≥ 80 필요)' : '') + '<br>' +
+      '<b>phase 수</b> = C·K² / TILE_WIDTH = ' + CKK + '/' + T_ + ' → 책의 절삭 <b>' + phBook +
+      '</b>, 필요한 값 <b>' + phCeil + '</b>' +
+      (phBook !== phCeil ? ' &nbsp;⚠ <b>' + (CKK - phBook*T_) + '</b> 열이 빠진다' : ' ✓ 딱 나누어떨어진다');
+  }
+
+  function renderModes() {
+    var mb = document.getElementById('cg-modes');
+    mb.innerHTML = '';
+    [['map', '① 식 (19.5) 매핑 — B 칸을 눌러 보라'],
+     ['phase', '② tiled matmul phase (Figure 19.9)']].forEach(function (o) {
+      var b = document.createElement('button');
+      b.textContent = o[1];
+      if (o[0] !== st.mode) b.className = 'ghost';
+      b.onclick = function () { st.mode = o[0]; renderAll(); };
+      mb.appendChild(b);
+    });
+    document.getElementById('cg-steps').style.opacity = (st.mode === 'phase') ? 1 : 0.35;
+    document.getElementById('cg-legend').innerHTML =
+      '<span class="swatch" style="background:var(--accent)"></span>선택한 B 칸과 그 출처 X 픽셀' +
+      '<span class="swatch" style="background:var(--predict)"></span>이번 phase 의 F·B tile' +
+      '<span class="swatch" style="background:var(--correct)"></span>이 block 이 만드는 Y tile';
+  }
+
+  function renderAll() { renderModes(); renderReadout(); renderCost(); draw(); }
+
+  cv.addEventListener('click', function (e) {
+    var r = cv.getBoundingClientRect();
+    var mx = e.clientX - r.left, my = e.clientY - r.top;
+    for (var i = 0; i < hit.length; i++) {
+      var h = hit[i];
+      if (mx >= h.x && mx < h.x + h.w && my >= h.y && my < h.y + h.h) {
+        st.mode = 'map'; st.sel = {u: h.u, v: h.v}; renderAll(); return;
+      }
+    }
+  });
+  document.getElementById('cg-next').onclick = function () {
+    st.mode = 'phase';
+    st.phase++;
+    if (st.phase >= NPHASE) { st.phase = 0; st.blk = (st.blk + 1) % (VCOLS/TILE); }
+    renderAll();
+  };
+  document.getElementById('cg-prev').onclick = function () {
+    st.mode = 'phase';
+    st.phase--;
+    if (st.phase < 0) { st.phase = NPHASE - 1; st.blk = (st.blk + VCOLS/TILE - 1) % (VCOLS/TILE); }
+    renderAll();
+  };
+  document.getElementById('cg-reset').onclick = function () {
+    st.phase = 0; st.blk = 0; renderAll();
+  };
+  ['cg-C','cg-K','cg-H','cg-T'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', renderCost);
+  });
+  window.addEventListener('resize', draw);
+
+  renderAll();
+})();
+</script>

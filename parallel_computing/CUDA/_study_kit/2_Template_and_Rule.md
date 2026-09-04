@@ -1025,3 +1025,77 @@ representation)` 으로 병기한다.
 | `경쟁`(contention)은 한국어 | 9장 |
 | `CSR`·`CSC`·`COO`·`SpMV` 약어 그대로 | 17장 |
 | `wavefront` 영어 | 16장 |
+
+
+### 19장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| **CNN** / convolutional neural network | 합성곱 신경망 (**약어 그대로**, 아래 참조) |
+| **feature map** / feature | 특징 지도 / 특징맵 |
+| **filter** / **filter bank** | 필터 / 필터 뱅크 (7장 규약 그대로) |
+| **channel** | 채널 (**아래 참조** — 메모리 채널과 구분한다) |
+| **layer** (`convolutional layer` 등) | 층 / 계층 (**아래 참조**) |
+| **batch** / **mini-batch** / **sample** | 배치 / 미니배치 / 샘플 (**아래 참조**) |
+| **unfolding** / unrolling (입력을 행렬로 펼치기) | 펼치기 / 전개 |
+| **GEMM** / cuBLAS / **CUDNN** | (15장 규약 · 고유명사 그대로) |
+| **stride** / **padding** | 보폭 / 패딩 (6장 규약 그대로) |
+| **tensor** | 텐서 |
+| **LeNet-5** / AlexNet / ImageNet / ILSVRC / Winograd | (고유명사 그대로) |
+| **sigmoid** | 시그모이드 (함수 이름) |
+| **`H_out`·`W_out`·`W_grid`·`H_grid`·`TILE_WIDTH`** | (코드 식별자 — 백틱 그대로) |
+
+**19장에서 정한 경계 넷**
+
+**① `batch` 는 영어다 — 한국어 "배치"가 이미 다른 뜻으로 굳었다.**
+이 스터디에서 **배치**는 지금까지 전부 *arrangement*(thread 배치 · 데이터 배치 · 재배치)로
+쓰였다 (6장 checklist, 10·15·17장). CNN 의 `batch`(묶음 실행)를 "배치"로 옮기면
+**같은 낱말이 한 문단에 두 뜻으로** 나온다 — 19.2절이 정확히 그런 문단이다
+("thread **배치**" 와 "**batch** 안의 sample" 이 한 문장 걸러 나온다).
+`mini-batch`·`sample` 도 짝을 맞춰 영어.
+
+| 쓸 것 | 뜻 |
+|---|---|
+| **배치**(한국어) | arrangement — "thread 배치", "데이터 배치", "재배치" |
+| **`batch`**(영어) | 묶음 실행 — "batch 안의 sample", "batch 크기 $N$" |
+
+**② `channel` 은 영어 — 메모리 채널과 구분한다.**
+4·5·9장에서 **메모리 채널**(DRAM channel)을 한국어로 쓴 자리가 있다.
+CNN 의 `channel`(= 입력 feature map 의 index)은 **완전히 다른 것**이므로 영어로 두어
+grep 으로도 구분되게 한다. 19장 본문의 `channel` 은 전부 CNN 쪽이다.
+
+**③ `layer` 는 영어 — 합성 용어의 일부이기 때문이다.**
+`convolutional layer`·`subsampling layer`·`fully connected layer` 는 통째로 하나의 이름이고,
+`convolution` 을 영어로 둔 7장 규약과 짝을 이뤄야 한다
+("convolution 층"은 잡종이다). 반면 **일반명사로서의 "층"** — 메모리 계층, 의존 그래프의 층 —
+은 한국어를 그대로 쓴다 (16장 규약).
+
+**④ `CNN` 은 약어, 그러나 딥러닝·신경망은 한국어.**
+1장에서 이미 **딥러닝**·**신경망**을 한국어로 썼고 그대로 간다
+(한국어 교재의 완전한 표준이다). 그러나 **CNN** 은 약어이므로 풀지 않는다 —
+`SpMV`·`COO`(17장), `BFS`(18장)와 같은 처리다.
+`convolutional neural network` 를 풀어 쓸 때도 영어 그대로.
+
+**19장에서 추가로 한국어를 쓰는 것**: **가중치**·**편향**·**퍼셉트론**·**활성화 함수**·
+**순전파**·**역전파**·**추론**·**훈련**·**학습**·**모델 파라미터**·**내적**·**선형화**·
+**중복**·**팽창비**는 한국어가 표준이다.
+`매개변수` 는 **함수 인자**를, `모델 파라미터` 는 **학습되는 가중치**를 가리켜 구분한다.
+
+**`배` / `×` 경계 — 19장에서 나온 사례.**
+- "$16\times$ 개선", "$20\times$ 이상 팽창", "$24.1\times$", "$976\times$", "$80\times$ 아래",
+  "훈련 한 step 이 추론의 $3\times$" → **전부 두 값의 비교 → `×`**
+- 19장 본문에도 순수한 `배` 는 없었다. **`$K^2$ 배로 부푼다`** 처럼 **한 대상을 키우는**
+  자리만 `배` 인데, 19장에서는 그것을 "팽창비"로 표현해 `배` 를 쓸 일이 없었다.
+
+**19장에서 되짚은 앞 장 규약** (전부 그대로 지켰다)
+
+| 용어 | 어디서 정했나 |
+|---|---|
+| `kernel` (커널 ✗) | 전역 규칙표 |
+| `memory bandwidth` (대역폭 ✗) | 전역 규칙표 |
+| `arithmetic intensity` (산술 강도 ✗) | 5장 · 15장 |
+| `convolution` / `filter` / `ghost cell` 영어 | 7장 |
+| `padding` (패딩 ✗) | 6장 |
+| `coalescing` / `bank conflict` 영어 | 6장 |
+| `GEMM` · `register tiling` · `double buffering` 영어 | 15장 |
+| `tensor core` 영어 | 15장 |
