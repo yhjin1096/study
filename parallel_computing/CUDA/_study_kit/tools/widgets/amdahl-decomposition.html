@@ -1,0 +1,227 @@
+<div class="lab" id="w-amdahl22">
+  <div class="lab-head">
+    <span class="lab-tag">실험 22</span>
+    <span class="lab-title">두 개의 상한 — Amdahl 의 벽과 batch 의 맞바꿈</span>
+    <span class="lab-note">22.3절 분자동역학 예제와 22.5절 latency/throughput 을 재현</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      <b>왼쪽</b>은 22.3절의 계산이다. 병렬부의 speedup 을 아무리 올려도
+      전체는 $1/(1-p)$ 에 붙는다.
+      <b>오른쪽</b>은 22.5절의 맞바꿈이다 — batch 를 키우면 개별 query 의 latency 는
+      나빠지는데 전체 throughput 은 좋아진다.
+      두 곡선 모두 <b>"어디에 한계가 있는가"</b>를 묻는 같은 종류의 그림이다.
+    </p>
+
+    <div class="sliders">
+      <label class="slider">병렬화되는 비율 p
+        <input type="range" id="am-p" min="50" max="999" step="1" value="950">
+        <output id="am-pv">95.0%</output>
+      </label>
+      <label class="slider">병렬부 speedup s
+        <input type="range" id="am-s" min="1" max="1000" step="1" value="100">
+        <output id="am-sv">100</output>
+      </label>
+      <label class="slider">batch 크기 B
+        <input type="range" id="am-b" min="1" max="512" step="1" value="64">
+        <output id="am-bv">64</output>
+      </label>
+    </div>
+
+    <canvas id="am-canvas" width="880" height="300"></canvas>
+
+    <div class="legend" id="am-legend"></div>
+    <div class="readout" id="am-readout"></div>
+    <div class="readout" id="am-batch"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-amdahl22');
+  if (!root) return;
+  var cv = document.getElementById('am-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  function P() { return +document.getElementById('am-p').value / 1000; }
+  function S() { return +document.getElementById('am-s').value; }
+  function B() { return +document.getElementById('am-b').value; }
+
+  function amdahl(p, s) { return 1/((1 - p) + p/s); }
+
+  // 22.5절 모델 — 1024x4096 FP16 가중치, H100
+  var W_BYTES = 1024*4096*2, BW = 3.35e12, FLOPS = 66.9e12;
+  function tGemv()  { return W_BYTES/BW; }
+  function tGemm(b) { return Math.max(W_BYTES/BW, 2*b*1024*4096/FLOPS); }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 300;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct');
+
+    var half = W/2 - 20;
+    // ── 왼쪽: Amdahl ────────────────────────────────────────────────
+    (function () {
+      var x0 = 44, y0 = 34, w = half - 60, h = 200;
+      var p = P(), cap = 1/(1 - p);
+      var ymax = Math.max(cap*1.15, 5);
+      function PX(s) { return x0 + Math.log10(s)/3 * w; }         // s: 1..1000
+      function PY(v) { return y0 + h - (v/ymax)*h; }
+
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = ink; ctx.font = 'bold 12px ui-monospace, monospace';
+      ctx.fillText('22.3절 — Amdahl 의 벽', x0 - 30, y0 - 14);
+
+      // 축
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + h); ctx.lineTo(x0 + w, y0 + h); ctx.stroke();
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace';
+      [1, 10, 100, 1000].forEach(function (s) {
+        ctx.textAlign = 'center'; ctx.fillText(String(s), PX(s), y0 + h + 14);
+        ctx.strokeStyle = rule; ctx.setLineDash([2,3]);
+        ctx.beginPath(); ctx.moveTo(PX(s), y0); ctx.lineTo(PX(s), y0 + h); ctx.stroke();
+        ctx.setLineDash([]);
+      });
+      ctx.textAlign = 'right';
+      for (var q = 0; q <= 4; q++) {
+        var v = ymax*q/4;
+        ctx.fillText(v.toFixed(0), x0 - 5, PY(v) + 3);
+      }
+      ctx.textAlign = 'left'; ctx.fillStyle = soft;
+      ctx.fillText('병렬부 speedup s (log)', x0 + w - 130, y0 + h + 28);
+
+      // 상한선
+      ctx.strokeStyle = correct; ctx.setLineDash([5,4]); ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(x0, PY(cap)); ctx.lineTo(x0 + w, PY(cap)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = correct; ctx.font = '10.5px ui-monospace, monospace';
+      ctx.fillText('상한 1/(1-p) = ' + cap.toFixed(1) + '×', x0 + 6, PY(cap) - 5);
+
+      // 곡선
+      ctx.strokeStyle = accent; ctx.lineWidth = 2.2; ctx.beginPath();
+      for (var i = 0; i <= 300; i++) {
+        var s = Math.pow(10, 3*i/300);
+        var yv = amdahl(p, s);
+        if (i === 0) ctx.moveTo(PX(s), PY(yv)); else ctx.lineTo(PX(s), PY(yv));
+      }
+      ctx.stroke();
+      // 이상적인 선 (p=1)
+      ctx.strokeStyle = faint; ctx.setLineDash([3,3]); ctx.lineWidth = 1; ctx.beginPath();
+      for (i = 0; i <= 300; i++) {
+        s = Math.pow(10, 3*i/300);
+        var yy = Math.min(s, ymax*1.3);
+        if (i === 0) ctx.moveTo(PX(s), PY(yy)); else ctx.lineTo(PX(s), PY(yy));
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+
+      // 현재 점
+      var sc = S(), vc = amdahl(p, sc);
+      ctx.fillStyle = predict;
+      ctx.beginPath(); ctx.arc(PX(sc), PY(vc), 5, 0, 6.2832); ctx.fill();
+      ctx.strokeStyle = predict; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+      ctx.beginPath(); ctx.moveTo(PX(sc), PY(vc)); ctx.lineTo(x0, PY(vc)); ctx.stroke();
+      ctx.setLineDash([]);
+    })();
+
+    // ── 오른쪽: batch ───────────────────────────────────────────────
+    (function () {
+      var x0 = W/2 + 44, y0 = 34, w = half - 60, h = 200;
+      function PX(b) { return x0 + Math.log2(b)/9 * w; }           // b: 1..512
+      var tmax = 0;
+      for (var b = 1; b <= 512; b*=2) tmax = Math.max(tmax, b*tGemv());
+      function PY(t) { return y0 + h - (Math.log10(t*1e6 + 1)/Math.log10(tmax*1e6 + 1))*h; }
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = ink; ctx.font = 'bold 12px ui-monospace, monospace';
+      ctx.fillText('22.5절 — batch 의 맞바꿈', x0 - 30, y0 - 14);
+
+      ctx.strokeStyle = rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + h); ctx.lineTo(x0 + w, y0 + h); ctx.stroke();
+      ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace';
+      [1, 8, 64, 512].forEach(function (b) {
+        ctx.textAlign = 'center'; ctx.fillText(String(b), PX(b), y0 + h + 14);
+      });
+      ctx.textAlign = 'left'; ctx.fillStyle = soft;
+      ctx.fillText('batch 크기 B (log) · 세로는 시간 (log)', x0 + 4, y0 + h + 28);
+
+      // GEMV B번 (전체 latency, batch 없이)
+      ctx.strokeStyle = accent; ctx.lineWidth = 2.2; ctx.beginPath();
+      for (var i = 0; i <= 200; i++) {
+        var b2 = Math.pow(2, 9*i/200);
+        var t = b2*tGemv();
+        if (i === 0) ctx.moveTo(PX(b2), PY(t)); else ctx.lineTo(PX(b2), PY(t));
+      }
+      ctx.stroke();
+      // GEMM 한 번 (전체 latency, batch)
+      ctx.strokeStyle = correct; ctx.lineWidth = 2.2; ctx.beginPath();
+      for (i = 0; i <= 200; i++) {
+        b2 = Math.pow(2, 9*i/200);
+        t = tGemm(b2);
+        if (i === 0) ctx.moveTo(PX(b2), PY(t)); else ctx.lineTo(PX(b2), PY(t));
+      }
+      ctx.stroke();
+      // 개별 query 의 latency (= GEMM 시간)
+      ctx.strokeStyle = predict; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(PX(1), PY(tGemv())); ctx.lineTo(PX(512), PY(tGemv()));
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = predict; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText('batch 없을 때 개별 latency', x0 + 6, PY(tGemv()) - 5);
+
+      var bc = B();
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(PX(bc), PY(bc*tGemv()), 5, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = correct;
+      ctx.beginPath(); ctx.arc(PX(bc), PY(tGemm(bc)), 5, 0, 6.2832); ctx.fill();
+      ctx.strokeStyle = faint; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+      ctx.beginPath(); ctx.moveTo(PX(bc), y0); ctx.lineTo(PX(bc), y0 + h); ctx.stroke();
+      ctx.setLineDash([]);
+    })();
+  }
+
+  function render() {
+    var p = P(), s = S(), b = B();
+    document.getElementById('am-pv').textContent = (p*100).toFixed(1) + '%';
+    document.getElementById('am-sv').textContent = s;
+    document.getElementById('am-bv').textContent = b;
+
+    var cap = 1/(1 - p), cur = amdahl(p, s);
+    document.getElementById('am-readout').innerHTML =
+      '<b>Amdahl</b> — 순차 부분 <b>' + ((1-p)*100).toFixed(1) + '%</b>' +
+      ' · 병렬부 <b>' + s + '×</b> 가속 &nbsp;→&nbsp; 전체 <b>' + cur.toFixed(2) + '×</b>' +
+      ' &nbsp;(상한 <b>' + cap.toFixed(1) + '×</b>, 그 중 <b>' +
+      (100*cur/cap).toFixed(1) + '%</b> 를 달성)<br>' +
+      '&nbsp;&nbsp;책의 예 (p=95%, s=100): 1/(5% + 0.95%) = <b>16.81×</b>' +
+      ' &nbsp;·&nbsp; 완전히 겹치면 1/5% = <b>20×</b>' +
+      ' &nbsp;·&nbsp; 순차 부분을 1% 로 줄이면 상한이 <b>100×</b>';
+
+    var tv = tGemv(), tm = tGemm(b);
+    document.getElementById('am-batch').innerHTML =
+      '<b>batch</b> — GEMV 를 ' + b + '번: <b>' + (b*tv*1e6).toFixed(1) + ' µs</b>' +
+      ' &nbsp;vs&nbsp; GEMM 한 번: <b>' + (tm*1e6).toFixed(1) + ' µs</b>' +
+      ' &nbsp;→&nbsp; 전체 latency <b>' + (b*tv/tm).toFixed(1) + '×</b> 개선<br>' +
+      '&nbsp;&nbsp;그런데 <b>개별 query 의 latency 는 ' + (tm/tv).toFixed(1) + '× 나빠진다</b>' +
+      ' (' + (tv*1e6).toFixed(1) + ' µs → ' + (tm*1e6).toFixed(1) + ' µs)' +
+      ' &nbsp;·&nbsp; throughput <b>' + (b/tm/1e6).toFixed(2) + ' M query/s</b>' +
+      (tm > tv ? ' &nbsp;— compute-bound 구간' : ' &nbsp;— 아직 memory-bound (공짜 구간)');
+  }
+
+  document.getElementById('am-legend').innerHTML =
+    '<span class="swatch" style="background:var(--accent)"></span>batch 없이 (GEMV × B) · Amdahl 곡선' +
+    '<span class="swatch" style="background:var(--correct)"></span>batch 로 (GEMM 한 번) · Amdahl 상한' +
+    '<span class="swatch" style="background:var(--predict)"></span>현재 설정';
+
+  ['am-p','am-s','am-b'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { render(); draw(); });
+  });
+  window.addEventListener('resize', draw);
+  render(); draw();
+})();
+</script>

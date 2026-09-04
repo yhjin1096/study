@@ -1233,3 +1233,41 @@ $g_q$(group 수), $b$(batch 크기), $p$(정밀도 바이트) 는 **풀어 쓰�
 | `occupancy` · `register` | 전역 규칙표 · 4장 |
 | `배치` 는 arrangement (batch 는 영어) | 19장 |
 | `control divergence` (제어 분기 ✗) | 전역 규칙표 |
+
+
+### 22장에서 추가된 용어
+
+| 쓸 것 | 쓰지 말 것 |
+|---|---|
+| **output-centric / input-centric** (분해) | 출력 중심 / 입력 중심 |
+| **gather / scatter** (접근 패턴) | 모으기 / 흩뿌리기 (**21장 규약 그대로**) |
+| **problem decomposition / problem formulation** | 문제 분해 / 문제 정식화 (**아래 참조**) |
+| **algorithm selection** | 알고리즘 선택 |
+| **definiteness / effective computability / finiteness** | (알고리즘의 세 성질 — 영어) |
+| **Amdahl's Law** | 암달의 법칙 (1장 규약 그대로) |
+| **latency optimization** | 지연 최적화 |
+| **task-level parallelism** / stream | 작업 수준 병렬성 |
+| **SPMD** | (약어 그대로) |
+
+**22장에서 정한 경계 둘**
+
+**① `분해`·`정식화` 는 한국어를 쓰되 수식어는 영어로 붙인다.**
+`decomposition`·`formulation` 자체는 한국어 **분해**·**정식화**가 표준이고,
+그 앞에 붙는 **`output-centric`·`input-centric`** 은 영어다 —
+"output-centric 분해", "문제 정식화" 처럼 쓴다.
+19장의 `matrix-vector 곱셈`, 17장의 `matrix-vector 곱` 과 같은 조합 방식이다.
+
+**② `reduction`(패턴 이름)은 영어, `축약`(일반 동작)은 한국어.**
+전역 규칙표가 `reduction` 을 "축소/리덕션/감축 트리"로 옮기지 말라고 하는데,
+**패턴 이름**을 가리킬 때가 그렇다 ("전역 reduction", "block-wide reduction").
+반면 **연산의 성질을 서술**할 때는 한국어 **축약**을 쓴다
+("GEMM 의 축약 차원", "warp 축약" — 19·20장에서 이미 그렇게 썼다).
+
+**22장에서 추가로 한국어를 쓰는 것**: **맞바꿈**(trade-off)·**복잡도**·**정확도**·
+**수치 안정성**·**일반성**·**부하 균형**·**멱등**·**분자동역학**·**힘**·**원자**는
+한국어가 표준이다. `work efficiency` 는 전역 규칙표대로 영어.
+
+**`배` / `×` 경계 — 22장에서 나온 사례.**
+- "$100\times$ 가속", "$17\times$", "$20\times$ 로 제한", "$4.5\times$ 적다",
+  "$25.6\times$ 나빠진다" → **전부 두 값의 비교 → `×`**
+- 22장 본문에도 순수한 `배` 는 없었다.

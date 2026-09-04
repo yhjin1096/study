@@ -1,0 +1,5 @@
+# 24장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 24 --book-pages 577-582 \
+#         --out part3_applications/24_conclusion/images \
+#         --names _study_kit/tools/figure_names/ch24.txt
+Figure 24.1 = fig24_1_g80_to_b200

@@ -1,0 +1,6 @@
+# 22장 — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter 22 --book-pages 529-540 \
+#         --out part3_applications/22_algorithm_selection/images \
+#         --names _study_kit/tools/figure_names/ch22.txt
+Figure 22.1 = fig22_1_decomposition
+Figure 22.2 = fig22_2_md_modules
