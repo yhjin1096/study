@@ -41,7 +41,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 21장 Electrostatic potential map | ✅ | ✅ 14개 | ✅ dcs-coarsening |
 | 22장 Algorithm selection, problem decomposition, and problem formulation | ✅ | ✅ 2개 | ✅ amdahl-decomposition |
 | 23장 Multi-GPU programming | ⬜ | — | — |
-| 24장 Conclusion and future outlook | ⬜ | — | — |
+| 24장 Conclusion and future outlook | ✅ | ✅ 1개 | ✅ gpu-18years |
 | 부록 A. Numerical considerations | ⬜ | — | — |
 | 부록 B. Deep learning basics | ⬜ | — | — |
 | 부록 C. CUDA memories, address spaces, and pointers | ⬜ | — | — |

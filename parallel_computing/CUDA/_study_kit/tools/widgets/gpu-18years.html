@@ -1,0 +1,178 @@
+<div class="lab" id="w-gpu18">
+  <div class="lab-head">
+    <span class="lab-tag">실험 24</span>
+    <span class="lab-title">18년 — 연산은 6,377× 늘고 bandwidth 는 93× 늘었다</span>
+    <span class="lab-note">Figure 24.1 을 roofline 으로 옮겨 본다</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      Figure 24.1 의 다섯 숫자를 <b>roofline</b> 위에 놓는다.
+      연산이 memory bandwidth 보다 훨씬 빨리 늘었으므로
+      <b>임계값(compute-bound 가 되기 위한 arithmetic intensity)이 4 에서 275 FLOP/B 로</b> 올랐다.
+      이 책의 여러 kernel 을 점으로 찍어 <b>어느 쪽에 있는지</b> 보인다.
+    </p>
+
+    <div class="btnrow" id="g18-gpus"></div>
+    <canvas id="g18-canvas" width="880" height="330"></canvas>
+    <div class="legend" id="g18-legend"></div>
+    <div class="readout" id="g18-readout"></div>
+    <div class="readout" id="g18-table"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-gpu18');
+  if (!root) return;
+  var cv = document.getElementById('g18-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  // Figure 24.1 의 숫자 (TFLOPS, TB/s)
+  var GPUS = [
+    {key:'g80',  name:'G80 (2007)',            flops:0.345, bw:0.0864},
+    {key:'h100', name:'H100 (17장에서 쓴 값)',  flops:66.9,  bw:3.35},
+    {key:'b200', name:'B200 FP32 (2025)',      flops:80,    bw:8.0},
+    {key:'b200t',name:'B200 Tensor Core FP32', flops:2200,  bw:8.0}
+  ];
+  var st = { sel: 'b200t' };
+
+  // 이 책에서 계산한 kernel 들의 arithmetic intensity (FLOP/B)
+  var K = [
+    {ai:0.17, label:'SpMV (17장)'},
+    {ai:0.25, label:'naive matmul (5장) · conv kernel (19장)'},
+    {ai:1.0,  label:'attention 생성 국면 (20장)'},
+    {ai:4.0,  label:'19장 tiled GEMM (T=16)'},
+    {ai:8.0,  label:'15장 tile 32×32'},
+    {ai:32.0, label:'15장 tile 128×128'},
+    {ai:315,  label:'linear layer batch 512 (20장)'}
+  ];
+
+  function G() { return GPUS.filter(function (g) { return g.key === st.sel; })[0]; }
+  function ridge(g) { return g.flops/g.bw; }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 330;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct');
+
+    var x0 = 56, y0 = 22, w = W - 300, h = H - 76;
+    // x: AI 0.05 ~ 2000 (log), y: 성능 0.01 ~ 4000 TFLOPS (log)
+    var xlo = Math.log10(0.05), xhi = Math.log10(2000);
+    var ylo = Math.log10(0.005), yhi = Math.log10(4000);
+    function PX(ai) { return x0 + (Math.log10(ai) - xlo)/(xhi - xlo)*w; }
+    function PY(p)  { return y0 + h - (Math.log10(p) - ylo)/(yhi - ylo)*h; }
+
+    // 축
+    ctx.strokeStyle = rule; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y0+h); ctx.lineTo(x0+w, y0+h); ctx.stroke();
+    ctx.fillStyle = faint; ctx.font = '10px ui-monospace, monospace';
+    [0.1, 1, 10, 100, 1000].forEach(function (v) {
+      ctx.textAlign = 'center'; ctx.fillText(String(v), PX(v), y0+h+14);
+      ctx.strokeStyle = rule; ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.moveTo(PX(v), y0); ctx.lineTo(PX(v), y0+h); ctx.stroke(); ctx.setLineDash([]);
+    });
+    ctx.textAlign = 'right';
+    [0.01, 0.1, 1, 10, 100, 1000].forEach(function (v) {
+      ctx.fillText(String(v), x0-5, PY(v)+3);
+    });
+    ctx.textAlign = 'left'; ctx.fillStyle = soft; ctx.font = '10.5px ui-monospace, monospace';
+    ctx.fillText('arithmetic intensity (FLOP/B, log)', x0 + w - 210, y0+h+30);
+    ctx.save(); ctx.translate(14, y0 + h/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center'; ctx.fillText('달성 가능한 성능 (TFLOPS, log)', 0, 0); ctx.restore();
+
+    // roofline — 모든 GPU 를 흐리게, 선택한 것을 진하게
+    GPUS.forEach(function (g, gi) {
+      var sel = (g.key === st.sel);
+      var r = ridge(g);
+      ctx.strokeStyle = sel ? accent : rule;
+      ctx.lineWidth = sel ? 2.4 : 1;
+      ctx.globalAlpha = sel ? 1 : 0.5;
+      ctx.beginPath();
+      ctx.moveTo(PX(0.05), PY(Math.max(0.005, 0.05*g.bw)));
+      ctx.lineTo(PX(r), PY(g.flops));
+      ctx.lineTo(PX(2000), PY(g.flops));
+      ctx.stroke();
+      if (sel) {
+        ctx.strokeStyle = correct; ctx.setLineDash([4,4]); ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(PX(r), y0); ctx.lineTo(PX(r), y0+h); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = correct; ctx.font = 'bold 11px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('임계값 ' + r.toFixed(1) + ' FLOP/B', PX(r) + 5, y0 + h - 8);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = sel ? ink : faint;
+      ctx.font = (sel ? 'bold ' : '') + '10.5px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      var ly = PY(g.flops) + 3;
+      if (g.key === 'h100') ly += 12;              // B200 FP32 라벨과 겹치지 않게
+      if (g.key === 'b200') ly -= 4;
+      ctx.fillText(g.name, PX(2000) + 6, ly);
+    });
+
+    // kernel 점
+    var g = G(), r = ridge(g);
+    K.forEach(function (k, i) {
+      var perf = Math.min(k.ai*g.bw, g.flops);
+      var bound = k.ai < r;
+      ctx.fillStyle = bound ? predict : correct;
+      ctx.beginPath(); ctx.arc(PX(k.ai), PY(perf), 4.5, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = faint; ctx.font = '9.5px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(k.label.split(' ')[0], PX(k.ai), PY(perf) - 9 - (i%2)*11);
+    });
+  }
+
+  function render() {
+    var g = G(), g80 = GPUS[0], r = ridge(g), r80 = ridge(g80);
+    var mb = K.filter(function (k) { return k.ai < r; });
+    document.getElementById('g18-readout').innerHTML =
+      '<b>' + g.name + '</b> — ' + g.flops + ' TFLOPS / ' + g.bw + ' TB/s' +
+      ' &nbsp;→&nbsp; 임계값 <b>' + r.toFixed(1) + ' FLOP/B</b>' +
+      ' &nbsp;(G80 의 ' + r80.toFixed(1) + ' 대비 <b>' + (r/r80).toFixed(0) + '×</b>)<br>' +
+      '&nbsp;&nbsp;이 책의 kernel ' + K.length + '개 중 <b>' + mb.length +
+      '개가 memory-bound</b>: ' + mb.map(function (k) { return k.label; }).join(' · ');
+
+    var rows = GPUS.map(function (x) {
+      return '<tr><td>' + x.name + '</td><td>' + x.flops + '</td><td>' + x.bw +
+             '</td><td><b>' + ridge(x).toFixed(1) + '</b></td><td>' +
+             (x.flops/GPUS[0].flops).toFixed(0) + '×</td><td>' +
+             (x.bw/GPUS[0].bw).toFixed(0) + '×</td></tr>';
+    }).join('');
+    document.getElementById('g18-table').innerHTML =
+      '<div style="overflow-x:auto"><table style="font-size:12px">' +
+      '<tr><th>GPU</th><th>TFLOPS</th><th>TB/s</th><th>임계값</th>' +
+      '<th>연산 G80 대비</th><th>bandwidth G80 대비</th></tr>' + rows + '</table></div>' +
+      '<b>책의 표에서 Tensor Core 비율만 638× 로 적혀 있다</b> — ' +
+      '2200/0.345 = <b>6377</b> 이므로 자릿수가 하나 빠졌다 (원문 오기 ①).';
+  }
+
+  function renderBtns() {
+    var b = document.getElementById('g18-gpus');
+    b.innerHTML = '';
+    GPUS.forEach(function (g) {
+      var el = document.createElement('button');
+      el.textContent = g.name;
+      if (g.key !== st.sel) el.className = 'ghost';
+      el.onclick = function () { st.sel = g.key; renderAll(); };
+      b.appendChild(el);
+    });
+    document.getElementById('g18-legend').innerHTML =
+      '<span class="swatch" style="background:var(--accent)"></span>선택한 GPU 의 roofline' +
+      '<span class="swatch" style="background:var(--correct)"></span>임계값 · compute-bound kernel' +
+      '<span class="swatch" style="background:var(--predict)"></span>memory-bound kernel';
+  }
+
+  function renderAll() { renderBtns(); render(); draw(); }
+  window.addEventListener('resize', draw);
+  renderAll();
+})();
+</script>
