@@ -1,0 +1,18 @@
+# 1장 Factor Graphs for SLAM (책 p.19~52)
+# 재현:  python3 _study_kit/tools/extract_figures.py --chapter 1 --book-pages 19-52 \
+#          --out part1_foundations/01_factor_graphs/images --names _study_kit/tools/figure_names/ch1.txt
+Figure 1.1 = fig1_1_toy_example
+Figure 1.2 = fig1_2_bayes_net
+Figure 1.3 = fig1_3_factor_graph
+Figure 1.4 = fig1_4_slam_variants
+Figure 1.5 = fig1_5_large_example
+Figure 1.6 = fig1_6_dogleg
+Figure 1.7 = fig1_7_sparse_jacobian
+Figure 1.8 = fig1_8_information_matrix
+Figure 1.9 = fig1_9_ordering_fillin
+Figure 1.10 = fig1_10_elimination_sequence
+Figure 1.11 = fig1_11_eliminate_l1
+Figure 1.12 = fig1_12_elimination_remaining
+Figure 1.13 = fig1_13_bayes_tree
+Figure 1.14 = fig1_14_bayes_tree_update
+Figure 1.15 = fig1_15_bayes_tree_large

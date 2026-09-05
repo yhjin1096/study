@@ -306,6 +306,16 @@ def convert(md, vault, base_dir, cards=None):
     while i < n:
         line = lines[i]
 
+        # --- raw HTML 블록 — 그대로 통과시킨다
+        # 접기 블록(<details>/<summary>)을 쓰기 위한 것이다. 연습문제의 답을 접어 두면
+        # 읽는 사람이 먼저 풀어 볼 수 있다. 여닫는 태그만 통과시키고 그 사이 내용은
+        # 평소대로 마크다운으로 처리하므로, 안에 표·수식·목록을 그대로 쓸 수 있다.
+        if re.match(r"\s*</?(?:details|summary)\b[^>]*>.*$", line, re.I):
+            close_list(list_stack)
+            out.append(line.strip())
+            i += 1
+            continue
+
         # --- widget marker
         m = re.match(r"\s*<!--\s*widget:([\w-]+)\s*-->\s*$", line)
         if m:
@@ -427,7 +437,10 @@ def convert(md, vault, base_dir, cards=None):
         i += 1
         while i < n and lines[i].strip() and not re.match(
                 r"^(#{1,6}\s|>|```|\s*[-*]\s|\s*\d+\.\s|\s*---+\s*$|\|)", lines[i]) \
-                and not re.match(r"\s*<!--\s*widget:", lines[i]):
+                and not re.match(r"\s*<!--\s*widget:", lines[i]) \
+                and not re.match(r"\s*</?(?:details|summary)\b", lines[i], re.I):
+            # 마지막 조건 — 문단 바로 뒤에 빈 줄 없이 </details> 가 오는 일이 흔하다.
+            # 여기서 끊지 않으면 닫는 태그가 문단에 삼켜져 화면에 글자로 새어 나온다.
             buf.append(lines[i])
             i += 1
         out.append(f"<p>{inline(' '.join(buf), vault, cards)}</p>")
@@ -590,6 +603,15 @@ main {{ padding:3.4rem 3.2rem 8rem; min-width:0; }}
   margin-left:calc(-1 * var(--bleed));
   margin-right:calc(-1 * var(--bleed));
 }}
+/* 다만 **감싸인 안에서는 bleed 를 취소한다.** 본문에서 표·수식을 좌우로 넓게
+   빼주는 이 음수 마진이, 인용구·접기 블록·카드 안에서는 그 테두리를 뚫고 나간다
+   (글자가 선 밖으로 삐져 나온 것처럼 보인다). */
+blockquote .mathblock, blockquote .codewrap, blockquote .tablewrap, blockquote figure,
+details .mathblock, details .codewrap, details .tablewrap, details figure,
+#drawer-body .mathblock, #drawer-body .codewrap, #drawer-body .tablewrap, #drawer-body figure {{
+  margin-left:0;
+  margin-right:0;
+}}
 
 h1,h2,h3,h4 {{ text-wrap:balance; line-height:1.32; }}
 h1 {{
@@ -724,6 +746,24 @@ canvas {{ display:block; width:100%; height:auto; border-radius:7px; background:
 @media (prefers-reduced-motion: reduce) {{
   * {{ transition:none !important; animation:none !important; }}
 }}
+
+/* ---- 접기 블록 (연습문제 답) ---- */
+details {{
+  margin:1.1rem 0; padding:0 1rem; border:1px solid var(--rule);
+  border-radius:.5rem; background:var(--panel-2);
+}}
+details[open] {{ padding-bottom:.4rem; }}
+details > summary {{
+  margin:0 -1rem; padding:.7rem 1rem; cursor:pointer; list-style:none;
+  font-weight:600; color:var(--accent); user-select:none;
+}}
+details > summary::-webkit-details-marker {{ display:none; }}
+details > summary::before {{
+  content:"\\25B8"; display:inline-block; width:1.1em;
+  transition:transform .15s ease; opacity:.8;
+}}
+details[open] > summary::before {{ transform:rotate(90deg); }}
+details > summary:hover {{ color:var(--ink); }}
 
 /* ---- aside 카드 (포스트잇) ---- */
 /* 본문 표시: 점선 밑줄만. 흐름을 끊지 않는 것이 목적이다. */

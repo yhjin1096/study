@@ -101,10 +101,10 @@
   },
   "15": {
    "raw": "Agarwal, Sameer, Mierle, Keir, and Team, The Ceres Solver. 2022 (3). Ceres Solver.",
-   "authors": "",
-   "year": "",
-   "title": "Agarwal, Sameer, Mierle, Keir, and Team, The Ceres Solver. 2022 (3). Ceres Solver.",
-   "short": "Agarwal, Sameer, Mierle, Keir, and Team, The Cer"
+   "authors": "Agarwal, Sameer, Mierle, Keir, and Team, The Ceres Solver",
+   "year": "2022",
+   "title": "Ceres Solver",
+   "short": "Agarwal et al. 2022"
   },
   "16": {
    "raw": "Agate, M., Grimsdale, R. L., and Lister, P. F. 1991. The HERO Algorithm for Ray-tracing Octrees. Pages 61–73 of: Advances in Computer Graphics Hardware IV.",
@@ -227,10 +227,10 @@
   },
   "33": {
    "raw": "Ankenbauer, Jacqueline, Lusk, Parker C., and How, Jonathan P. 2023 (Mar.). Global Localization in Unstructured Environments Using Semantic Object Maps Built from Various Viewpoints.",
-   "authors": "",
-   "year": "",
-   "title": "Ankenbauer, Jacqueline, Lusk, Parker C., and How, Jonathan P. 2023 (Mar.). Global Localization in Unstructured Environments Using Semantic Object Maps Built from Various Viewpoints.",
-   "short": "Ankenbauer, Jacqueline, Lusk, Parker C., and How"
+   "authors": "Ankenbauer, Jacqueline, Lusk, Parker C., and How, Jonathan P",
+   "year": "2023",
+   "title": "Global Localization in Unstructured Environments Using Semantic Object Maps Built from Various Viewpoints",
+   "short": "Ankenbauer et al. 2023"
   },
   "34": {
    "raw": "Antonante, P., Tzoumas, V., Yang, H., and Carlone, L. 2021. OutlierRobust Estimation: Hardness, Minimally Tuned Algorithms, and Applications. IEEE Trans. Robotics, 38(1), 281–301. .",
@@ -416,10 +416,10 @@
   },
   "60": {
    "raw": "Bauernfeind, Carl Max v. 1856. Elemente der Vermessungskunde: ein Lehrbuch der praktischen Geometrie. Cotta.",
-   "authors": "",
-   "year": "",
-   "title": "Bauernfeind, Carl Max v. 1856. Elemente der Vermessungskunde: ein Lehrbuch der praktischen Geometrie. Cotta.",
-   "short": "Bauernfeind, Carl Max v. 1856. Elemente der Verm"
+   "authors": "Bauernfeind, Carl Max v",
+   "year": "1856",
+   "title": "Elemente der Vermessungskunde: ein Lehrbuch der praktischen Geometrie",
+   "short": "Bauernfeind 1856"
   },
   "61": {
    "raw": "Bavle, Hriday, Sanchez-Lopez, Jose Luis, Shaheer, Muhammad, Civera, Javier, and Voos, Holger. 2022. Situational Graphs for Robot Navigation in Structured Indoor Environments. IEEE Robotics and Automation Letters, 7(4), 9107–9114.",
@@ -794,10 +794,10 @@
   },
   "114": {
    "raw": "Briales, J., and Gonzalez-Jimenez, J. 2016 (Oct). Fast global optimality verification in 3D SLAM. Pages 4630–4636 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Briales, J., and Gonzalez-Jimenez, J. 2016 (Oct). Fast global optimality verification in 3D SLAM. Pages 4630–4636 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Briales, J., and Gonzalez-Jimenez, J. 2016 (Oct)"
+   "authors": "Briales, J., and Gonzalez-Jimenez, J",
+   "year": "2016",
+   "title": "Fast global optimality verification in 3D SLAM",
+   "short": "Briales et al. 2016"
   },
   "115": {
    "raw": "Briales, Jesus, and Gonzalez-Jimenez, Javier. 2017. Convex Global 3D Registration with Lagrangian Duality. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -1263,10 +1263,10 @@
   },
   "181": {
    "raw": "Chen, Chuchu, Peng, Yuxiang, and Huang, Guoquan. 2024b (May). Fast and Consistent Covariance Recovery for Sliding-window Optimization-based VINS. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Chen, Chuchu, Peng, Yuxiang, and Huang, Guoquan. 2024b (May). Fast and Consistent Covariance Recovery for Sliding-window Optimization-based VINS. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Chen, Chuchu, Peng, Yuxiang, and Huang, Guoquan."
+   "authors": "Chen, Chuchu, Peng, Yuxiang, and Huang, Guoquan",
+   "year": "2024b",
+   "title": "Fast and Consistent Covariance Recovery for Sliding-window Optimization-based VINS",
+   "short": "Chen et al. 2024b"
   },
   "182": {
    "raw": "Chen, Hansheng, Wang, Pichao, Wang, Fan, Tian, Wei, Xiong, Lu, and Li, Hao. 2022a. EPro-PnP: Generalized End-to-End Probabilistic Perspectiven-Points for Monocular Object Pose Estimation. Pages 2781–2790 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -1417,10 +1417,10 @@
   },
   "203": {
    "raw": "Chin, T., Kee, Y. H., Eriksson, A., and Neumann, F. 2016 (June). Guaranteed Outlier Removal with Mixed Integer Linear Programs. Pages 5858–5866 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Chin, T., Kee, Y. H., Eriksson, A., and Neumann, F. 2016 (June). Guaranteed Outlier Removal with Mixed Integer Linear Programs. Pages 5858–5866 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Chin, T., Kee, Y. H., Eriksson, A., and Neumann,"
+   "authors": "Chin, T., Kee, Y. H., Eriksson, A., and Neumann, F",
+   "year": "2016",
+   "title": "Guaranteed Outlier Removal with Mixed Integer Linear Programs",
+   "short": "Chin et al. 2016"
   },
   "204": {
    "raw": "Chin, Tat-Jun, Bagchi, Samya, Eriksson, Anders P., and van Schaik, Andr´e. 2019. Star Tracking using an Event Camera. Pages 1646–1655 of: IEEE/CVF Conf. on Computer Vision and Pattern Recognition Workshops.",
@@ -1704,10 +1704,10 @@
   },
   "244": {
    "raw": "Davison, Andrew J. 2003 (Oct). Real-time simultaneous localisation and mapping with a single camera. Pages 1403–1410, vol. 2 of: Intl. Conf. on Computer Vision (ICCV).",
-   "authors": "",
-   "year": "",
-   "title": "Davison, Andrew J. 2003 (Oct). Real-time simultaneous localisation and mapping with a single camera. Pages 1403–1410, vol. 2 of: Intl. Conf. on Computer Vision (ICCV).",
-   "short": "Davison, Andrew J. 2003 (Oct). Real-time simulta"
+   "authors": "Davison, Andrew J",
+   "year": "2003",
+   "title": "Real-time simultaneous localisation and mapping with a single camera",
+   "short": "Davison 2003"
   },
   "245": {
    "raw": "Davison, Andrew J. 2018. FutureMapping: The computational structure of spatial AI systems. arXiv preprint.",
@@ -1767,10 +1767,10 @@
   },
   "253": {
    "raw": "Dellaert, Frank, and Contributors, GTSAM. 2022 (May). GTSAM: Georgia Tech Smoothing and Mapping Library. Georgia Tech Borg Lab.",
-   "authors": "",
-   "year": "",
-   "title": "Dellaert, Frank, and Contributors, GTSAM. 2022 (May). GTSAM: Georgia Tech Smoothing and Mapping Library. Georgia Tech Borg Lab.",
-   "short": "Dellaert, Frank, and Contributors, GTSAM. 2022 ("
+   "authors": "Dellaert, Frank, and Contributors, GTSAM",
+   "year": "2022",
+   "title": "GTSAM: Georgia Tech Smoothing and Mapping Library",
+   "short": "Dellaert et al. 2022"
   },
   "254": {
    "raw": "Dellaert, Frank, and Kaess, Michael. 2006. Square Root SAM: Simultaneous localization and mapping via square root information smoothing. Intl. J. of Robotics Research, 25(12), 1181–1203.",
@@ -2068,10 +2068,10 @@
   },
   "296": {
    "raw": "Dymczyk, Marcin, Lynen, Simon, Cieslewski, Titus, Bosse, Michael, Siegwart, Roland, and Furgale, Paul. 2015 (May). The gist of maps-summarizing experience for lifelong localization. Pages 2767–2773 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Dymczyk, Marcin, Lynen, Simon, Cieslewski, Titus, Bosse, Michael, Siegwart, Roland, and Furgale, Paul. 2015 (May). The gist of maps-summarizing experience for lifelong localization. Pages 2767–2773 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Dymczyk, Marcin, Lynen, Simon, Cieslewski, Titus"
+   "authors": "Dymczyk, Marcin, Lynen, Simon, Cieslewski, Titus, Bosse, Michael, Siegwart, Roland, and Furgale, Paul",
+   "year": "2015",
+   "title": "The gist of maps-summarizing experience for lifelong localization",
+   "short": "Dymczyk et al. 2015"
   },
   "297": {
    "raw": "Dziri, Nouha, Lu, Ximing, Sclar, Melanie, Li, Xiang Lorraine, Jian, Liwei, Lin, Bill Yuchen, West, Peter, Bhagavatula, Chandra, Bras, Ronan Le, Hwang, Jena D, et al. 2023. Faith and Fate: Limits of Transformers on Compositionality. arXiv preprint.",
@@ -2138,10 +2138,10 @@
   },
   "306": {
    "raw": "Engel, J., Sturm, J., and Cremers, D. 2012 (Oct.). Accurate Figure Flying with a Quadrocopter Using Onboard Visual and Inertial Sensing. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems Workshops.",
-   "authors": "",
-   "year": "",
-   "title": "Engel, J., Sturm, J., and Cremers, D. 2012 (Oct.). Accurate Figure Flying with a Quadrocopter Using Onboard Visual and Inertial Sensing. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems Workshops.",
-   "short": "Engel, J., Sturm, J., and Cremers, D. 2012 (Oct."
+   "authors": "Engel, J., Sturm, J., and Cremers, D",
+   "year": "2012",
+   "title": "Accurate Figure Flying with a Quadrocopter Using Onboard Visual and Inertial Sensing",
+   "short": "Engel et al. 2012"
   },
   "307": {
    "raw": "Engel, Jakob, Sch¨ops, Thomas, and Cremers, Daniel. 2014. LSD-SLAM: Large-scale direct monocular SLAM. Pages 834–849 of: European Conf. on Computer Vision (ECCV). Springer.",
@@ -2180,17 +2180,17 @@
   },
   "312": {
    "raw": "Eustice, R., Singh, H., and Leonard, J. 2005a (Apr.). Exactly Sparse Delayed-State Filters. Pages 2417–2424 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Eustice, R., Singh, H., and Leonard, J. 2005a (Apr.). Exactly Sparse Delayed-State Filters. Pages 2417–2424 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Eustice, R., Singh, H., and Leonard, J. 2005a (A"
+   "authors": "Eustice, R., Singh, H., and Leonard, J",
+   "year": "2005a",
+   "title": "Exactly Sparse Delayed-State Filters",
+   "short": "Eustice et al. 2005a"
   },
   "313": {
    "raw": "Eustice, R., Walter, M., and Leonard, J. 2005b (Aug). Sparse Extended Information Filters: Insights into Sparsification. Pages 3281–3288 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Eustice, R., Walter, M., and Leonard, J. 2005b (Aug). Sparse Extended Information Filters: Insights into Sparsification. Pages 3281–3288 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Eustice, R., Walter, M., and Leonard, J. 2005b ("
+   "authors": "Eustice, R., Walter, M., and Leonard, J",
+   "year": "2005b",
+   "title": "Sparse Extended Information Filters: Insights into Sparsification",
+   "short": "Eustice et al. 2005b"
   },
   "314": {
    "raw": "Fahmi, Shamel, Fink, Geoff, and Semini, Claudio. 2021. On State Estimation for Legged Locomotion Over Soft Terrain. IEEE Sensors Letters, 5(1), 1–4.",
@@ -2250,10 +2250,10 @@
   },
   "322": {
    "raw": "Feige, Uriel, Goldwasser, Shafi, Lov´asz, L´aszl´o, Safra, Shmuel, and Szegedy, Mario. 1991 (Sept.). Approximating clique is almost NP-complete. Pages 2–12 of: Symp. on Foundations of Computer Science.",
-   "authors": "",
-   "year": "",
-   "title": "Feige, Uriel, Goldwasser, Shafi, Lov´asz, L´aszl´o, Safra, Shmuel, and Szegedy, Mario. 1991 (Sept.). Approximating clique is almost NP-complete. Pages 2–12 of: Symp. on Foundations of Computer Science.",
-   "short": "Feige, Uriel, Goldwasser, Shafi, Lov´asz, L´aszl"
+   "authors": "Feige, Uriel, Goldwasser, Shafi, Lov´asz, L´aszl´o, Safra, Shmuel, and Szegedy, Mario",
+   "year": "1991",
+   "title": "Approximating clique is almost NP-complete",
+   "short": "Feige et al. 1991"
   },
   "323": {
    "raw": "Feng, Qiaojun, Meng, Yue, Shan, Mo, and Atanasov, Nikolay. 2019. Localization and Mapping using Instance-specific Mesh Models. Pages 4985–4991 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
@@ -2334,10 +2334,10 @@
   },
   "334": {
    "raw": "Forster, Christian, Carlone, Luca, Dellaert, Frank, and Scaramuzza, Davide. 2015 (July 13–17,). IMU preintegration on manifold for efficient visualinertial maximum-a-posteriori estimation. In: Robotics: Science and Systems (RSS).",
-   "authors": "",
-   "year": "",
-   "title": "Forster, Christian, Carlone, Luca, Dellaert, Frank, and Scaramuzza, Davide. 2015 (July 13–17,). IMU preintegration on manifold for efficient visualinertial maximum-a-posteriori estimation. In: Robotics: Science and Systems (RSS).",
-   "short": "Forster, Christian, Carlone, Luca, Dellaert, Fra"
+   "authors": "Forster, Christian, Carlone, Luca, Dellaert, Frank, and Scaramuzza, Davide",
+   "year": "2015",
+   "title": "IMU preintegration on manifold for efficient visualinertial maximum-a-posteriori estimation",
+   "short": "Forster et al. 2015"
   },
   "335": {
    "raw": "Forster, Christian, Carlone, Luca, Dellaert, Frank, and Scaramuzza, Davide. 2016. On-manifold preintegration for real-time visual–inertial odometry. IEEE Trans. Robotics, 33(1), 1–21.",
@@ -2551,10 +2551,10 @@
   },
   "365": {
    "raw": "Gao, X., Wang, R., Demmel, N., and Cremers, D. 2018 (October). LDSO: Direct Sparse Odometry with Loop Closure. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Gao, X., Wang, R., Demmel, N., and Cremers, D. 2018 (October). LDSO: Direct Sparse Odometry with Loop Closure. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Gao, X., Wang, R., Demmel, N., and Cremers, D. 2"
+   "authors": "Gao, X., Wang, R., Demmel, N., and Cremers, D",
+   "year": "2018",
+   "title": "LDSO: Direct Sparse Odometry with Loop Closure",
+   "short": "Gao et al. 2018"
   },
   "366": {
    "raw": "Gao, Yiming, Cao, Yan-Pei, and Shan, Ying. 2023. SurfelNeRF: Neural Surfel Radiance Fields for Online Photorealistic Reconstruction of Indoor Scenes. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -2607,10 +2607,10 @@
   },
   "373": {
    "raw": "Geiger, A., Lenz, P., and Urtasun, R. 2012 (June). Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite. Pages 3354–3361 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Geiger, A., Lenz, P., and Urtasun, R. 2012 (June). Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite. Pages 3354–3361 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Geiger, A., Lenz, P., and Urtasun, R. 2012 (June"
+   "authors": "Geiger, A., Lenz, P., and Urtasun, R",
+   "year": "2012",
+   "title": "Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite",
+   "short": "Geiger et al. 2012"
   },
   "374": {
    "raw": "Geneva, Patrick, Eckenhoff, Kevin, Yang, Yulin, and Huang, Guoquan. 2018. Lips: Lidar-inertial 3d plane slam. Pages 123–130 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
@@ -2803,10 +2803,10 @@
   },
   "401": {
    "raw": "Grisetti, Giorgio, K¨ummerle, Rainer, Stachniss, Cyrill, Frese, Udo, and Hertzberg, Christoph. 2010 (5). Hierarchical optimization on manifolds for online 2D and 3D mapping. Pages 273–278 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Grisetti, Giorgio, K¨ummerle, Rainer, Stachniss, Cyrill, Frese, Udo, and Hertzberg, Christoph. 2010 (5). Hierarchical optimization on manifolds for online 2D and 3D mapping. Pages 273–278 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Grisetti, Giorgio, K¨ummerle, Rainer, Stachniss,"
+   "authors": "Grisetti, Giorgio, K¨ummerle, Rainer, Stachniss, Cyrill, Frese, Udo, and Hertzberg, Christoph",
+   "year": "2010",
+   "title": "Hierarchical optimization on manifolds for online 2D and 3D mapping",
+   "short": "Grisetti et al. 2010"
   },
   "402": {
    "raw": "Grisetti, Giorgio, K¨ummerle, Rainer, Strasdat, Hauke, and Konolige, Kurt. 2011. g2o: A general framework for (hyper) graph optimization. Pages 9–13 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -2936,10 +2936,10 @@
   },
   "420": {
    "raw": "Gutmann, J.-S., and Konolige, K. 2000 (November). Incremental Mapping of Large Cyclic Environments. Pages 318–325 of: IEEE Intl. Symp. on Computational Intelligence in Robotics and Automation (CIRA).",
-   "authors": "",
-   "year": "",
-   "title": "Gutmann, J.-S., and Konolige, K. 2000 (November). Incremental Mapping of Large Cyclic Environments. Pages 318–325 of: IEEE Intl. Symp. on Computational Intelligence in Robotics and Automation (CIRA).",
-   "short": "Gutmann, J.-S., and Konolige, K. 2000 (November)"
+   "authors": "Gutmann, J.-S., and Konolige, K",
+   "year": "2000",
+   "title": "Incremental Mapping of Large Cyclic Environments",
+   "short": "Gutmann et al. 2000"
   },
   "421": {
    "raw": "Guzhov, Andrey, Raue, Federico, Hees, J¨orn, and Dengel, Andreas. 2022. Audioclip: Extending clip to image, text and audio. Pages 976–980 of: ICASSP 2022-2022 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP). IEEE.",
@@ -3181,10 +3181,10 @@
   },
   "455": {
    "raw": "Hesch, J. A., Mirzaei, F. M., Mariottini, G. L., and Roumeliotis, S. I. 2010 (May). A Laser-Aided Inertial Navigation System (L-INS) for human localization in unknown indoor environments. Pages 5376–5382 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Hesch, J. A., Mirzaei, F. M., Mariottini, G. L., and Roumeliotis, S. I. 2010 (May). A Laser-Aided Inertial Navigation System (L-INS) for human localization in unknown indoor environments. Pages 5376–5382 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Hesch, J. A., Mirzaei, F. M., Mariottini, G. L.,"
+   "authors": "Hesch, J. A., Mirzaei, F. M., Mariottini, G. L., and Roumeliotis, S. I",
+   "year": "2010",
+   "title": "A Laser-Aided Inertial Navigation System (L-INS) for human localization in unknown indoor environments",
+   "short": "Hesch et al. 2010"
   },
   "456": {
    "raw": "Hesch, J.A., Kottas, D.G., Bowman, S.L., and Roumeliotis, S.I. 2013a. Consistency Analysis and Improvement of Vision-aided Inertial Navigation. IEEE Trans. Robotics, 30(1), 158–176.",
@@ -3216,17 +3216,17 @@
   },
   "460": {
    "raw": "Hidalgo-Carri´o, Javier, Gehrig, Daniel, and Scaramuzza, Davide. 2020 (Nov.). Learning Monocular Dense Depth from Events. Pages 534–542 of: Intl. Conf. on 3D Vision (3DV).",
-   "authors": "",
-   "year": "",
-   "title": "Hidalgo-Carri´o, Javier, Gehrig, Daniel, and Scaramuzza, Davide. 2020 (Nov.). Learning Monocular Dense Depth from Events. Pages 534–542 of: Intl. Conf. on 3D Vision (3DV).",
-   "short": "Hidalgo-Carri´o, Javier, Gehrig, Daniel, and Sca"
+   "authors": "Hidalgo-Carri´o, Javier, Gehrig, Daniel, and Scaramuzza, Davide",
+   "year": "2020",
+   "title": "Learning Monocular Dense Depth from Events",
+   "short": "Hidalgo-Carri´o et al. 2020"
   },
   "461": {
    "raw": "Hidalgo-Carri´o, Javier, Gallego, Guillermo, and Scaramuzza, Davide. 2022 (June). Event-aided Direct Sparse odometry. Pages 5781–5790 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Hidalgo-Carri´o, Javier, Gallego, Guillermo, and Scaramuzza, Davide. 2022 (June). Event-aided Direct Sparse odometry. Pages 5781–5790 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Hidalgo-Carri´o, Javier, Gallego, Guillermo, and"
+   "authors": "Hidalgo-Carri´o, Javier, Gallego, Guillermo, and Scaramuzza, Davide",
+   "year": "2022",
+   "title": "Event-aided Direct Sparse odometry",
+   "short": "Hidalgo-Carri´o et al. 2022"
   },
   "462": {
    "raw": "Himstedt, Marian, Frost, Jan, Hellbach, Sven, B¨ohme, Hans-Joachim, and Maehle, Erik. 2014. Large scale place recognition in 2D LIDAR scans using geometrical landmark relations. Pages 5030–5035 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS). IEEE.",
@@ -3405,10 +3405,10 @@
   },
   "487": {
    "raw": "Huang, Guoquan, Mourikis, Anastasios I., and Roumeliotis, Stergios I. 2011 (Sept.). An Observability Constrained Sliding Window Filter for SLAM. Pages 65–72 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Huang, Guoquan, Mourikis, Anastasios I., and Roumeliotis, Stergios I. 2011 (Sept.). An Observability Constrained Sliding Window Filter for SLAM. Pages 65–72 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Huang, Guoquan, Mourikis, Anastasios I., and Rou"
+   "authors": "Huang, Guoquan, Mourikis, Anastasios I., and Roumeliotis, Stergios I",
+   "year": "2011",
+   "title": "An Observability Constrained Sliding Window Filter for SLAM",
+   "short": "Huang et al. 2011"
   },
   "488": {
    "raw": "Huang, Huajian, Li, Longwei, Hui, Cheng, and Yeung, Sai-Kit. 2024b. PhotoSLAM: Real-time Simultaneous Localization and Photorealistic Mapping for Monocular, Stereo, and RGB-D Cameras. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -3426,10 +3426,10 @@
   },
   "490": {
    "raw": "Huang, Jui-Te, Xu, Ruoyang, Hinduja, Akshay, and Kaess, Michael. 2024c (May). Multi-Radar Inertial Odometry for 3D State Estimation using mmWave Imaging Radar. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Huang, Jui-Te, Xu, Ruoyang, Hinduja, Akshay, and Kaess, Michael. 2024c (May). Multi-Radar Inertial Odometry for 3D State Estimation using mmWave Imaging Radar. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Huang, Jui-Te, Xu, Ruoyang, Hinduja, Akshay, and"
+   "authors": "Huang, Jui-Te, Xu, Ruoyang, Hinduja, Akshay, and Kaess, Michael",
+   "year": "2024c",
+   "title": "Multi-Radar Inertial Odometry for 3D State Estimation using mmWave Imaging Radar",
+   "short": "Huang et al. 2024c"
   },
   "491": {
    "raw": "Huang, Qiangqiang, Pu, Can, Khosoussi, Kasra, Rosen, David M, Fourie, Dehann, How, Jonathan P, and Leonard, John J. 2022b. Incremental nonGaussian inference for SLAM using normalizing flows. IEEE Trans. Robotics, 39(2), 1458–1475.",
@@ -3720,10 +3720,10 @@
   },
   "532": {
    "raw": "Kaess, M., Johannsson, H., Roberts, R., Ila, V., Leonard, J., and Dellaert, F. 2011 (May). iSAM2: Incremental Smoothing and Mapping with Fluid Relinearization and Incremental Variable Reordering. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Kaess, M., Johannsson, H., Roberts, R., Ila, V., Leonard, J., and Dellaert, F. 2011 (May). iSAM2: Incremental Smoothing and Mapping with Fluid Relinearization and Incremental Variable Reordering. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Kaess, M., Johannsson, H., Roberts, R., Ila, V.,"
+   "authors": "Kaess, M., Johannsson, H., Roberts, R., Ila, V., Leonard, J., and Dellaert, F",
+   "year": "2011",
+   "title": "iSAM2: Incremental Smoothing and Mapping with Fluid Relinearization and Incremental Variable Reordering",
+   "short": "Kaess et al. 2011"
   },
   "533": {
    "raw": "Kaess, Michael. 2015. Simultaneous localization and mapping with infinite planes. Pages 4605–4611 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -4056,10 +4056,10 @@
   },
   "580": {
    "raw": "Kirillov, Alexander, He, Kaiming, Girshick, Ross, Rother, Carsten, and Dollar, Piotr. 2019 (June). Panoptic Segmentation. In: The IEEE Conference on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Kirillov, Alexander, He, Kaiming, Girshick, Ross, Rother, Carsten, and Dollar, Piotr. 2019 (June). Panoptic Segmentation. In: The IEEE Conference on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Kirillov, Alexander, He, Kaiming, Girshick, Ross"
+   "authors": "Kirillov, Alexander, He, Kaiming, Girshick, Ross, Rother, Carsten, and Dollar, Piotr",
+   "year": "2019",
+   "title": "Panoptic Segmentation",
+   "short": "Kirillov et al. 2019"
   },
   "581": {
    "raw": "Kirillov, Alexander, Mintun, Eric, Ravi, Nikhila, Mao, Hanzi, Rolland, Chloe, Gustafson, Laura, Xiao, Tete, Whitehead, Spencer, Berg, Alexander C, Lo, Wan-Yen, et al. 2023. Segment anything. Pages 4015–4026 of: Intl. Conf. on Computer Vision (ICCV).",
@@ -4112,17 +4112,17 @@
   },
   "588": {
    "raw": "Koch, Sebastian, Vaskevicius, Narunas, Colosi, Mirco, Hermosilla, Pedro, and Ropinski, Timo. 2024b (June). Open3DSG: Open-Vocabulary 3D Scene Graphs from Point Clouds with Queryable Objects and Open-Set Relationships. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Koch, Sebastian, Vaskevicius, Narunas, Colosi, Mirco, Hermosilla, Pedro, and Ropinski, Timo. 2024b (June). Open3DSG: Open-Vocabulary 3D Scene Graphs from Point Clouds with Queryable Objects and Open-Set Relationships. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Koch, Sebastian, Vaskevicius, Narunas, Colosi, M"
+   "authors": "Koch, Sebastian, Vaskevicius, Narunas, Colosi, Mirco, Hermosilla, Pedro, and Ropinski, Timo",
+   "year": "2024b",
+   "title": "Open3DSG: Open-Vocabulary 3D Scene Graphs from Point Clouds with Queryable Objects and Open-Set Relationships",
+   "short": "Koch et al. 2024b"
   },
   "589": {
    "raw": "Koch, Sebastian, Hermosilla, Pedro, Vaskevicius, Narunas, Colosi, Mirco, and Ropinski, Timo. 2024c (January). SGRec3D: Self-Supervised 3D Scene Graph Learning via Object-Level Scene Reconstruction. Pages 3404–3414 of: Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV).",
-   "authors": "",
-   "year": "",
-   "title": "Koch, Sebastian, Hermosilla, Pedro, Vaskevicius, Narunas, Colosi, Mirco, and Ropinski, Timo. 2024c (January). SGRec3D: Self-Supervised 3D Scene Graph Learning via Object-Level Scene Reconstruction. Pages 3404–3414 of: Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV).",
-   "short": "Koch, Sebastian, Hermosilla, Pedro, Vaskevicius,"
+   "authors": "Koch, Sebastian, Hermosilla, Pedro, Vaskevicius, Narunas, Colosi, Mirco, and Ropinski, Timo",
+   "year": "2024c",
+   "title": "SGRec3D: Self-Supervised 3D Scene Graph Learning via Object-Level Scene Reconstruction",
+   "short": "Koch et al. 2024c"
   },
   "590": {
    "raw": "Koenemann, Jonas, Licitra, Giovanni, Alp, Mustafa, and Diehl, Moritz. 2017. Openocl–open optimal control library.",
@@ -4189,10 +4189,10 @@
   },
   "599": {
    "raw": "Kottas, Dimitrios, and Roumeliotis, Stergios. 2013 (June 24–28,). Exploiting Urban Scenes for Vision-aided Inertial Navigation. In: Robotics: Science and Systems (RSS).",
-   "authors": "",
-   "year": "",
-   "title": "Kottas, Dimitrios, and Roumeliotis, Stergios. 2013 (June 24–28,). Exploiting Urban Scenes for Vision-aided Inertial Navigation. In: Robotics: Science and Systems (RSS).",
-   "short": "Kottas, Dimitrios, and Roumeliotis, Stergios. 20"
+   "authors": "Kottas, Dimitrios, and Roumeliotis, Stergios",
+   "year": "2013",
+   "title": "Exploiting Urban Scenes for Vision-aided Inertial Navigation",
+   "short": "Kottas et al. 2013"
   },
   "600": {
    "raw": "Kottege, Navinda, Scherer, Sebastian, Faigl, J., and Agha, Ali. 2022. Special Issue on Advancements and Lessons Learned during Phases I and II of the DARPA Subterranean Challenge. Field Robotics, 1947–1950.",
@@ -4357,10 +4357,10 @@
   },
   "623": {
    "raw": "Lang, Ben. 2022 (May). Reality Labs Chief Scientist Outlines a New Compute Architecture for True AR Glasses. https://www.roadtovr.com/ michael-abrash-iedm-2021-compute-architecture-for-ar-glasses/.",
-   "authors": "",
-   "year": "",
-   "title": "Lang, Ben. 2022 (May). Reality Labs Chief Scientist Outlines a New Compute Architecture for True AR Glasses. https://www.roadtovr.com/ michael-abrash-iedm-2021-compute-architecture-for-ar-glasses/.",
-   "short": "Lang, Ben. 2022 (May). Reality Labs Chief Scient"
+   "authors": "Lang, Ben",
+   "year": "2022",
+   "title": "Reality Labs Chief Scientist Outlines a New Compute Architecture for True AR Glasses",
+   "short": "Lang 2022"
   },
   "624": {
    "raw": "Lang, Xiaolei, Li, Laijian, Wu, Chenming, Zhao, Chen, Liu, Lina, Liu, Yong, Lv, Jiajun, and Zuo, Xingxing. 2025. Gaussian-LIC: Real-Time PhotoRealistic SLAM with Gaussian Splatting and LiDAR-Inertial-Camera Fusion. IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -4574,10 +4574,10 @@
   },
   "654": {
    "raw": "Li, M., and Mourikis, A. I. 2012 (May 14–18,). Improving the Accuracy of EKF-based Visual-Inertial Odometry. Pages 828–835 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Li, M., and Mourikis, A. I. 2012 (May 14–18,). Improving the Accuracy of EKF-based Visual-Inertial Odometry. Pages 828–835 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Li, M., and Mourikis, A. I. 2012 (May 14–18,). I"
+   "authors": "Li, M., and Mourikis, A. I",
+   "year": "2012",
+   "title": "Improving the Accuracy of EKF-based Visual-Inertial Odometry",
+   "short": "Li et al. 2012"
   },
   "655": {
    "raw": "Li, Qing, Chen, Shaoyang, Wang, Cheng, Li, Xin, Wen, Chenglu, Cheng, Ming, and Li, Jonathan. 2019. LO-Net: Deep Real-Time Lidar Odometry. Pages 8465–8474 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -4686,10 +4686,10 @@
   },
   "670": {
    "raw": "Lin, Tzu-Yuan, Zhang, Ray, Yu, Justin, and Ghaffari, Maani. 2022 (08–11 Nov). Legged Robot State Estimation using Invariant Kalman Filtering and Learned Contact Events. Pages 1057–1066 of: Faust, Aleksandra, Hsu, David, and Neumann, Gerhard (eds), Conf. on Robot Learning (CoRL). Proceedings of Machine Learning Research, vol. 164.",
-   "authors": "",
-   "year": "",
-   "title": "Lin, Tzu-Yuan, Zhang, Ray, Yu, Justin, and Ghaffari, Maani. 2022 (08–11 Nov). Legged Robot State Estimation using Invariant Kalman Filtering and Learned Contact Events. Pages 1057–1066 of: Faust, Aleksandra, Hsu, David, and Neumann, Gerhard (eds), Conf. on Robot Learning (CoRL). Proceedings of Machine Learning Research, vol. 164.",
-   "short": "Lin, Tzu-Yuan, Zhang, Ray, Yu, Justin, and Ghaff"
+   "authors": "Lin, Tzu-Yuan, Zhang, Ray, Yu, Justin, and Ghaffari, Maani",
+   "year": "2022",
+   "title": "Legged Robot State Estimation using Invariant Kalman Filtering and Learned Contact Events",
+   "short": "Lin et al. 2022"
   },
   "671": {
    "raw": "Lindenberger, Philipp, Sarlin, Paul-Edouard, and Pollefeys, Marc. 2023. Lightglue: Local feature matching at light speed. Pages 17627–17638 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -4973,17 +4973,17 @@
   },
   "711": {
    "raw": "Lusk, Parker C., Fathian, Kaveh, and How, Jonathan P. 2021a (May). CLIPPER: A Graph-Theoretic Framework for Robust Data Association. Pages 13828–13834 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Lusk, Parker C., Fathian, Kaveh, and How, Jonathan P. 2021a (May). CLIPPER: A Graph-Theoretic Framework for Robust Data Association. Pages 13828–13834 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Lusk, Parker C., Fathian, Kaveh, and How, Jonath"
+   "authors": "Lusk, Parker C., Fathian, Kaveh, and How, Jonathan P",
+   "year": "2021a",
+   "title": "CLIPPER: A Graph-Theoretic Framework for Robust Data Association",
+   "short": "Lusk et al. 2021a"
   },
   "712": {
    "raw": "Lusk, Parker C., Roy, Ronak, Fathian, Kaveh, and How, Jonathan P. 2021b (Nov.). MIXER: A Principled Framework for Multimodal, Multiway Data Association.",
-   "authors": "",
-   "year": "",
-   "title": "Lusk, Parker C., Roy, Ronak, Fathian, Kaveh, and How, Jonathan P. 2021b (Nov.). MIXER: A Principled Framework for Multimodal, Multiway Data Association.",
-   "short": "Lusk, Parker C., Roy, Ronak, Fathian, Kaveh, and"
+   "authors": "Lusk, Parker C., Roy, Ronak, Fathian, Kaveh, and How, Jonathan P",
+   "year": "2021b",
+   "title": "MIXER: A Principled Framework for Multimodal, Multiway Data Association",
+   "short": "Lusk et al. 2021b"
   },
   "713": {
    "raw": "Lusk, Parker C., Parikh, Devarth, and How, Jonathan P. 2023. GraffMatch: Global Matching of 3D Lines and Planes for Wide Baseline LiDAR Registration. IEEE Robotics and Automation Letters, 8(2), 632–639.",
@@ -5155,10 +5155,10 @@
   },
   "737": {
    "raw": "Martinelli, A. 2013 (Nov.). Visual-inertial structure from motion: Observability and resolvability. Pages 4235–4242 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Martinelli, A. 2013 (Nov.). Visual-inertial structure from motion: Observability and resolvability. Pages 4235–4242 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Martinelli, A. 2013 (Nov.). Visual-inertial stru"
+   "authors": "Martinelli, A",
+   "year": "2013",
+   "title": "Visual-inertial structure from motion: Observability and resolvability",
+   "short": "Martinelli 2013"
   },
   "738": {
    "raw": "MATLAB. 2010. version 7.10.0 (R2010a). Natick, Massachusetts: The MathWorks Inc.",
@@ -5323,17 +5323,17 @@
   },
   "761": {
    "raw": "Meta. 2025 (Mar.). Meta Quest 3: Technical Specifications.",
-   "authors": "",
-   "year": "",
-   "title": "Meta. 2025 (Mar.). Meta Quest 3: Technical Specifications.",
-   "short": "Meta. 2025 (Mar.). Meta Quest 3: Technical Speci"
+   "authors": "Meta",
+   "year": "2025",
+   "title": "Meta Quest 3: Technical Specifications",
+   "short": "Meta 2025"
   },
   "762": {
    "raw": "Mielle, Malcolm, Magnusson, Martin, and Lilienthal, Achim J. 2019 (Sept.). A comparative analysis of radar and lidar sensing for localization and mapping. In: European Conf. on Mobile Robots (ECMR).",
-   "authors": "",
-   "year": "",
-   "title": "Mielle, Malcolm, Magnusson, Martin, and Lilienthal, Achim J. 2019 (Sept.). A comparative analysis of radar and lidar sensing for localization and mapping. In: European Conf. on Mobile Robots (ECMR).",
-   "short": "Mielle, Malcolm, Magnusson, Martin, and Lilienth"
+   "authors": "Mielle, Malcolm, Magnusson, Martin, and Lilienthal, Achim J",
+   "year": "2019",
+   "title": "A comparative analysis of radar and lidar sensing for localization and mapping",
+   "short": "Mielle et al. 2019"
   },
   "763": {
    "raw": "Miki, Takahiro, Lee, Joonho, Hwangbo, Jemin, Wellhausen, Lorenz, Koltun, Vladlen, and Hutter, Marco. 2022. Learning robust perceptive locomotion for quadrupedal robots in the wild. Science Robotics, 7(62), eabk2822.",
@@ -5407,10 +5407,10 @@
   },
   "773": {
    "raw": "Mopidevi, A.N., Harlow, K., and Heckman, C. 2024 (Oct.). RMap: Millimeter-Wave Radar Mapping Through Volumetric Upsampling. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Mopidevi, A.N., Harlow, K., and Heckman, C. 2024 (Oct.). RMap: Millimeter-Wave Radar Mapping Through Volumetric Upsampling. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Mopidevi, A.N., Harlow, K., and Heckman, C. 2024"
+   "authors": "Mopidevi, A.N., Harlow, K., and Heckman, C",
+   "year": "2024",
+   "title": "RMap: Millimeter-Wave Radar Mapping Through Volumetric Upsampling",
+   "short": "Mopidevi et al. 2024"
   },
   "774": {
    "raw": "Moravec, Hans, and Elfes, Alberto. 1985. High resolution maps from wide angle sonar. Pages 116–121 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -5764,10 +5764,10 @@
   },
   "824": {
    "raw": "Olson, E., Leonard, J., and Teller, S. 2006 (May). Fast Iterative Alignment of Pose Graphs with Poor Initial Estimates. Pages 2262–2269 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Olson, E., Leonard, J., and Teller, S. 2006 (May). Fast Iterative Alignment of Pose Graphs with Poor Initial Estimates. Pages 2262–2269 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Olson, E., Leonard, J., and Teller, S. 2006 (May"
+   "authors": "Olson, E., Leonard, J., and Teller, S",
+   "year": "2006",
+   "title": "Fast Iterative Alignment of Pose Graphs with Poor Initial Estimates",
+   "short": "Olson et al. 2006"
   },
   "825": {
    "raw": "Olson, Edwin. 2009. Real-Time Correlative Scan Matching. Pages 4387–4393 of: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -5785,10 +5785,10 @@
   },
   "827": {
    "raw": "Olson, Edwin, and Agarwal, Pratik. 2012 (July). Inference on networks of mixtures for robust robot mapping. In: Robotics: Science and Systems (RSS).",
-   "authors": "",
-   "year": "",
-   "title": "Olson, Edwin, and Agarwal, Pratik. 2012 (July). Inference on networks of mixtures for robust robot mapping. In: Robotics: Science and Systems (RSS).",
-   "short": "Olson, Edwin, and Agarwal, Pratik. 2012 (July). "
+   "authors": "Olson, Edwin, and Agarwal, Pratik",
+   "year": "2012",
+   "title": "Inference on networks of mixtures for robust robot mapping",
+   "short": "Olson et al. 2012"
   },
   "828": {
    "raw": "Olson, Edwin, Strom, Johannes, Morton, Ryan, Richardson, Andrew, Ranganathan, Pradeep, Goeddel, Robert, Bulic, Mihai, Crossman, Jacob, and Marinier, Bob. 2012. Progress toward multi-robot reconnaissance and the MAGIC 2010 competition. J. of Field Robotics, 29(5), 762–792.",
@@ -6002,10 +6002,10 @@
   },
   "858": {
    "raw": "Peng, Guohao, Li, Heshan, Zhao, Yangyang, Zhang, Jun, Wu, Zhenyu, Zheng, Pengyu, and Wang, Danwei. 2024a (6). TransLoc4D: Transformerbased 4D Radar Place Recognition. Pages 17595–17605 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Peng, Guohao, Li, Heshan, Zhao, Yangyang, Zhang, Jun, Wu, Zhenyu, Zheng, Pengyu, and Wang, Danwei. 2024a (6). TransLoc4D: Transformerbased 4D Radar Place Recognition. Pages 17595–17605 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Peng, Guohao, Li, Heshan, Zhao, Yangyang, Zhang,"
+   "authors": "Peng, Guohao, Li, Heshan, Zhao, Yangyang, Zhang, Jun, Wu, Zhenyu, Zheng, Pengyu, and Wang, Danwei",
+   "year": "2024a",
+   "title": "TransLoc4D: Transformerbased 4D Radar Place Recognition",
+   "short": "Peng et al. 2024a"
   },
   "859": {
    "raw": "Peng, Liangzu, Fazlyab, Mahyar, and Vidal, Ren´e. 2022. Towards Understanding The Semidefinite Relaxations of Truncated Least-Squares in Robust Rotation Search.",
@@ -6051,24 +6051,24 @@
   },
   "865": {
    "raw": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2024c (May). Quantized Visual-Inertial Odometry. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2024c (May). Quantized Visual-Inertial Odometry. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan."
+   "authors": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan",
+   "year": "2024c",
+   "title": "Quantized Visual-Inertial Odometry",
+   "short": "Peng et al. 2024c"
   },
   "866": {
    "raw": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2024d (May). Ultrafast Square-Root Filter-based VINS. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2024d (May). Ultrafast Square-Root Filter-based VINS. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan."
+   "authors": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan",
+   "year": "2024d",
+   "title": "Ultrafast Square-Root Filter-based VINS",
+   "short": "Peng et al. 2024d"
   },
   "867": {
    "raw": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2025 (May). QVIO2: Quantized MAP-based Visual-Inertial Odometry. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan. 2025 (May). QVIO2: Quantized MAP-based Visual-Inertial Odometry. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan."
+   "authors": "Peng, Yuxiang, Chen, Chuchu, and Huang, Guoquan",
+   "year": "2025",
+   "title": "QVIO2: Quantized MAP-based Visual-Inertial Odometry",
+   "short": "Peng et al. 2025"
   },
   "868": {
    "raw": "Peng, Zhexi, Shao, Tianjia, Yong, Liu, Zhou, Jingke, Yang, Yin, Wang, Jingdong, and Zhou, Kun. 2024e. RTG-SLAM: Real-time 3D Reconstruction at Scale using Gaussian Splatting. Intl. Conf. on Computer Graphics and Interactive Techniques (SIGGRAPH).",
@@ -6282,10 +6282,10 @@
   },
   "898": {
    "raw": "Qiu, Yuheng, Wang, Chen, Xu, Can, Chen, Yutian, Zhou, Xunfei, Xia, Youjie, and Scherer, Sebastian. 2024 (May). AirIMU: Learning Uncertainty Propagation for Inertial Odometry.",
-   "authors": "",
-   "year": "",
-   "title": "Qiu, Yuheng, Wang, Chen, Xu, Can, Chen, Yutian, Zhou, Xunfei, Xia, Youjie, and Scherer, Sebastian. 2024 (May). AirIMU: Learning Uncertainty Propagation for Inertial Odometry.",
-   "short": "Qiu, Yuheng, Wang, Chen, Xu, Can, Chen, Yutian, "
+   "authors": "Qiu, Yuheng, Wang, Chen, Xu, Can, Chen, Yutian, Zhou, Xunfei, Xia, Youjie, and Scherer, Sebastian",
+   "year": "2024",
+   "title": "AirIMU: Learning Uncertainty Propagation for Inertial Odometry",
+   "short": "Qiu et al. 2024"
   },
   "899": {
    "raw": "Radford, Alec, Kim, Jong Wook, Hallacy, Chris, Ramesh, Aditya, Goh, Gabriel, Agarwal, Sandhini, Sastry, Girish, Askell, Amanda, Mishkin, Pamela, Clark, Jack, et al. 2021. Learning transferable visual models from natural language supervision. Pages 8748–8763 of: Intl. Conf. on Machine Learning (ICML). PMLR.",
@@ -6569,10 +6569,10 @@
   },
   "939": {
    "raw": "Rosen, D.M., Carlone, L., Bandeira, A.S., and Leonard, J.J. 2016b (December). SE-Sync: A Certifiably Correct Algorithm for Synchronization over the Special Euclidean Group. In: Intl. Workshop on the Algorithmic Foundations of Robotics (WAFR).",
-   "authors": "",
-   "year": "",
-   "title": "Rosen, D.M., Carlone, L., Bandeira, A.S., and Leonard, J.J. 2016b (December). SE-Sync: A Certifiably Correct Algorithm for Synchronization over the Special Euclidean Group. In: Intl. Workshop on the Algorithmic Foundations of Robotics (WAFR).",
-   "short": "Rosen, D.M., Carlone, L., Bandeira, A.S., and Le"
+   "authors": "Rosen, D.M., Carlone, L., Bandeira, A.S., and Leonard, J.J",
+   "year": "2016b",
+   "title": "SE-Sync: A Certifiably Correct Algorithm for Synchronization over the Special Euclidean Group",
+   "short": "Rosen et al. 2016b"
   },
   "940": {
    "raw": "Rosinol, A., Leonard, J.J., and Carlone, L. 2023. NeRF-SLAM: Real-Time Dense Monocular SLAM with Neural Radiance Fields. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS). .",
@@ -6611,10 +6611,10 @@
   },
   "945": {
    "raw": "Ross, Stephane, Gordon, Geoffrey, and Bagnell, Drew. 2011 (11–13 Apr). A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. Pages 627–635 of: Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics. Proceedings of Machine Learning Research, vol. 15.",
-   "authors": "",
-   "year": "",
-   "title": "Ross, Stephane, Gordon, Geoffrey, and Bagnell, Drew. 2011 (11–13 Apr). A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. Pages 627–635 of: Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics. Proceedings of Machine Learning Research, vol. 15.",
-   "short": "Ross, Stephane, Gordon, Geoffrey, and Bagnell, D"
+   "authors": "Ross, Stephane, Gordon, Geoffrey, and Bagnell, Drew",
+   "year": "2011",
+   "title": "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning",
+   "short": "Ross et al. 2011"
   },
   "946": {
    "raw": "Rosten, E., and Drummond, T. 2006. Machine learning for high-speed corner detection. In: European Conf. on Computer Vision (ECCV).",
@@ -6800,10 +6800,10 @@
   },
   "972": {
    "raw": "Saunderson, J., Parrilo, P.A., and Willsky, A. 2014 (May). Semidefinite relaxations for optimization problems over rotation matrices. In: IEEE Conf. on Decision and Control (CDC).",
-   "authors": "",
-   "year": "",
-   "title": "Saunderson, J., Parrilo, P.A., and Willsky, A. 2014 (May). Semidefinite relaxations for optimization problems over rotation matrices. In: IEEE Conf. on Decision and Control (CDC).",
-   "short": "Saunderson, J., Parrilo, P.A., and Willsky, A. 2"
+   "authors": "Saunderson, J., Parrilo, P.A., and Willsky, A",
+   "year": "2014",
+   "title": "Semidefinite relaxations for optimization problems over rotation matrices",
+   "short": "Saunderson et al. 2014"
   },
   "973": {
    "raw": "Schauer, Johannes, and N¨uchter, Andreas. 2018. The peopleremover—removing dynamic objects from 3-d point cloud data by traversing a voxel occupancy grid. IEEE Robotics and Automation Letters, 3(3), 1679–1686.",
@@ -6856,17 +6856,17 @@
   },
   "980": {
    "raw": "Schubert, D., Demmel, N., Usenko, V., Stueckler, J., and Cremers, D. 2018 (September). Direct Sparse Odometry With Rolling Shutter. In: European Conf. on Computer Vision (ECCV).",
-   "authors": "",
-   "year": "",
-   "title": "Schubert, D., Demmel, N., Usenko, V., Stueckler, J., and Cremers, D. 2018 (September). Direct Sparse Odometry With Rolling Shutter. In: European Conf. on Computer Vision (ECCV).",
-   "short": "Schubert, D., Demmel, N., Usenko, V., Stueckler,"
+   "authors": "Schubert, D., Demmel, N., Usenko, V., Stueckler, J., and Cremers, D",
+   "year": "2018",
+   "title": "Direct Sparse Odometry With Rolling Shutter",
+   "short": "Schubert et al. 2018"
   },
   "981": {
    "raw": "Schubert, D., Demmel, N., von Stumberg, L., Usenko, V., and Cremers, D. 2019 (November). Rolling-Shutter Modelling for Visual-Inertial Odometry. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Schubert, D., Demmel, N., von Stumberg, L., Usenko, V., and Cremers, D. 2019 (November). Rolling-Shutter Modelling for Visual-Inertial Odometry. In: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Schubert, D., Demmel, N., von Stumberg, L., Usen"
+   "authors": "Schubert, D., Demmel, N., von Stumberg, L., Usenko, V., and Cremers, D",
+   "year": "2019",
+   "title": "Rolling-Shutter Modelling for Visual-Inertial Odometry",
+   "short": "Schubert et al. 2019"
   },
   "982": {
    "raw": "Schumann, Ole, Hahn, Markus, Scheiner, Nicolas, Weishaupt, Fabio, Tilly, Julius F, Dickmann, J¨urgen, and W¨ohler, Christian. 2021. RadarScenes: A real-world radar point cloud data set for automotive applications. Pages 1–8 of: Intl. Conf. on Information Fusion (FUSION).",
@@ -7087,10 +7087,10 @@
   },
   "1013": {
    "raw": "Sim, R., Elinas, P., Griffin, M., Shyr, A., and Little, J.J. 2006 (Jun). Design and Analysis of a Framework for Real-time Vision-based SLAM using RaoBlackwellised Particle Filters. In: Conf. on Computer and Robot Vision (CRV).",
-   "authors": "",
-   "year": "",
-   "title": "Sim, R., Elinas, P., Griffin, M., Shyr, A., and Little, J.J. 2006 (Jun). Design and Analysis of a Framework for Real-time Vision-based SLAM using RaoBlackwellised Particle Filters. In: Conf. on Computer and Robot Vision (CRV).",
-   "short": "Sim, R., Elinas, P., Griffin, M., Shyr, A., and "
+   "authors": "Sim, R., Elinas, P., Griffin, M., Shyr, A., and Little, J.J",
+   "year": "2006",
+   "title": "Design and Analysis of a Framework for Real-time Vision-based SLAM using RaoBlackwellised Particle Filters",
+   "short": "Sim et al. 2006"
   },
   "1014": {
    "raw": "Singer, A. 2010. Angular synchronization by eigenvectors and semidefinite programming. Appl. Comput. Harmon. Anal., 30, 20–36.",
@@ -7178,10 +7178,10 @@
   },
   "1026": {
    "raw": "Speciale, P., Paudel, D. P., Oswald, M. R., Kroeger, T., Gool, L. V., and Pollefeys, M. 2017 (July). Consensus Maximization with Linear Matrix Inequality Constraints. Pages 5048–5056 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "authors": "",
-   "year": "",
-   "title": "Speciale, P., Paudel, D. P., Oswald, M. R., Kroeger, T., Gool, L. V., and Pollefeys, M. 2017 (July). Consensus Maximization with Linear Matrix Inequality Constraints. Pages 5048–5056 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
-   "short": "Speciale, P., Paudel, D. P., Oswald, M. R., Kroe"
+   "authors": "Speciale, P., Paudel, D. P., Oswald, M. R., Kroeger, T., Gool, L. V., and Pollefeys, M",
+   "year": "2017",
+   "title": "Consensus Maximization with Linear Matrix Inequality Constraints",
+   "short": "Speciale et al. 2017"
   },
   "1027": {
    "raw": "Stadie, Bradly, Zhang, Lunjun, and Ba, Jimmy. 2020. Learning intrinsic rewards as a bi-level optimization problem. Pages 111–120 of: Conf. on Uncertainty in Artificial Intelligence (UAI). PMLR.",
@@ -7304,10 +7304,10 @@
   },
   "1044": {
    "raw": "Sturm, J., Bylow, E., Kahl, F., and Cremers, D. 2013 (September). CopyMe3D: Scanning and Printing Persons in 3D. In: German Conference on Pattern Recognition (GCPR).",
-   "authors": "",
-   "year": "",
-   "title": "Sturm, J., Bylow, E., Kahl, F., and Cremers, D. 2013 (September). CopyMe3D: Scanning and Printing Persons in 3D. In: German Conference on Pattern Recognition (GCPR).",
-   "short": "Sturm, J., Bylow, E., Kahl, F., and Cremers, D. "
+   "authors": "Sturm, J., Bylow, E., Kahl, F., and Cremers, D",
+   "year": "2013",
+   "title": "CopyMe3D: Scanning and Printing Persons in 3D",
+   "short": "Sturm et al. 2013"
   },
   "1045": {
    "raw": "Sturm, J¨urgen, Engelhard, Nikolas, Endres, Felix, Burgard, Wolfram, and Cremers, Daniel. 2012. A benchmark for the evaluation of RGB-D SLAM systems. Pages 573–580 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS). IEEE.",
@@ -7318,10 +7318,10 @@
   },
   "1046": {
    "raw": "St¨uhmer, J., Gumhold, S., and Cremers, D. 2010 (September). Real-Time Dense Geometry from a Handheld Camera. Pages 11–20 of: Pattern Recognition (Proc. DAGM).",
-   "authors": "",
-   "year": "",
-   "title": "St¨uhmer, J., Gumhold, S., and Cremers, D. 2010 (September). Real-Time Dense Geometry from a Handheld Camera. Pages 11–20 of: Pattern Recognition (Proc. DAGM).",
-   "short": "St¨uhmer, J., Gumhold, S., and Cremers, D. 2010 "
+   "authors": "St¨uhmer, J., Gumhold, S., and Cremers, D",
+   "year": "2010",
+   "title": "Real-Time Dense Geometry from a Handheld Camera",
+   "short": "St¨uhmer et al. 2010"
   },
   "1047": {
    "raw": "Sucar, Edgar, Liu, Shikun, Ortiz, Joseph, and Davison, Andrew J. 2021. imap: Implicit mapping and positioning in real-time. In: Intl. Conf. on Computer Vision (ICCV).",
@@ -8116,10 +8116,10 @@
   },
   "1160": {
    "raw": "Wang, R., Schw¨orer, M., and Cremers, D. 2017a (October). Stereo DSO: Large-Scale Direct Sparse Visual Odometry with Stereo Cameras. In: Intl. Conf. on Computer Vision (ICCV).",
-   "authors": "",
-   "year": "",
-   "title": "Wang, R., Schw¨orer, M., and Cremers, D. 2017a (October). Stereo DSO: Large-Scale Direct Sparse Visual Odometry with Stereo Cameras. In: Intl. Conf. on Computer Vision (ICCV).",
-   "short": "Wang, R., Schw¨orer, M., and Cremers, D. 2017a ("
+   "authors": "Wang, R., Schw¨orer, M., and Cremers, D",
+   "year": "2017a",
+   "title": "Stereo DSO: Large-Scale Direct Sparse Visual Odometry with Stereo Cameras",
+   "short": "Wang et al. 2017a"
   },
   "1161": {
    "raw": "Wang, Rui, Yang, Nan, St¨uckler, J¨org, and Cremers, Daniel. 2020b. DirectShape: Photometric Alignment of Shape Priors for Visual Vehicle Pose and Shape Estimation. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
@@ -8277,10 +8277,10 @@
   },
   "1183": {
    "raw": "Whelan, Thomas, Kaess, Michael, Fallon, Maurice, Johannsson, Hordur, Leonard, John, and McDonald, John. 2012 (July). Kintinuous: Spatially extended kinectfusion. In: Robotics: Science and Systems Workshop.",
-   "authors": "",
-   "year": "",
-   "title": "Whelan, Thomas, Kaess, Michael, Fallon, Maurice, Johannsson, Hordur, Leonard, John, and McDonald, John. 2012 (July). Kintinuous: Spatially extended kinectfusion. In: Robotics: Science and Systems Workshop.",
-   "short": "Whelan, Thomas, Kaess, Michael, Fallon, Maurice,"
+   "authors": "Whelan, Thomas, Kaess, Michael, Fallon, Maurice, Johannsson, Hordur, Leonard, John, and McDonald, John",
+   "year": "2012",
+   "title": "Kintinuous: Spatially extended kinectfusion",
+   "short": "Whelan et al. 2012"
   },
   "1184": {
    "raw": "Whelan, Thomas, Leutenegger, Stefan, Salas-Moreno, Renato F, Glocker, Ben, and Davison, Andrew J. 2015. ElasticFusion: Dense SLAM without a pose graph. Page 3 of: Robotics: Science and Systems (RSS), vol. 11. Rome.",
@@ -8466,10 +8466,10 @@
   },
   "1210": {
    "raw": "Xu, R., Dong, W., Sharma, A., and Kaess, M. 2022c (Oct.). Learned Depth Estimation of 3D Imaging Radar for Indoor Mapping. In: Proc. IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Xu, R., Dong, W., Sharma, A., and Kaess, M. 2022c (Oct.). Learned Depth Estimation of 3D Imaging Radar for Indoor Mapping. In: Proc. IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Xu, R., Dong, W., Sharma, A., and Kaess, M. 2022"
+   "authors": "Xu, R., Dong, W., Sharma, A., and Kaess, M",
+   "year": "2022c",
+   "title": "Learned Depth Estimation of 3D Imaging Radar for Indoor Mapping",
+   "short": "Xu et al. 2022c"
   },
   "1211": {
    "raw": "Xu, Wei, Cai, Yixi, He, Dongjiao, Lin, Jiarong, and Zhang, Fu. 2022d. Fastlio2: Fast direct lidar-inertial odometry. IEEE Trans. Robotics, 38(4), 2053– 2073.",
@@ -8648,10 +8648,10 @@
   },
   "1236": {
    "raw": "Yang, Yulin, Geneva, Patrick, Zuo, Xingxing, Eckenhoff, Kevin, Liu, Yong, and Huang, Guoquan. 2019b (May). Tightly-Coupled Aided Inertial Navigation with Point and Plane Features. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Yang, Yulin, Geneva, Patrick, Zuo, Xingxing, Eckenhoff, Kevin, Liu, Yong, and Huang, Guoquan. 2019b (May). Tightly-Coupled Aided Inertial Navigation with Point and Plane Features. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Yang, Yulin, Geneva, Patrick, Zuo, Xingxing, Eck"
+   "authors": "Yang, Yulin, Geneva, Patrick, Zuo, Xingxing, Eckenhoff, Kevin, Liu, Yong, and Huang, Guoquan",
+   "year": "2019b",
+   "title": "Tightly-Coupled Aided Inertial Navigation with Point and Plane Features",
+   "short": "Yang et al. 2019b"
   },
   "1237": {
    "raw": "Yang, Yulin, Geneva, Patrick, Zuo, Xingxing, and Huang, Guoquan. 2023c. Online Self-Calibration for Visual-Inertial Navigation Systems: Models, Analysis and Degeneracy. IEEE Trans. Robotics, May.",
@@ -9082,10 +9082,10 @@
   },
   "1298": {
    "raw": "Zhou, Shenghao, Katragadda, Saimouli, and Huang, Guoquan. 2025 (May). Learning IMU Bias with Diffusion Model. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "authors": "",
-   "year": "",
-   "title": "Zhou, Shenghao, Katragadda, Saimouli, and Huang, Guoquan. 2025 (May). Learning IMU Bias with Diffusion Model. In: IEEE Intl. Conf. on Robotics and Automation (ICRA).",
-   "short": "Zhou, Shenghao, Katragadda, Saimouli, and Huang,"
+   "authors": "Zhou, Shenghao, Katragadda, Saimouli, and Huang, Guoquan",
+   "year": "2025",
+   "title": "Learning IMU Bias with Diffusion Model",
+   "short": "Zhou et al. 2025"
   },
   "1299": {
    "raw": "Zhou, Tinghui, Brown, Matthew, Snavely, Noah, and Lowe, David G. 2017. Unsupervised learning of depth and ego-motion from video. Pages 1851–1858 of: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR).",
@@ -9194,17 +9194,17 @@
   },
   "1314": {
    "raw": "Zuckerman, David. 2006 (May). Linear degree extractors and the inapproximability of max clique and chromatic number. Pages 681–690 of: ACM Symp. on Theory of Computing (STOC).",
-   "authors": "",
-   "year": "",
-   "title": "Zuckerman, David. 2006 (May). Linear degree extractors and the inapproximability of max clique and chromatic number. Pages 681–690 of: ACM Symp. on Theory of Computing (STOC).",
-   "short": "Zuckerman, David. 2006 (May). Linear degree extr"
+   "authors": "Zuckerman, David",
+   "year": "2006",
+   "title": "Linear degree extractors and the inapproximability of max clique and chromatic number",
+   "short": "Zuckerman 2006"
   },
   "1315": {
    "raw": "Zuo, X., Xie, J., Liu, Y., and Huang, Guoquan. 2017 (Sept.). Robust Visual SLAM with Point and Line Features. Pages 1775–1782 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "authors": "",
-   "year": "",
-   "title": "Zuo, X., Xie, J., Liu, Y., and Huang, Guoquan. 2017 (Sept.). Robust Visual SLAM with Point and Line Features. Pages 1775–1782 of: IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS).",
-   "short": "Zuo, X., Xie, J., Liu, Y., and Huang, Guoquan. 2"
+   "authors": "Zuo, X., Xie, J., Liu, Y., and Huang, Guoquan",
+   "year": "2017",
+   "title": "Robust Visual SLAM with Point and Line Features",
+   "short": "Zuo et al. 2017"
   },
   "1316": {
    "raw": "Zuo, Xingxing, Samangouei, Pouya, Zhou, Yunwen, Di, Yan, and Li, Mingyang. 2024a. Fmgs: Foundation model embedded 3d gaussian splatting for holistic 3d scene understanding. Intl. J. of Computer Vision.",

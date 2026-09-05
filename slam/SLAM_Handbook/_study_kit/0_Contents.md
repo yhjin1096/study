@@ -29,8 +29,8 @@
 | 장 | 유형 | 노트 | 그림 | 위젯 |
 |---|---|---|---|---|
 | [Notation](../part0_prep/00_notation/00_notation.md) | D | ✅ | — | — |
-| Prelude I | C | ⬜ | 7 | — |
-| 1장 Factor Graphs for SLAM | A | ⬜ | 15 | — |
+| [Prelude I](../part1_foundations/00_prelude_1/00_prelude_1.md) | C | ✅ | 7 | — |
+| [1장 Factor Graphs for SLAM](../part1_foundations/01_factor_graphs/01_factor_graphs.md) | A | ✅ | 15 | — |
 | 2장 Advanced State Variable Representations | A | ⬜ | 7 | — |
 | 3장 Robustness to Incorrect Data Association and Outliers | A | ⬜ | 10 | — |
 | 4장 Differentiable Optimization | A | ⬜ | 1 | — |

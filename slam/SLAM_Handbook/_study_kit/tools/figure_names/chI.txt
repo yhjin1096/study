@@ -1,0 +1,10 @@
+# Prelude I (책 p.3~18) — 그림 파일명 매핑
+# 재현:  python3 _study_kit/tools/extract_figures.py --chapter I --book-pages 3-18 \
+#          --out part1_foundations/00_prelude_1/images --names _study_kit/tools/figure_names/chI.txt
+Figure I.1 = figI_1_applications
+Figure I.2 = figI_2_frontend_backend
+Figure I.3 = figI_3_landmark_vs_posegraph
+Figure I.4 = figI_4_autonomy_pipeline
+Figure I.5 = figI_5_perceptual_aliasing
+Figure I.6 = figI_6_history
+Figure I.7 = figI_7_spatial_ai
