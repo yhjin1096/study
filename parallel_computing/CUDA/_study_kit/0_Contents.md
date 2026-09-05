@@ -44,7 +44,7 @@ sparse matrix · graph · CNN · LLM attention 같은 실제 응용과 multi-GPU
 | 24장 Conclusion and future outlook | ✅ | ✅ 1개 | ✅ gpu-18years |
 | 부록 A. Numerical considerations | ⬜ | — | — |
 | 부록 B. Deep learning basics | ⬜ | — | — |
-| 부록 C. CUDA memories, address spaces, and pointers | ⬜ | — | — |
+| 부록 C. CUDA memories, address spaces, and pointers | ✅ | ✅ 1개 | ✅ unified-memory |
 
 ### 1장. Introduction (p.1)
 

@@ -84,17 +84,22 @@ CUDA/                              ← 스터디 루트 (여기서 명령을 실
 │       ├── check_refs.py          노트의 참조를 원문과 대조
 │       ├── check_toc.py           0_Contents.md 의 쪽번호를 원문과 대조
 │       ├── kit_config.py          kit.conf 로더 (구간별 오프셋 환산 포함)
-│       ├── figure_names/chN.txt   챕터별 그림 파일명 매핑 (추출 재현용)
+│       ├── figure_names/chN.txt   챕터별 그림 파일명 매핑 (추출 재현용, 부록은 chA/B/C)
 │       ├── vendor/tex-svg.js      MathJax (외부 폰트 불필요)
 │       └── widgets/*.html         Canvas 인터랙티브 위젯
-└── part1_fundamentals/
-    └── 06_performance/
-        ├── 06_performance.md     ← 원본. 이것만 손으로 고친다
-        ├── 06_performance.html   ← 생성물. 직접 편집하지 않는다
-        └── images/
+├── part1_fundamentals/
+│   └── 06_performance/
+│       ├── 06_performance.md     ← 원본. 이것만 손으로 고친다
+│       ├── 06_performance.html   ← 생성물. 직접 편집하지 않는다
+│       └── images/
+└── part4_appendices/
+    └── C_memories_address_spaces/   ← 부록은 장 번호 대신 글자를 쓴다
 ```
 
 - 폴더 앞 번호는 `0_Contents.md`의 장 번호를 그대로 따른다
+  (부록은 번호가 없으므로 `A_`·`B_`·`C_` 로 시작한다)
+- 부 폴더 이름은 책의 Part 를 따른다 — `part4_appendices` 가 책의 **Part 4: Appendices** 다.
+  `check_refs.py` 가 `part*/*/*.md` 를 훑으므로 이 접두사를 지켜야 검사에 걸린다
 - **챕터당 파일 1개** — 절이 많아도 쪼개지 않고 헤더로 탐색한다 (흐름 파악에 유리)
 - `images/`를 챕터 폴더 안에 두어 각 챕터가 self-contained하게 유지한다
 - 완성된 `.html`은 수식 엔진·이미지·위젯이 전부 인라인되어 **인터넷 없이 단독으로 열린다**

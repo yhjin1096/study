@@ -1,0 +1,5 @@
+# 부록 C — Figure 파일명 매핑
+# 사용: python3 _study_kit/tools/extract_figures.py --chapter C --book-pages 623-629 \
+#         --out appendices/C_memories_address_spaces/images \
+#         --names _study_kit/tools/figure_names/chC.txt
+Figure C.1 = figC_1_unified_memory_port

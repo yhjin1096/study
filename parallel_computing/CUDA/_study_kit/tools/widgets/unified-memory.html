@@ -1,0 +1,267 @@
+<div class="lab" id="w-um">
+  <div class="lab-head">
+    <span class="lab-tag">실험 C</span>
+    <span class="lab-title">주소 공간의 벽, 그리고 migration 이냐 mapping 이냐</span>
+    <span class="lab-note">C.4·C.7 의 비트 수와 C.8 의 유일한 맞바꿈</span>
+  </div>
+  <div class="lab-body">
+    <p>
+      <b>왼쪽</b>: 데이터 집합을 담으려면 주소 비트가 몇 개 필요한가.
+      <b>4 GB 벽</b>(32비트)이 21장의 3D grid 를 어디서 막았는지 보인다.
+      <b>오른쪽</b>: C.8 의 <b>"mapping on access can sometimes be faster than migration"</b> 을
+      식으로 세운 것이다. page fault 비용 $T_f$ 를 0 에서 올려 보면
+      <b>이야기가 어디서 뒤집히는지</b> 보인다.
+    </p>
+
+    <div class="btnrow" id="um-ic"></div>
+    <div class="sliders">
+      <label class="slider">데이터 집합 크기
+        <input type="range" id="um-size" min="20" max="42" step="1" value="32">
+        <output id="um-sizev">4 GiB</output>
+      </label>
+      <label class="slider">page 하나에서 읽는 총량 $n$
+        <input type="range" id="um-n" min="12" max="28" step="1" value="14">
+        <output id="um-nv">16 KiB</output>
+      </label>
+      <label class="slider">page fault 비용 $T_f$
+        <input type="range" id="um-tf" min="0" max="500" step="5" value="200">
+        <output id="um-tfv">20.0 µs</output>
+      </label>
+    </div>
+
+    <canvas id="um-canvas" width="880" height="252"></canvas>
+    <div class="legend" id="um-legend"></div>
+    <div class="readout" id="um-r1"></div>
+    <div class="readout" id="um-r2"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('w-um');
+  if (!root) return;
+  var cv = document.getElementById('um-canvas');
+  var ctx = cv.getContext('2d');
+  function css(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+  }
+
+  // C.2 가 드는 system interconnect 들. GB/s 는 24장 Figure 24.1 의 값이다.
+  //   bw  = interconnect bandwidth,  mem = 같은 세대의 global memory bandwidth
+  var ICS = [
+    {key:'g2',  label:'PCIe Gen2 x16 (G80)',  bw:8e9,    mem:86.4e9},
+    {key:'g5',  label:'PCIe Gen5 x16 (H100)', bw:64e9,   mem:3350e9},
+    {key:'nvl', label:'NVLink (B200)',        bw:1.8e12, mem:8000e9}
+  ];
+  // 손익분기 모델은 'GPU 는 H100 으로 고정하고 interconnect 만 바꾼다' 는 비교다.
+  var B_HBM = 3.35e12;
+  var PAGE = 4096;
+  var st = { ic: 'g5' };
+
+  // C.4·C.7 이 드는 주소 비트들
+  var BITS = [
+    {b:32, who:'초기 GPU — 가상·물리 (C.4)'},
+    {b:40, who:'Kepler 이후 물리 주소 하한 (C.4)'},
+    {b:48, who:'현대 CPU 가상 주소 (C.4)'},
+    {b:49, who:'Pascal GPU 가상 주소 (C.7)'},
+    {b:64, who:'포인터 폭'}
+  ];
+
+  function IC()   { return ICS.filter(function (x) { return x.key === st.ic; })[0]; }
+  function SIZE() { return Math.pow(2, +document.getElementById('um-size').value); }
+  function N()    { return Math.pow(2, +document.getElementById('um-n').value); }
+  function TF()   { return +document.getElementById('um-tf').value * 1e-7; }   // 0 ~ 50 us
+
+  function human(x) {
+    var u = ['B','KiB','MiB','GiB','TiB','PiB','EiB'], i = 0;
+    while (x >= 1024 && i < u.length - 1) { x /= 1024; i++; }
+    return (x < 10 ? x.toFixed(1) : Math.round(x)) + ' ' + u[i];
+  }
+  function t_map(n)     { return n / IC().bw; }
+  function t_migrate(n) { return TF() + PAGE / IC().bw + n / B_HBM; }
+  function breakeven() {
+    var slope = 1 / IC().bw - 1 / B_HBM;
+    if (slope <= 0) return null;
+    return (TF() + PAGE / IC().bw) / slope;
+  }
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 880, H = 252;
+    if (cv.width !== Math.round(W*dpr)) { cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var ink = css('--ink'), soft = css('--ink-soft'), faint = css('--ink-faint');
+    var rule = css('--rule'), accent = css('--accent'), predict = css('--predict');
+    var correct = css('--correct'), ground = css('--ground');
+
+    // ── 왼쪽: 주소 비트 사다리 ──────────────────────────────────────
+    var lx = 44, ly = 30, lw = Math.max(170, W*0.29), lh = 165;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('주소 비트가 담을 수 있는 크기 (log)', lx - 30, ly - 12);
+
+    var blo = Math.log2(1 << 20), bhi = 66;           // 1 MiB ~ 2^66
+    function BX(bytes) { return lx + (Math.log2(bytes) - blo)/(bhi - blo)*lw; }
+    var size = SIZE();
+    var rowH = lh/BITS.length;
+    BITS.forEach(function (o, i) {
+      var y = ly + i*rowH, fits = Math.pow(2, o.b) >= size;
+      ctx.fillStyle = fits ? correct : accent;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(lx, y + 4, Math.max(2, BX(Math.pow(2, o.b)) - lx), rowH - 12);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = ground; ctx.font = 'bold 10px ui-monospace, monospace';
+      ctx.fillText(o.b + ' bit', lx + 5, y + rowH/2 + 2);
+      ctx.fillStyle = soft; ctx.font = '9.5px ui-monospace, monospace';
+      ctx.fillText(human(Math.pow(2, o.b)), BX(Math.pow(2, o.b)) + 5, y + rowH/2 + 2);
+    });
+    // 데이터 집합 크기 선
+    var sx = BX(size);
+    ctx.strokeStyle = predict; ctx.lineWidth = 2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(sx, ly - 4); ctx.lineTo(sx, ly + lh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = predict; ctx.font = 'bold 10.5px ui-monospace, monospace';
+    ctx.textAlign = sx > lx + lw*0.6 ? 'right' : 'left';
+    ctx.fillText(human(size), sx + (sx > lx + lw*0.6 ? -4 : 4), ly + lh + 14);
+    ctx.textAlign = 'left';
+
+    // ── 오른쪽: migration 대 mapping ────────────────────────────────
+    var rx = Math.max(lx + lw + 78, W*0.47), ry = 30;
+    var rw = W - rx - 20, rh = 170;
+    ctx.fillStyle = soft; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('page 하나를 읽는 시간 (양축 log)', rx, ry - 12);
+
+    var nlo = 12, nhi = 28;                            // 4 KiB ~ 256 MiB
+    function NX(n) { return rx + (Math.log2(n) - nlo)/(nhi - nlo)*rw; }
+    var tvals = [];
+    for (var e = nlo; e <= nhi; e += 0.25) {
+      var n = Math.pow(2, e);
+      tvals.push(t_map(n), t_migrate(n));
+    }
+    var tlo = Math.log10(Math.min.apply(null, tvals)*0.7);
+    var thi = Math.log10(Math.max.apply(null, tvals)*1.4);
+    function TY(t) { return ry + rh - (Math.log10(t) - tlo)/(thi - tlo)*rh; }
+
+    ctx.strokeStyle = rule; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx, ry+rh); ctx.lineTo(rx+rw, ry+rh); ctx.stroke();
+    ctx.fillStyle = faint; ctx.font = '9.5px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    [12, 16, 20, 24, 28].forEach(function (e) {
+      if (e < nlo || e > nhi) return;
+      ctx.fillText(human(Math.pow(2, e)), NX(Math.pow(2, e)), ry+rh+13);
+    });
+    ctx.textAlign = 'right';
+    for (var d = Math.ceil(tlo); d <= Math.floor(thi); d++) {
+      var t = Math.pow(10, d);
+      ctx.fillText(t >= 1e-3 ? (t*1e3).toFixed(0) + 'ms'
+                   : t >= 1e-6 ? (t*1e6).toFixed(0) + 'µs' : (t*1e9).toFixed(0) + 'ns',
+                   rx - 4, TY(t) + 3);
+      ctx.strokeStyle = rule; ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.moveTo(rx, TY(t)); ctx.lineTo(rx+rw, TY(t)); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.textAlign = 'left';
+
+    function curve(f, col, wid) {
+      ctx.strokeStyle = col; ctx.lineWidth = wid; ctx.beginPath();
+      for (var e = nlo, first = true; e <= nhi + 1e-9; e += 0.1) {
+        var n = Math.pow(2, e), y = TY(f(n));
+        if (first) { ctx.moveTo(NX(n), y); first = false; } else ctx.lineTo(NX(n), y);
+      }
+      ctx.stroke();
+    }
+    curve(t_map, accent, 2.2);
+    curve(t_migrate, correct, 2.2);
+
+    // 손익분기
+    var be = breakeven();
+    if (be !== null && be >= Math.pow(2, nlo) && be <= Math.pow(2, nhi)) {
+      var bx = NX(be);
+      ctx.strokeStyle = predict; ctx.lineWidth = 1.4; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(bx, ry); ctx.lineTo(bx, ry+rh); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = predict; ctx.beginPath(); ctx.arc(bx, TY(t_map(be)), 4, 0, 6.2832); ctx.fill();
+      ctx.font = 'bold 10px ui-monospace, monospace';
+      ctx.textAlign = bx > rx + rw*0.6 ? 'right' : 'left';
+      ctx.fillText('손익분기 ' + human(be), bx + (bx > rx + rw*0.6 ? -5 : 5), ry + 12);
+      ctx.textAlign = 'left';
+    }
+    // 현재 n
+    var n0 = N(), nx0 = NX(n0);
+    ctx.strokeStyle = faint; ctx.lineWidth = 1; ctx.setLineDash([1,3]);
+    ctx.beginPath(); ctx.moveTo(nx0, ry); ctx.lineTo(nx0, ry+rh); ctx.stroke();
+    ctx.setLineDash([]);
+    [[t_map(n0), accent], [t_migrate(n0), correct]].forEach(function (p) {
+      ctx.fillStyle = p[1]; ctx.beginPath(); ctx.arc(nx0, TY(p[0]), 3.5, 0, 6.2832); ctx.fill();
+    });
+    ctx.fillStyle = ink; ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = nx0 > rx + rw*0.7 ? 'right' : 'left';
+    ctx.fillText('n = ' + human(n0), nx0 + (nx0 > rx + rw*0.7 ? -5 : 5), ry + rh - 8);
+    ctx.textAlign = 'left';
+  }
+
+  function render() {
+    document.getElementById('um-sizev').textContent = human(SIZE());
+    document.getElementById('um-nv').textContent = human(N());
+    document.getElementById('um-tfv').textContent = (TF()*1e6).toFixed(1) + ' µs';
+
+    var size = SIZE();
+    var need = Math.ceil(Math.log2(size));
+    var can = BITS.filter(function (o) { return Math.pow(2, o.b) >= size; });
+    document.getElementById('um-r1').innerHTML =
+      '<b>' + human(size) + '</b> 를 주소지정하려면 <b>' + need + ' bit</b> 가 필요하다 &nbsp;→&nbsp; ' +
+      (can.length ? '담을 수 있는 것: <b>' + can.map(function (o) { return o.b; }).join(' · ') + ' bit</b>'
+                  : '<b>표의 어느 것도 담지 못한다</b>') +
+      ' &nbsp;·&nbsp; ' +
+      (size > Math.pow(2, 32)
+        ? '<b>4 GB 벽을 넘었다</b> — Kepler 이전에는 불가능한 크기다 (C.4)'
+        : '4 GB 벽 안이다 — 초기 GPU 로도 담긴다') +
+      '<br>&nbsp;&nbsp;참고: <b>float grid ' + Math.round(Math.pow(size/4, 1/3)) +
+      '<sup>3</sup></b> 이 이 크기다. 21장이 3D grid 를 2D slice 로 자른 이유가 이 줄이다.';
+
+    var ic = IC(), n0 = N(), be = breakeven();
+    var tm = t_map(n0), tg = t_migrate(n0);
+    var winner = tg < tm ? 'migration' : 'mapping';
+    document.getElementById('um-r2').innerHTML =
+      '<b>' + ic.label + '</b> — interconnect ' + (ic.bw/1e9).toFixed(0) + ' GB/s' +
+      ' &nbsp;·&nbsp; 같은 세대 global memory ' + (ic.mem/1e9).toFixed(0) + ' GB/s' +
+      ' &nbsp;(비율 <b>' + (100*ic.bw/ic.mem).toFixed(2) + '%</b>' +
+      (ic.bw/ic.mem < 0.1 ? ' — C.2 의 <b>10% 미만</b>을 지킨다)' : ' — <b>10% 를 넘는다</b>)') + '<br>' +
+      '&nbsp;&nbsp;아래 손익분기는 <b>GPU 를 H100(3,350 GB/s)으로 고정</b>하고 interconnect 만 바꾼 비교다.<br>' +
+      '&nbsp;&nbsp;<i>n</i> = ' + human(n0) + ' 일 때 &nbsp; mapping <b>' + (tm*1e6).toFixed(2) +
+      ' µs</b> vs migration <b>' + (tg*1e6).toFixed(2) + ' µs</b>' +
+      ' &nbsp;→&nbsp; <b>' + winner + ' 이 이긴다</b> (' +
+      (Math.max(tm,tg)/Math.min(tm,tg)).toFixed(2) + '×)<br>' +
+      '&nbsp;&nbsp;손익분기: ' +
+      (be === null
+        ? '<b>없다</b> — interconnect 가 global memory 만큼 빠르면 migration 은 절대 이기지 못한다'
+        : '<b>' + human(be) + '</b> = 4 KiB page 를 <b>' + Math.round(be/PAGE) +
+          '번</b> 훑는 양. <i>T</i><sub>f</sub> 를 0 으로 내리면 <b>' +
+          human((PAGE/ic.bw)/(1/ic.bw - 1/B_HBM)) + '</b> 로 줄어든다');
+  }
+
+  function renderBtns() {
+    var b = document.getElementById('um-ic');
+    b.innerHTML = '';
+    ICS.forEach(function (x) {
+      var el = document.createElement('button');
+      el.textContent = x.label;
+      if (x.key !== st.ic) el.className = 'ghost';
+      el.onclick = function () { st.ic = x.key; renderAll(); };
+      b.appendChild(el);
+    });
+    document.getElementById('um-legend').innerHTML =
+      '<span class="swatch" style="background:var(--correct)"></span>담을 수 있다 · migration 시간' +
+      '<span class="swatch" style="background:var(--accent)"></span>담지 못한다 · mapping(zero-copy) 시간' +
+      '<span class="swatch" style="background:var(--predict)"></span>데이터 집합 크기 · 손익분기';
+  }
+
+  function renderAll() { renderBtns(); render(); draw(); }
+  ['um-size','um-n','um-tf'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () { render(); draw(); });
+  });
+  window.addEventListener('resize', draw);
+  renderAll();
+})();
+</script>
